@@ -1,0 +1,76 @@
+# =========================
+# Visual Studio
+# =========================
+.vs/
+*.vcxproj.user
+*.vcxproj.filters
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# =========================
+# Build folders
+# =========================
+Debug/
+Release/
+x64/
+x86/
+build/
+out/
+bin/
+obj/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+Makefile
+
+# =========================
+# Binary files
+# =========================
+*.exe
+*.dll
+*.lib
+*.so
+*.a
+*.o
+*.obj
+*.pdb
+*.ilk
+
+# =========================
+# Logs & temp
+# =========================
+*.log
+*.tlog
+*.tmp
+*.cache
+*.db
+*.opendb
+*.VC.db
+
+# =========================
+# Visual Studio profiler / debug
+# =========================
+*.psess
+*.vsp
+*.vspx
+
+# =========================
+# IntelliSense
+# =========================
+ipch/
+
+# =========================
+# Windows
+# =========================
+Thumbs.db
+desktop.ini
+
+# =========================
+# Others
+# =========================
+*.opensdf
+*.sdf

@@ -1,0 +1,57 @@
+#pragma once
+#include <deque>
+#include <mutex>
+#include <atomic>
+#include <functional>
+#include "Core/MatchConfig.hpp"
+#include "World/GameWorld.hpp"
+#include "Network/SessionManager.hpp"
+#include "Network/CommandDispatcher.hpp"
+#include "Network/GameCommand.hpp"
+#include "Network/NetworkManager.hpp"
+
+class Match {
+public:
+    Match(MatchConfig config,
+          NetworkManager& network,
+          std::function<void(MatchResult)> onEnd);
+
+    uint32_t id()              const { return _config.matchId; }
+    bool     isRunning()       const { return _running.load(std::memory_order_relaxed); }
+    size_t   connectedPlayers()const { return _sessions.size(); }
+    size_t   totalSlots()      const { return _config.playerIds.size(); }
+    void     logPositions()    const { _world.logTankPositions(_config.matchId); }
+
+    // Thread-safe. Called from NetworkManager IOCP workers.
+    void pushCommand(GameCommand cmd);
+
+    // Called from tick dispatcher thread (one match per pool task).
+    void tick(float dt);
+
+private:
+    MatchConfig   _config;
+    GameWorld     _world;
+    SessionManager _sessions;
+    CommandDispatcher _dispatcher;
+    NetworkManager&  _network;
+    std::function<void(MatchResult)> _onEnd;
+
+    std::deque<GameCommand>  _cmdQueue;
+    std::mutex               _queueMutex;
+    std::atomic<bool>        _running{true};
+    float                    _elapsed = 0.f;
+
+    uint32_t  _nextSlot      = 0;
+    int       _tickCount     = 0;
+    int       _peakConnected = 0;   // max simultaneous sessions ever
+    std::mutex _slotMutex;
+
+    static constexpr int SNAPSHOT_EVERY = 1; // broadcast every tick = 60 Hz
+
+    void registerHandlers();
+    bool resolvePlayer(const sockaddr_in& addr, uint32_t& outPid);
+    void broadcastSnapshot();
+
+    void handleMove (GameCommand& cmd);
+    void handleShoot(GameCommand& cmd);
+};

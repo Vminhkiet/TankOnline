@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 5 ./server_tank.exe)",
+      "Bash(cmd.exe /c \"call \\\\\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\VC\\\\Auxiliary\\\\Build\\\\vcvars64.bat\\\\\" && cmake --build d:\\\\SOURCE_C++\\\\Tank\\\\out\\\\build\\\\x64-Debug --target server_tank 2>&1\")",
+      "PowerShell(Start-Process -FilePath \"d:\\\\SOURCE_C++\\\\Tank\\\\out\\\\build\\\\x64-Debug\\\\server_tank\\\\server_tank.exe\" -WorkingDirectory \"d:\\\\SOURCE_C++\\\\Tank\\\\out\\\\build\\\\x64-Debug\\\\server_tank\" -WindowStyle Normal)",
+      "PowerShell(Stop-Process -Name \"server_tank\" -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

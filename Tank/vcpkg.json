@@ -1,0 +1,10 @@
+{
+  "name": "tank",
+  "version": "1.0.0",
+  "dependencies": [
+    "asio",
+    "fmt",
+    "librdkafka",
+    "nlohmann-json"
+  ]
+}

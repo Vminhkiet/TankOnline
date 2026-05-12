@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake --build out/build/x64-Debug --target server_tank)",
+      "Bash(cmake --build out/build/x64-Debug --target server_tank --clean-first)",
+      "Bash(cmd /c \"\\\\\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\VC\\\\Auxiliary\\\\Build\\\\vcvars64.bat\\\\\" > nul 2>&1 && cmake --build \\\\\"d:\\\\SOURCE_C++\\\\Tank\\\\out\\\\build\\\\x64-Debug\\\\\" --target server_tank 2>&1\")",
+      "Bash(cmd /c \"call \\\\\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\VC\\\\Auxiliary\\\\Build\\\\vcvars64.bat\\\\\" && cd /d d:\\\\SOURCE_C++\\\\Tank && cmake --build out/build/x64-Debug --target server_tank 2>&1\")"
+    ]
+  }
+}
