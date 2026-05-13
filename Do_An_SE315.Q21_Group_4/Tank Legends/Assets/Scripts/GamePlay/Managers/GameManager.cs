@@ -80,6 +80,12 @@ namespace Complete
                 }
                 else
                 {
+                    // Clear stale remote tanks from any previous session before subscribing
+                    foreach (var go in _remoteTanks.Values)
+                        if (go != null) Destroy(go);
+                    _remoteTanks.Clear();
+                    _remoteSnaps.Clear();
+
                     TankNetClient.Instance.OnSnapshot += HandleSnapshot;
                     TankNetClient.Instance.Connect(m_ServerHost, m_ServerPort, m_MatchId);
                 }
@@ -136,6 +142,14 @@ namespace Complete
         {
             if (m_OnlineMode && TankNetClient.Instance != null)
                 TankNetClient.Instance.OnSnapshot -= HandleSnapshot;
+
+            // Xóa hết tank khi scene kết thúc
+            foreach (var t in GameObject.FindGameObjectsWithTag("Tank"))
+                if (t != null) Destroy(t);
+            foreach (var go in _remoteTanks.Values)
+                if (go != null) Destroy(go);
+            _remoteTanks.Clear();
+            _remoteSnaps.Clear();
         }
 
         // Gọi từ Lobby sau khi matching service trả về thông tin server
@@ -149,6 +163,12 @@ namespace Complete
 
         private void SpawnAllTanks()
         {
+            // Xóa hết tank đang active trong scene trước khi spawn mới
+            foreach (var t in GameObject.FindGameObjectsWithTag("Tank"))
+                Destroy(t);
+            for (int i = 0; i < m_Tanks.Length; i++)
+                m_Tanks[i].m_Instance = null;
+
             for (int i = 0; i < m_Tanks.Length; i++)
             {
                 // Online mode: không spawn gì cả, chờ server gửi vị trí qua snapshot
@@ -403,31 +423,65 @@ namespace Complete
             var serverRot = Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0);
 
             // Always sync Y: client has no terrain height simulation.
-            var pos = go.transform.position;
-            pos.y = serverPos.y;
-            go.transform.position = pos;
+            // Must use rb.position, NOT transform.position — setting transform.position
+            // directly on a non-kinematic rigidbody causes PhysX to detect a warp and
+            // generate large correction impulses → jitter at walls.
+            var rb0 = go.GetComponent<Rigidbody>();
+            if (rb0 != null)
+            {
+                var p = rb0.position; p.y = serverPos.y; rb0.position = p;
+            }
+            else
+            {
+                var pos = go.transform.position; pos.y = serverPos.y;
+                go.transform.position = pos;
+            }
 
-            // XZ: the full-delta approach requires the server to echo the exact input-seq
-            // it processed (so we compare server state vs client history AT THE SAME TICK).
-            // Without that, server snapshot is 1 tick stale → delta ≈ -velocity*dt every
-            // frame → continuous backward oscillation.
-            //
-            // Instead: hard-snap only on large errors (wall push, death, respawn).
-            // Timer fixes (measured dt + timeBeginPeriod) keep drift below 0.1 units on LAN,
-            // so this threshold is almost never triggered during normal movement.
+            // XZ error = khoảng cách giữa client prediction và server position.
+            // Server snapshot trễ hơn client: snapshotInterval + RTT one-way.
+            // Với speed=12, snapshot 20Hz, LAN RTT~16ms:
+            //   expected xzErr ≈ 12 * (0.05 + 0.008) ≈ 0.7 units khi di chuyển thẳng.
+            // Threshold 1.0f dễ bị trigger → teleport. Dùng 3 mức:
+            //   < SOFT_THRESHOLD : bình thường, không sửa
+            //   SOFT..HARD       : soft lerp — tank trôi nhẹ về server pos, không teleport
+            //   > HARD_THRESHOLD : hard snap — death/respawn/wall push mạnh
+            const float SOFT_THRESHOLD = 1.5f;
+            const float HARD_THRESHOLD = 4.0f;
+            const float LERP_SPEED     = 5.0f;  // units/s correction khi lỗi vừa
+
             float xzErr = new Vector2(
                 go.transform.position.x - serverPos.x,
                 go.transform.position.z - serverPos.z).magnitude;
 
 #if UNITY_EDITOR
-            if (xzErr > 0.3f)
+            if (xzErr > 0.5f)
                 Debug.Log($"[CSP] xzErr={xzErr:F3}");
 #endif
 
-            if (xzErr > 1.0f)
+            if (xzErr > HARD_THRESHOLD)
             {
-                go.transform.position = serverPos;
+                // Lỗi lớn: death, respawn, server push — snap tức thời
+                var rb = go.GetComponent<Rigidbody>();
+                if (rb != null)
+                {
+                    rb.position = serverPos;
+                    rb.velocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                }
+                else go.transform.position = serverPos;
                 go.transform.rotation = serverRot;
+            }
+            else if (xzErr > SOFT_THRESHOLD)
+            {
+                // Lỗi vừa: drift từ latency/timer spike — lerp nhẹ, không gây teleport
+                var rb = go.GetComponent<Rigidbody>();
+                float step = LERP_SPEED * Time.deltaTime;
+                Vector3 corrected = Vector3.MoveTowards(
+                    go.transform.position,
+                    new Vector3(serverPos.x, go.transform.position.y, serverPos.z),
+                    step);
+                if (rb != null) rb.position = corrected;
+                else go.transform.position = corrected;
             }
 
             if (!ts.IsAlive) go.SetActive(false);

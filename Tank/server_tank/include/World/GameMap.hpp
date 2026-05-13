@@ -7,12 +7,25 @@ class GameMap {
 public:
     struct SpawnPoint { int id; float x, y, z; };
 
+    // Half-extents of the tank's box collider (matches Unity BoxCollider / 2)
+    struct TankConfig {
+        float extentX = 0.9f;
+        float extentY = 1.0f;
+        float extentZ = 1.2f;
+    };
+
+    struct BulletConfig {
+        float radius = 0.25f;
+    };
+
     GameMap() = default;
     ~GameMap() = default;
 
     bool LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWorld);
     float GetHeightAt(float x, float z) const;
     const std::vector<SpawnPoint>& getSpawnPoints() const { return _spawnPoints; }
+    const TankConfig&   getTankConfig()   const { return _tankConfig; }
+    const BulletConfig& getBulletConfig() const { return _bulletConfig; }
 
 private:
     struct HeightLayer {
@@ -29,4 +42,6 @@ private:
     std::string _mapName;
     std::vector<HeightLayer> _layers;
     std::vector<SpawnPoint>  _spawnPoints;
+    TankConfig               _tankConfig;
+    BulletConfig             _bulletConfig;
 };

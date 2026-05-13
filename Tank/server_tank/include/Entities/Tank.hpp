@@ -5,12 +5,10 @@
 
 class Tank {
 public:
-    static constexpr float CAPSULE_RADIUS = 1.0f;    // half-width
-    static constexpr float CAPSULE_HEIGHT = 2.2f;    // full height
-    static constexpr float MAX_SPEED      = 12.f;    // units / second
-    static constexpr float TURN_SPEED     = 3.14159f; // radians / second (= 180 deg/s, matches Unity client)
-    static constexpr int   MAX_HEALTH     = 100;
-    static constexpr int   BULLET_DAMAGE  = 25;
+    static constexpr float MAX_SPEED    = 12.f;
+    static constexpr float TURN_SPEED   = 3.14159f; // radians / second (= 180 deg/s, matches Unity client)
+    static constexpr int   MAX_HEALTH   = 100;
+    static constexpr int   BULLET_DAMAGE = 25;
 
     uint32_t id;
     Vector3  position;    // bottom-center of capsule
@@ -30,7 +28,4 @@ public:
     void takeDamage(int damage);
     bool isDead() const { return !isAlive || health <= 0; }
 
-    // Capsule endpoints for physics (bottom sphere, top sphere)
-    Vector3 capsuleBottom() const { return position + Vector3{0.f, CAPSULE_RADIUS,              0.f}; }
-    Vector3 capsuleTop()    const { return position + Vector3{0.f, CAPSULE_HEIGHT - CAPSULE_RADIUS, 0.f}; }
 };

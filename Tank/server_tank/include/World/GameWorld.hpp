@@ -51,5 +51,10 @@ private:
     void syncColliders();
     void applyPhysicsResults(float deltaTime);
     void spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw);
+    // Returns height + id of walkable box contributing (0 = terrain only)
+    float surfaceHeight(float x, float z, uint32_t* outBoxId = nullptr) const;
     static Vector3 defaultSpawn(uint32_t playerId);
+
+    // Track which tanks are on a walkable box — for entry/exit log
+    std::unordered_map<uint32_t, uint32_t> _tankOnBox; // tankId → boxEntityId (0 = terrain)
 };

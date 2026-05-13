@@ -13,10 +13,13 @@ namespace Complete
 
         public Color m_PlayerColor;                             // This is the color this tank will be tinted.
         public Transform m_SpawnPoint;                          // The position and direction the tank will have when it spawns.
-        [HideInInspector] public int m_PlayerNumber;            // This specifies which player this the manager for.
-        [HideInInspector] public string m_ColoredPlayerText;    // A string that represents the player with their number colored to match their tank.
-        [HideInInspector] public GameObject m_Instance;         // A reference to the instance of the tank when it is created.
-        [HideInInspector] public int m_Wins;                    // The number of wins this player has so far.
+        [HideInInspector] public int m_PlayerNumber;
+        [HideInInspector] public string m_ColoredPlayerText;
+        // NonSerialized: runtime-only reference, must not persist between Editor play sessions.
+        // [HideInInspector] alone still serializes the field → stale destroyed-object reference
+        // survives Stop → next Play → m_Instance != null but object is gone → NullRef.
+        [System.NonSerialized] public GameObject m_Instance;
+        [HideInInspector] public int m_Wins;
         
 
         private TankMovement m_Movement;                        // Reference to tank's movement script, used to disable and enable control.
@@ -30,6 +33,12 @@ namespace Complete
             m_Movement = m_Instance.GetComponent<TankMovement> ();
             m_Shooting = m_Instance.GetComponent<TankShooting> ();
             m_CanvasGameObject = m_Instance.GetComponentInChildren<Canvas> ().gameObject;
+
+            // Lift the indicator canvas above the turret so bridge deck geometry cannot occlude it.
+            Transform canvasTf = m_CanvasGameObject.transform;
+            Vector3 lp = canvasTf.localPosition;
+            lp.y = 2.2f;
+            canvasTf.localPosition = lp;
 
             // Set the player numbers to be consistent across the scripts.
             m_Movement.m_PlayerNumber = m_PlayerNumber;

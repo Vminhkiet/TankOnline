@@ -40,8 +40,10 @@ std::vector<std::pair<GridEntry, GridEntry>> UniformGrid::broadPhasePairs() cons
             const GridEntry& b = entries[j];
 
             if (a.entityId == b.entityId) continue;
-            // Skip static-static (Box vs Box)
-            if (a.kind == ColliderKind::Box && b.kind == ColliderKind::Box) continue;
+            // Skip static-static pairs (Box/Capsule vs Box/Capsule)
+            bool aStatic = (a.kind == ColliderKind::Box || a.kind == ColliderKind::Capsule);
+            bool bStatic = (b.kind == ColliderKind::Box || b.kind == ColliderKind::Capsule);
+            if (aStatic && bStatic) continue;
 
             uint64_t lo = a.entityId, hi = b.entityId;
             if (lo > hi) std::swap(lo, hi);
@@ -49,8 +51,8 @@ std::vector<std::pair<GridEntry, GridEntry>> UniformGrid::broadPhasePairs() cons
 
             if (seen.count(key)) continue;
 
-            // Canonical order: Box is always second so narrow-phase is uniform
-            if (a.kind == ColliderKind::Box)
+            // Canonical order: static colliders (Box/Capsule) go second
+            if (aStatic)
                 seen[key] = {b, a};
             else
                 seen[key] = {a, b};

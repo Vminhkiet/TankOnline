@@ -31,8 +31,9 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
 
             if (type == "box") {
                 OBBCollider box;
-                box.entityId = staticId++;
-                box.isActive = true;
+                box.entityId  = staticId++;
+                box.isActive  = true;
+                box.isWalkable = item.value("walkable", false);
                 box.center = { center.x, center.y, center.z };
                 box.extents = {
                     (float)item["size"]["x"] * 0.5f,
@@ -70,6 +71,25 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
             }
         }
     }
+
+    if (data.contains("tank")) {
+        const auto& t = data["tank"];
+        if (t.contains("collider_extents")) {
+            _tankConfig.extentX = t["collider_extents"]["x"].get<float>();
+            _tankConfig.extentY = t["collider_extents"]["y"].get<float>();
+            _tankConfig.extentZ = t["collider_extents"]["z"].get<float>();
+        }
+    }
+
+    if (data.contains("bullet")) {
+        const auto& b = data["bullet"];
+        if (b.contains("collider_radius"))
+            _bulletConfig.radius = b["collider_radius"].get<float>();
+    }
+
+    LOG_INFO("GameMap: tank({:.3f},{:.3f},{:.3f}) bullet_r={:.3f}",
+             _tankConfig.extentX, _tankConfig.extentY, _tankConfig.extentZ,
+             _bulletConfig.radius);
 
     if (data.contains("spawns")) {
         for (const auto& sp : data["spawns"]) {

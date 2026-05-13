@@ -49,7 +49,9 @@ public class MapExporter
         {
             colliders = colliders,
             heightmaps = heightmaps,
-            spawns = spawns
+            spawns    = spawns,
+            tank      = BuildTankConfig(),
+            bullet    = BuildBulletConfig()
         };
 
         string json = JsonUtility.ToJson(world, true);
@@ -267,6 +269,7 @@ public class MapExporter
                 data.type = "box";
                 data.center = col.transform.TransformPoint(box.center);
                 data.size = Vector3.Scale(box.size, col.transform.lossyScale);
+                data.walkable = col.gameObject.CompareTag("Surface");
             }
             else if (col is SphereCollider sphere)
             {
@@ -321,6 +324,45 @@ public class MapExporter
     }
 
     // =========================
+    // TANK / BULLET CONFIG
+    // =========================
+    static TankConfigData BuildTankConfig()
+    {
+        GameObject tank = GameObject.FindWithTag("Tank");
+        var box = tank != null ? tank.GetComponentInChildren<BoxCollider>(true) : null;
+        if (box == null)
+        {
+            Debug.LogWarning("[MapExporter] No GameObject tagged 'Tank' with BoxCollider found – using defaults.");
+            return new TankConfigData { collider_extents = new Vec3Data(0.9f, 1.0f, 1.2f) };
+        }
+
+        Vector3 s = box.size, sc = box.transform.lossyScale;
+        float ex = s.x * Mathf.Abs(sc.x) * 0.5f;
+        float ey = s.y * Mathf.Abs(sc.y) * 0.5f;
+        float ez = s.z * Mathf.Abs(sc.z) * 0.5f;
+        Debug.Log($"[MapExporter] Tank collider extents: ({ex:F4}, {ey:F4}, {ez:F4})");
+        return new TankConfigData { collider_extents = new Vec3Data(ex, ey, ez) };
+    }
+
+    static BulletConfigData BuildBulletConfig()
+    {
+        GameObject shell = GameObject.FindWithTag("Shell");
+        var sph = shell != null ? shell.GetComponentInChildren<SphereCollider>(true) : null;
+        if (sph == null)
+        {
+            Debug.LogWarning("[MapExporter] No GameObject tagged 'Shell' with SphereCollider found – using default radius 0.25.");
+            return new BulletConfigData { collider_radius = 0.25f };
+        }
+
+        float maxSc = Mathf.Max(Mathf.Abs(sph.transform.lossyScale.x),
+                                Mathf.Abs(sph.transform.lossyScale.y),
+                                Mathf.Abs(sph.transform.lossyScale.z));
+        float radius = sph.radius * maxSc;
+        Debug.Log($"[MapExporter] Bullet collider radius: {radius:F4}");
+        return new BulletConfigData { collider_radius = radius };
+    }
+
+    // =========================
     // DATA STRUCTS
     // =========================
     [System.Serializable]
@@ -329,7 +371,22 @@ public class MapExporter
         public List<ColliderData> colliders;
         public List<HeightmapData> heightmaps;
         public List<SpawnData> spawns;
+        public TankConfigData   tank;
+        public BulletConfigData bullet;
     }
+
+    [System.Serializable]
+    public class Vec3Data
+    {
+        public float x, y, z;
+        public Vec3Data(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
+    }
+
+    [System.Serializable]
+    public class TankConfigData { public Vec3Data collider_extents; }
+
+    [System.Serializable]
+    public class BulletConfigData { public float collider_radius; }
 
     [System.Serializable]
     public class HeightmapData
@@ -362,6 +419,7 @@ public class MapExporter
         public float radius;
         public float height;
         public int direction;
+        public bool walkable;
     }
 
     [System.Serializable]

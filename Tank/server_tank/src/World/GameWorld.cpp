@@ -15,8 +15,11 @@ bool GameWorld::loadMap(const std::string& mapPath)
         LOG_ERR("GameWorld: failed to load map: {}", mapPath);
         return false;
     }
-    LOG_INFO("GameWorld: map loaded – {} static boxes, {} static capsules",
-             _physics._boxes.size(), _physics._capsules.size());
+
+    LOG_INFO("GameWorld: map loaded – {} boxes, {} capsules | tank({:.2f},{:.2f},{:.2f}) bullet_r={:.3f}",
+             _physics._boxes.size(), _physics._capsules.size(),
+             _map.getTankConfig().extentX, _map.getTankConfig().extentY, _map.getTankConfig().extentZ,
+             _map.getBulletConfig().radius);
     return true;
 }
 
@@ -27,15 +30,18 @@ bool GameWorld::loadMap(const std::string& mapPath)
 void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos)
 {
     _tanks.emplace(playerId, Tank(playerId, spawnPos));
-    Tank& tank = _tanks.at(playerId);
+    const GameMap::TankConfig& cfg = _map.getTankConfig();
 
-    CapsuleCollider cap;
-    cap.entityId = playerId;
-    cap.isActive = true;
-    cap.radius   = Tank::CAPSULE_RADIUS;
-    cap.pA       = tank.capsuleBottom();
-    cap.pB       = tank.capsuleTop();
-    _physics.addCapsule(cap);
+    OBBCollider obb;
+    obb.entityId = playerId;
+    obb.isActive = true;
+    obb.isStatic = false;
+    obb.extents  = { cfg.extentX, cfg.extentY, cfg.extentZ };
+    obb.center   = { spawnPos.x, spawnPos.y + cfg.extentY, spawnPos.z };
+    obb.axisX = {1.f, 0.f, 0.f};
+    obb.axisY = {0.f, 1.f, 0.f};
+    obb.axisZ = {0.f, 0.f, 1.f};
+    _physics.addDynamicBox(obb);
 
     LOG_INFO("GameWorld: player {} spawned at ({:.1f},{:.1f},{:.1f})",
              playerId, spawnPos.x, spawnPos.y, spawnPos.z);
@@ -44,7 +50,7 @@ void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos)
 void GameWorld::removePlayer(uint32_t playerId)
 {
     _tanks.erase(playerId);
-    _physics.removeCapsule(playerId);
+    _physics.removeDynamicBox(playerId);
     LOG_INFO("GameWorld: player {} removed", playerId);
 }
 
@@ -94,17 +100,30 @@ void GameWorld::update(float deltaTime)
         }
     }
 
-    // 2. Apply gravity and snap to terrain
+    // 2. Apply gravity and snap to terrain (heightmap + elevated box surfaces)
     constexpr float GRAVITY = 20.f;
     for (auto& [id, tank] : _tanks) {
         if (!tank.isAlive) continue;
-        float groundY = _map.GetHeightAt(tank.position.x, tank.position.z);
+        uint32_t boxId  = 0;
+        float groundY   = surfaceHeight(tank.position.x, tank.position.z, &boxId);
+        uint32_t prevBox = _tankOnBox.count(id) ? _tankOnBox.at(id) : 0;
+
+        // Log surface enter / leave
+        if (boxId != prevBox) {
+            if (boxId != 0)
+                LOG_INFO("[Surface] tank {} entered walkable box {} (top={:.3f}) pos=({:.2f},{:.2f},{:.2f})",
+                         id, boxId, groundY,
+                         tank.position.x, tank.position.y, tank.position.z);
+            else
+                LOG_INFO("[Surface] tank {} left walkable box {} back to terrain y={:.3f}",
+                         id, prevBox, groundY);
+            _tankOnBox[id] = boxId;
+        }
+
         if (tank.position.y <= groundY) {
-            // On ground — no gravity, hold position
             tank.position.y = groundY;
             tank.velocityY  = 0.f;
         } else {
-            // Airborne — integrate gravity
             tank.velocityY  -= GRAVITY * deltaTime;
             tank.position.y += tank.velocityY * deltaTime;
             if (tank.position.y <= groundY) {
@@ -125,13 +144,24 @@ void GameWorld::update(float deltaTime)
 
     // 6. Respawn dead tanks (only when respawn is enabled, i.e. non-match mode)
     if (_respawnOnDeath) {
+        const GameMap::TankConfig& cfg = _map.getTankConfig();
         for (auto& [id, tank] : _tanks) {
             if (tank.isDead()) {
                 tank.position = defaultSpawn(id);
                 tank.health   = Tank::MAX_HEALTH;
                 tank.isAlive  = true;
                 tank.velocity = {};
-                _physics.updateCapsule(id, tank.capsuleBottom(), tank.capsuleTop());
+                // Re-add the OBB (was removed when tank died)
+                OBBCollider obb;
+                obb.entityId = id;
+                obb.isActive = true;
+                obb.isStatic = false;
+                obb.extents  = { cfg.extentX, cfg.extentY, cfg.extentZ };
+                obb.center   = { tank.position.x, tank.position.y + cfg.extentY, tank.position.z };
+                obb.axisX = {1.f, 0.f, 0.f};
+                obb.axisY = {0.f, 1.f, 0.f};
+                obb.axisZ = {0.f, 0.f, 1.f};
+                _physics.addDynamicBox(obb);
                 LOG_INFO("GameWorld: tank {} respawned", id);
             }
         }
@@ -144,19 +174,68 @@ void GameWorld::update(float deltaTime)
 
 void GameWorld::syncColliders()
 {
+    const GameMap::TankConfig& cfg = _map.getTankConfig();
     for (auto& [id, tank] : _tanks) {
-        if (tank.isAlive)
-            _physics.updateCapsule(id, tank.capsuleBottom(), tank.capsuleTop());
+        if (!tank.isAlive) continue;
+        // Rotate OBB axes with tank yaw: forward = {sin, 0, cos}, right = {cos, 0, -sin}
+        float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
+        Vector3 axisX{  cy, 0.f, -sy };
+        Vector3 axisZ{  sy, 0.f,  cy };
+        Vector3 center{ tank.position.x,
+                        tank.position.y + cfg.extentY,
+                        tank.position.z };
+        _physics.updateDynamicBox(id, center, axisX, {0.f, 1.f, 0.f}, axisZ);
     }
 }
 
 void GameWorld::applyPhysicsResults(float /*deltaTime*/)
 {
+    // Step-up detection: xác định tank nào cần leo lên mặt box thay vì bị đẩy ra
+    // Key insight: khi SAT chọn trục ngang (overlap nhỏ khi vừa chạm mép),
+    // nếu bỏ correction ngang và snap lên top, tick sau tank sẽ nằm trong footprint
+    // và surfaceHeight sẽ giữ đúng height.
+    constexpr float STEP_HEIGHT = 0.8f;
+    std::unordered_map<uint32_t, float> stepUpY; // tankId → target Y
+
+    for (const auto& m : _physics._manifolds) {
+        if (m.type != CollisionType::TANK_VS_WALL) continue;
+        if (std::fabs(m.normal.y) > 0.5f) continue; // đã là push lên, không cần xử lý
+        auto tankIt = _tanks.find(m.entityA);
+        if (tankIt == _tanks.end()) continue;
+        float tankY = tankIt->second.position.y;
+        for (const auto& box : _physics._boxes) {
+            if (box.entityId != m.entityB) continue;
+            float topY = box.center.y
+                + std::fabs(box.axisX.y) * box.extents.x
+                + std::fabs(box.axisY.y) * box.extents.y
+                + std::fabs(box.axisZ.y) * box.extents.z;
+            float gap = topY - tankY;
+            if (gap > 0.f && gap <= STEP_HEIGHT) {
+                auto prev = stepUpY.find(m.entityA);
+                if (prev == stepUpY.end() || topY > prev->second)
+                    stepUpY[m.entityA] = topY;
+            }
+            break;
+        }
+    }
+
     // Position corrections: push tanks out of walls / each other
+    // Nếu tank đang step-up: chỉ giữ phần Y của correction, bỏ ngang
+    // (để tank tiếp tục tiến vào footprint, không bị đẩy ra ngoài mép)
     for (auto& [entityId, correction] : _physics._corrections) {
         auto it = _tanks.find(entityId);
-        if (it != _tanks.end())
+        if (it == _tanks.end()) continue;
+        if (stepUpY.count(entityId))
+            it->second.position.y += correction.y; // chỉ áp dụng vertical
+        else
             it->second.position += correction;
+    }
+
+    // Snap step-up tanks lên top của box
+    for (auto& [entityId, targetY] : stepUpY) {
+        auto it = _tanks.find(entityId);
+        if (it != _tanks.end())
+            it->second.position.y = targetY;
     }
 
     // Collision events
@@ -188,7 +267,7 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
     // Spawn bullets for tanks that fired this tick
     for (auto& [id, tank] : _tanks) {
         if (tank.wantsShoot && tank.isAlive) {
-            Vector3 muzzlePos = tank.position + Vector3{0.f, Tank::CAPSULE_HEIGHT * 0.7f, 0.f};
+            Vector3 muzzlePos = tank.position + Vector3{0.f, _map.getTankConfig().extentY * 2.f * 0.7f, 0.f};
             spawnBullet(id, muzzlePos, tank.yaw);
             tank.wantsShoot = false;
         }
@@ -332,11 +411,35 @@ Vector3 GameWorld::getSpawnPosition(size_t slotIndex) const {
     return defaultSpawn(static_cast<uint32_t>(slotIndex));
 }
 
+// Trả về chiều cao mặt đứng tại (x,z): max của heightmap và top của các walkable box (bridge/floor)
+// Non-walkable walls bị bỏ qua để tránh snap tank lên đỉnh tường.
+float GameWorld::surfaceHeight(float x, float z, uint32_t* outBoxId) const
+{
+    float    h     = _map.GetHeightAt(x, z);
+    uint32_t boxId = 0;
+    for (const auto& box : _physics._boxes) {
+        if (!box.isActive || !box.isWalkable) continue;
+        float dx = x - box.center.x;
+        float dz = z - box.center.z;
+        float lx = dx * box.axisX.x + dz * box.axisX.z;
+        float lz = dx * box.axisZ.x + dz * box.axisZ.z;
+        if (std::fabs(lx) > box.extents.x) continue;
+        if (std::fabs(lz) > box.extents.z) continue;
+        float topY = box.center.y
+            + std::fabs(box.axisX.y) * box.extents.x
+            + std::fabs(box.axisY.y) * box.extents.y
+            + std::fabs(box.axisZ.y) * box.extents.z;
+        if (topY > h) { h = topY; boxId = box.entityId; }
+    }
+    if (outBoxId) *outBoxId = boxId;
+    return h;
+}
+
 void GameWorld::killPlayer(uint32_t playerId) {
     auto it = _tanks.find(playerId);
     if (it == _tanks.end()) return;
     it->second.isAlive = false;
-    _physics.removeCapsule(playerId);
+    _physics.removeDynamicBox(playerId);
 }
 
 void GameWorld::logTankPositions(uint32_t matchId) const {

@@ -40,9 +40,10 @@ inline Vector3 operator*(float s, const Vector3& v) { return v * s; }
 // ─── Colliders ────────────────────────────────────────────────────────────────
 
 struct OBBCollider {
-    uint32_t entityId = 0;
-    bool     isActive = false;
-    bool     isStatic = true;
+    uint32_t entityId  = 0;
+    bool     isActive  = false;
+    bool     isStatic  = true;
+    bool     isWalkable = false; // true = mặt phẳng đi được (bridge/floor), bỏ qua wall collision
 
     Vector3 center;
     Vector3 extents;                  // half-sizes

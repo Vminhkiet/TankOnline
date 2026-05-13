@@ -34,9 +34,10 @@ static void aabbSphere(const SphereCollider& s, Vector3& mn, Vector3& mx)
 // CRUD
 // ════════════════════════════════════════════════════════════════════════════
 
-void PhysicsWorld::addBox    (const OBBCollider& box)    { _boxes.push_back(box); }
-void PhysicsWorld::addCapsule(const CapsuleCollider& cap){ _capsules.push_back(cap); }
-void PhysicsWorld::addSphere (const SphereCollider& sph) { _spheres.push_back(sph); }
+void PhysicsWorld::addBox       (const OBBCollider& box)     { _boxes.push_back(box); }
+void PhysicsWorld::addCapsule   (const CapsuleCollider& cap) { _capsules.push_back(cap); }
+void PhysicsWorld::addDynamicBox(const OBBCollider& box)     { _dynamicBoxes.push_back(box); }
+void PhysicsWorld::addSphere    (const SphereCollider& sph)  { _spheres.push_back(sph); }
 
 template<typename Vec>
 static void swapRemove(Vec& v, uint32_t id) {
@@ -45,12 +46,18 @@ static void swapRemove(Vec& v, uint32_t id) {
     }
 }
 
-void PhysicsWorld::removeBox    (uint32_t id) { swapRemove(_boxes,    id); }
-void PhysicsWorld::removeCapsule(uint32_t id) { swapRemove(_capsules, id); }
-void PhysicsWorld::removeSphere (uint32_t id) { swapRemove(_spheres,  id); }
+void PhysicsWorld::removeBox       (uint32_t id) { swapRemove(_boxes,        id); }
+void PhysicsWorld::removeCapsule   (uint32_t id) { swapRemove(_capsules,     id); }
+void PhysicsWorld::removeDynamicBox(uint32_t id) { swapRemove(_dynamicBoxes, id); }
+void PhysicsWorld::removeSphere    (uint32_t id) { swapRemove(_spheres,      id); }
 
-void PhysicsWorld::updateCapsule(uint32_t id, const Vector3& pA, const Vector3& pB) {
-    for (auto& c : _capsules) if (c.entityId == id) { c.pA = pA; c.pB = pB; return; }
+void PhysicsWorld::updateDynamicBox(uint32_t id, const Vector3& center,
+                                     const Vector3& axisX, const Vector3& axisY, const Vector3& axisZ) {
+    for (auto& b : _dynamicBoxes) if (b.entityId == id) {
+        b.center = center;
+        b.axisX = axisX; b.axisY = axisY; b.axisZ = axisZ;
+        return;
+    }
 }
 
 void PhysicsWorld::updateSphere(uint32_t id, const Vector3& center) {
@@ -89,40 +96,71 @@ void PhysicsWorld::closestPtSegSeg(
     const Vector3& p2, const Vector3& q2,
     float& s, float& t, Vector3& c1, Vector3& c2)
 {
-    // Ericson, "Real-Time Collision Detection" §5.1.9
-    Vector3 d1 = q1 - p1;
-    Vector3 d2 = q2 - p2;
-    Vector3 r  = p1 - p2;
-
+    Vector3 d1 = q1 - p1, d2 = q2 - p2, r = p1 - p2;
     float a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r);
     const float EPS = 1e-8f;
-
     if (a <= EPS && e <= EPS) { s = t = 0.f; c1 = p1; c2 = p2; return; }
-
     if (a <= EPS) {
-        s = 0.f;
-        t = std::max(0.f, std::min(1.f, f / e));
+        s = 0.f; t = std::max(0.f, std::min(1.f, f / e));
     } else {
         float c = d1.dot(r);
         if (e <= EPS) {
-            t = 0.f;
-            s = std::max(0.f, std::min(1.f, -c / a));
+            t = 0.f; s = std::max(0.f, std::min(1.f, -c / a));
         } else {
-            float b     = d1.dot(d2);
-            float denom = a*e - b*b;
-            s = (std::fabs(denom) > EPS)
-                ? std::max(0.f, std::min(1.f, (b*f - c*e) / denom))
-                : 0.f;
+            float b = d1.dot(d2), denom = a*e - b*b;
+            s = (std::fabs(denom) > EPS) ? std::max(0.f, std::min(1.f, (b*f - c*e) / denom)) : 0.f;
             t = (b*s + f) / e;
-            if (t < 0.f) {
-                t = 0.f; s = std::max(0.f, std::min(1.f, -c / a));
-            } else if (t > 1.f) {
-                t = 1.f; s = std::max(0.f, std::min(1.f, (b - c) / a));
-            }
+            if (t < 0.f)      { t = 0.f; s = std::max(0.f, std::min(1.f, -c / a)); }
+            else if (t > 1.f) { t = 1.f; s = std::max(0.f, std::min(1.f, (b - c) / a)); }
         }
     }
-    c1 = p1 + d1 * s;
-    c2 = p2 + d2 * t;
+    c1 = p1 + d1 * s; c2 = p2 + d2 * t;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Narrow-phase: Capsule vs OBB  (static capsule obstacle vs tank OBB)
+// normal points FROM box TOWARD capsule (use -normal to push OBB out)
+// ════════════════════════════════════════════════════════════════════════════
+
+bool PhysicsWorld::checkCapsuleVsOBB(const CapsuleCollider& cap, const OBBCollider& box,
+                                      Vector3& normal, float& depth) const
+{
+    Vector3 seg = cap.pB - cap.pA;
+    float   len = seg.lengthSq();
+    float t = (len > 1e-8f)
+        ? std::max(0.f, std::min(1.f, (box.center - cap.pA).dot(seg) / len)) : 0.f;
+    Vector3 segPt  = cap.pA + seg * t;
+    Vector3 obbPt  = closestPtOnOBB(segPt, box);
+    Vector3 diff   = segPt - obbPt;
+    float   distSq = diff.lengthSq();
+    if (distSq >= cap.radius * cap.radius) return false;
+    float dist = std::sqrt(distSq);
+    depth  = cap.radius - dist;
+    normal = (dist < 1e-8f) ? Vector3{0.f,1.f,0.f} : diff * (1.f / dist);
+    return true;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Narrow-phase: Sphere vs Capsule  (bullet vs static capsule obstacle)
+// ════════════════════════════════════════════════════════════════════════════
+
+bool PhysicsWorld::checkSphereVsCapsule(const SphereCollider& sph,
+                                         const CapsuleCollider& cap,
+                                         Vector3& normal, float& depth) const
+{
+    Vector3 seg = cap.pB - cap.pA;
+    float lenSq = seg.lengthSq();
+    float t = (lenSq > 1e-8f)
+        ? std::max(0.f, std::min(1.f, (sph.center - cap.pA).dot(seg) / lenSq)) : 0.f;
+    Vector3 closest = cap.pA + seg * t;
+    Vector3 diff    = sph.center - closest;
+    float   totalR  = sph.radius + cap.radius;
+    float   distSq  = diff.lengthSq();
+    if (distSq >= totalR * totalR) return false;
+    float dist = std::sqrt(distSq);
+    depth  = totalR - dist;
+    normal = (dist < 1e-8f) ? Vector3{0.f,1.f,0.f} : diff * (1.f / dist);
+    return true;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -152,7 +190,7 @@ bool PhysicsWorld::checkOBBvsOBB(const OBBCollider& A, const OBBCollider& B,
         if (overlap <= 0.f) return false;
         if (overlap < depth) {
             depth  = overlap;
-            normal = (T.dot(ax) < 0.f) ? -ax : ax;
+            normal = (T.dot(ax) >= 0.f) ? -ax : ax;
         }
         return true;
     };
@@ -167,62 +205,7 @@ bool PhysicsWorld::checkOBBvsOBB(const OBBCollider& A, const OBBCollider& B,
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Narrow-phase: Capsule vs OBB
-// ════════════════════════════════════════════════════════════════════════════
-
-bool PhysicsWorld::checkCapsuleVsOBB(const CapsuleCollider& cap, const OBBCollider& box,
-                                      Vector3& normal, float& depth) const
-{
-    // Find closest point on segment to box center, then clamp to get OBB contact
-    Vector3 seg = cap.pB - cap.pA;
-    float   len = seg.lengthSq();
-
-    float t = (len > 1e-8f)
-        ? std::max(0.f, std::min(1.f, (box.center - cap.pA).dot(seg) / len))
-        : 0.f;
-
-    Vector3 segPt  = cap.pA + seg * t;
-    Vector3 obbPt  = closestPtOnOBB(segPt, box);
-    Vector3 diff   = segPt - obbPt;
-    float   distSq = diff.lengthSq();
-
-    if (distSq >= cap.radius * cap.radius) return false;
-
-    float dist = std::sqrt(distSq);
-    depth  = cap.radius - dist;
-    normal = (dist < 1e-8f) ? Vector3{0.f,1.f,0.f} : diff * (1.f / dist);
-    return true;
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Narrow-phase: Sphere vs Capsule (bullet vs tank)
-// ════════════════════════════════════════════════════════════════════════════
-
-bool PhysicsWorld::checkSphereVsCapsule(const SphereCollider& sph,
-                                         const CapsuleCollider& cap,
-                                         Vector3& normal, float& depth) const
-{
-    Vector3 seg  = cap.pB - cap.pA;
-    float   lenSq = seg.lengthSq();
-    float   t     = (lenSq > 1e-8f)
-        ? std::max(0.f, std::min(1.f, (sph.center - cap.pA).dot(seg) / lenSq))
-        : 0.f;
-
-    Vector3 closest = cap.pA + seg * t;
-    Vector3 diff    = sph.center - closest;
-    float   totalR  = sph.radius + cap.radius;
-    float   distSq  = diff.lengthSq();
-
-    if (distSq >= totalR * totalR) return false;
-
-    float dist = std::sqrt(distSq);
-    depth  = totalR - dist;
-    normal = (dist < 1e-8f) ? Vector3{0.f,1.f,0.f} : diff * (1.f / dist);
-    return true;
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// Narrow-phase: Sphere vs OBB (bullet vs wall)
+// Narrow-phase: Sphere vs OBB (bullet vs wall or bullet vs tank)
 // ════════════════════════════════════════════════════════════════════════════
 
 bool PhysicsWorld::checkSphereVsOBB(const SphereCollider& sph, const OBBCollider& box,
@@ -299,9 +282,10 @@ void PhysicsWorld::buildGrid()
     _grid.clear();
     Vector3 mn, mx;
 
-    for (auto& b : _boxes)    { if (b.isActive)  { aabbOBB(b, mn, mx);     _grid.insert(b.entityId, ColliderKind::Box,     mn, mx); } }
-    for (auto& c : _capsules) { if (c.isActive)  { aabbCapsule(c, mn, mx); _grid.insert(c.entityId, ColliderKind::Capsule, mn, mx); } }
-    for (auto& s : _spheres)  { if (s.isActive)  { aabbSphere(s, mn, mx);  _grid.insert(s.entityId, ColliderKind::Sphere,  mn, mx); } }
+    for (auto& b : _boxes)       { if (b.isActive) { aabbOBB(b, mn, mx);     _grid.insert(b.entityId, ColliderKind::Box,        mn, mx); } }
+    for (auto& c : _capsules)    { if (c.isActive) { aabbCapsule(c, mn, mx); _grid.insert(c.entityId, ColliderKind::Capsule,    mn, mx); } }
+    for (auto& b : _dynamicBoxes){ if (b.isActive) { aabbOBB(b, mn, mx);     _grid.insert(b.entityId, ColliderKind::DynamicBox, mn, mx); } }
+    for (auto& s : _spheres)     { if (s.isActive) { aabbSphere(s, mn, mx);  _grid.insert(s.entityId, ColliderKind::Sphere,     mn, mx); } }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -318,16 +302,20 @@ void PhysicsWorld::DetectCollisions()
     auto pairs = _grid.broadPhasePairs();
 
     // Fast lookup helpers (linear scan – small vectors in practice)
-    auto findCap = [&](uint32_t id) -> CapsuleCollider* {
-        for (auto& c : _capsules) if (c.entityId == id && c.isActive) return &c;
+    auto findDyn = [&](uint32_t id) -> OBBCollider* {
+        for (auto& b : _dynamicBoxes) if (b.entityId == id && b.isActive) return &b;
         return nullptr;
     };
     auto findSph = [&](uint32_t id) -> SphereCollider* {
-        for (auto& s : _spheres)  if (s.entityId == id && s.isActive) return &s;
+        for (auto& s : _spheres) if (s.entityId == id && s.isActive) return &s;
         return nullptr;
     };
     auto findBox = [&](uint32_t id) -> OBBCollider* {
-        for (auto& b : _boxes)    if (b.entityId == id && b.isActive) return &b;
+        for (auto& b : _boxes) if (b.entityId == id && b.isActive) return &b;
+        return nullptr;
+    };
+    auto findCap = [&](uint32_t id) -> CapsuleCollider* {
+        for (auto& c : _capsules) if (c.entityId == id && c.isActive) return &c;
         return nullptr;
     };
 
@@ -340,30 +328,38 @@ void PhysicsWorld::DetectCollisions()
         auto ka = entA.kind, kb = entB.kind;
         uint32_t ia = entA.entityId, ib = entB.entityId;
 
-        if (ka == ColliderKind::Capsule && kb == ColliderKind::Box) {
-            auto* cap = findCap(ia); auto* box = findBox(ib);
-            if (cap && box) { colliding = checkCapsuleVsOBB(*cap, *box, normal, depth); ctype = CollisionType::TANK_VS_WALL; }
+        if (ka == ColliderKind::DynamicBox && kb == ColliderKind::Box) {
+            auto* dyn = findDyn(ia); auto* box = findBox(ib);
+            if (dyn && box) {
+                // Bỏ qua walkable surfaces (bridge/floor tagged "Surface" trong Unity)
+                // surfaceHeight() snap tank lên mặt phẳng này, không cần wall collision
+                if (!box->isWalkable)
+                    colliding = checkOBBvsOBB(*dyn, *box, normal, depth);
+                ctype = CollisionType::TANK_VS_WALL;
+            }
         }
-        else if (ka == ColliderKind::Capsule && kb == ColliderKind::Capsule) {
-            auto* cA = findCap(ia); auto* cB = findCap(ib);
-            if (cA && cB) {
-                float s, t; Vector3 c1, c2;
-                closestPtSegSeg(cA->pA, cA->pB, cB->pA, cB->pB, s, t, c1, c2);
-                Vector3 diff = c1 - c2;
-                float   totR = cA->radius + cB->radius;
-                float   dsq  = diff.lengthSq();
-                if (dsq < totR * totR) {
-                    float dist = std::sqrt(dsq);
-                    depth  = totR - dist;
-                    normal = (dist < 1e-8f) ? Vector3{0,1,0} : diff * (1.f/dist);
+        else if (ka == ColliderKind::DynamicBox && kb == ColliderKind::DynamicBox) {
+            auto* dA = findDyn(ia); auto* dB = findDyn(ib);
+            if (dA && dB) { colliding = checkOBBvsOBB(*dA, *dB, normal, depth); ctype = CollisionType::TANK_VS_TANK; }
+        }
+        else if (ka == ColliderKind::Sphere && kb == ColliderKind::DynamicBox) {
+            auto* sph = findSph(ia); auto* dyn = findDyn(ib);
+            if (sph && dyn) { colliding = checkSphereVsOBB(*sph, *dyn, normal, depth); ctype = CollisionType::BULLET_VS_TANK; }
+        }
+        else if (ka == ColliderKind::DynamicBox && kb == ColliderKind::Capsule) {
+            // Tank (OBB) vs static capsule obstacle — negate normal so push is toward tank
+            auto* dyn = findDyn(ia); auto* cap = findCap(ib);
+            if (dyn && cap) {
+                if (checkCapsuleVsOBB(*cap, *dyn, normal, depth)) {
+                    normal   = -normal; // flip: push tank out, not capsule
                     colliding = true;
-                    ctype = CollisionType::TANK_VS_TANK;
                 }
+                ctype = CollisionType::TANK_VS_WALL;
             }
         }
         else if (ka == ColliderKind::Sphere && kb == ColliderKind::Capsule) {
             auto* sph = findSph(ia); auto* cap = findCap(ib);
-            if (sph && cap) { colliding = checkSphereVsCapsule(*sph, *cap, normal, depth); ctype = CollisionType::BULLET_VS_TANK; }
+            if (sph && cap) { colliding = checkSphereVsCapsule(*sph, *cap, normal, depth); ctype = CollisionType::BULLET_VS_WALL; }
         }
         else if (ka == ColliderKind::Sphere && kb == ColliderKind::Box) {
             auto* sph = findSph(ia); auto* box = findBox(ib);

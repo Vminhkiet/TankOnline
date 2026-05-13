@@ -24,7 +24,7 @@ struct GridCellHash {
 
 // ─── Entry stored per cell ────────────────────────────────────────────────────
 
-enum class ColliderKind : uint8_t { Box = 0, Capsule = 1, Sphere = 2 };
+enum class ColliderKind : uint8_t { Box = 0, Capsule = 1, Sphere = 2, DynamicBox = 3 };
 
 struct GridEntry {
     uint32_t    entityId;

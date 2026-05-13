@@ -25,7 +25,8 @@
             },
             "radius": 4.670000076293945,
             "height": 18.600000381469728,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -52,7 +53,8 @@
             },
             "radius": 9.448457717895508,
             "height": 26.850000381469728,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -79,7 +81,8 @@
             },
             "radius": 11.899999618530274,
             "height": 33.400001525878909,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -106,7 +109,8 @@
             },
             "radius": 4.866916656494141,
             "height": 18.399999618530275,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -133,7 +137,8 @@
             },
             "radius": 4.124958038330078,
             "height": 17.719999313354493,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -160,7 +165,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -187,7 +193,8 @@
             },
             "radius": 0.9399999976158142,
             "height": 3.5,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -214,7 +221,8 @@
             },
             "radius": 3.952861785888672,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -241,7 +249,8 @@
             },
             "radius": 3.0999999046325685,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -268,7 +277,8 @@
             },
             "radius": 4.190000057220459,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -295,7 +305,8 @@
             },
             "radius": 2.4000000953674318,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -322,7 +333,8 @@
             },
             "radius": 4.190000057220459,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -349,7 +361,8 @@
             },
             "radius": 3.299999952316284,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -376,7 +389,8 @@
             },
             "radius": 0.8999999761581421,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -403,7 +417,8 @@
             },
             "radius": 10.5,
             "height": 11.896665573120118,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff",
@@ -430,7 +445,8 @@
             },
             "radius": 10.5,
             "height": 11.896665573120118,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -457,7 +473,8 @@
             },
             "radius": 4.670000076293945,
             "height": 18.600000381469728,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -484,7 +501,8 @@
             },
             "radius": 9.448457717895508,
             "height": 26.850000381469728,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -511,7 +529,8 @@
             },
             "radius": 11.899999618530274,
             "height": 33.400001525878909,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -538,7 +557,8 @@
             },
             "radius": 4.866916656494141,
             "height": 18.399999618530275,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -565,7 +585,8 @@
             },
             "radius": 4.124958038330078,
             "height": 17.719999313354493,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -592,7 +613,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -619,7 +641,8 @@
             },
             "radius": 0.9399999976158142,
             "height": 3.5,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -646,7 +669,8 @@
             },
             "radius": 3.952861785888672,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -673,7 +697,8 @@
             },
             "radius": 3.0999999046325685,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -700,7 +725,8 @@
             },
             "radius": 4.190000057220459,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -727,7 +753,8 @@
             },
             "radius": 2.4000000953674318,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -754,7 +781,8 @@
             },
             "radius": 4.190000057220459,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -781,7 +809,8 @@
             },
             "radius": 3.299999952316284,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (1)",
@@ -808,7 +837,8 @@
             },
             "radius": 0.8999999761581421,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -835,7 +865,8 @@
             },
             "radius": 4.670000076293945,
             "height": 18.600000381469728,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -862,7 +893,8 @@
             },
             "radius": 9.448457717895508,
             "height": 26.850000381469728,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -889,7 +921,8 @@
             },
             "radius": 11.899999618530274,
             "height": 33.400001525878909,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -916,7 +949,8 @@
             },
             "radius": 4.866916656494141,
             "height": 18.399999618530275,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -943,7 +977,8 @@
             },
             "radius": 4.124958038330078,
             "height": 17.719999313354493,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -970,7 +1005,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -997,7 +1033,8 @@
             },
             "radius": 0.9399999976158142,
             "height": 3.5,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -1024,7 +1061,8 @@
             },
             "radius": 3.952861785888672,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -1051,7 +1089,8 @@
             },
             "radius": 3.0999999046325685,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -1078,7 +1117,8 @@
             },
             "radius": 4.190000057220459,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -1105,7 +1145,8 @@
             },
             "radius": 2.4000000953674318,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -1132,7 +1173,8 @@
             },
             "radius": 4.190000057220459,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -1159,7 +1201,8 @@
             },
             "radius": 3.299999952316284,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -1186,7 +1229,8 @@
             },
             "radius": 0.8999999761581421,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -1213,7 +1257,8 @@
             },
             "radius": 11.970000267028809,
             "height": 11.896665573120118,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (2)",
@@ -1240,7 +1285,8 @@
             },
             "radius": 11.970000267028809,
             "height": 11.896665573120118,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1267,7 +1313,8 @@
             },
             "radius": 4.670001029968262,
             "height": 18.600000381469728,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1294,7 +1341,8 @@
             },
             "radius": 9.44845962524414,
             "height": 26.850000381469728,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1321,7 +1369,8 @@
             },
             "radius": 11.900002479553223,
             "height": 33.400001525878909,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1348,7 +1397,8 @@
             },
             "radius": 4.866917610168457,
             "height": 18.399999618530275,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1375,7 +1425,8 @@
             },
             "radius": 4.1249589920043949,
             "height": 17.719999313354493,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1402,7 +1453,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1429,7 +1481,8 @@
             },
             "radius": 0.9400002360343933,
             "height": 3.5,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1456,7 +1509,8 @@
             },
             "radius": 3.9528627395629885,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1483,7 +1537,8 @@
             },
             "radius": 3.1000006198883058,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1510,7 +1565,8 @@
             },
             "radius": 4.190001010894775,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1537,7 +1593,8 @@
             },
             "radius": 2.40000057220459,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1564,7 +1621,8 @@
             },
             "radius": 4.190001010894775,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1591,7 +1649,8 @@
             },
             "radius": 3.3000006675720217,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Cliff (3)",
@@ -1618,7 +1677,8 @@
             },
             "radius": 0.9000002145767212,
             "height": 1.0,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "rock_010",
@@ -1645,7 +1705,8 @@
             },
             "radius": 1.5345515012741089,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "rock_010 (1)",
@@ -1672,7 +1733,8 @@
             },
             "radius": 1.5345515012741089,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "rock_011",
@@ -1699,7 +1761,8 @@
             },
             "radius": 1.5345515012741089,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "rock_010 (2)",
@@ -1726,250 +1789,8 @@
             },
             "radius": 1.5345515012741089,
             "height": 0.0,
-            "direction": 0
-        },
-        {
-            "name": "bridge",
-            "type": "box",
-            "position": {
-                "x": 6.996031761169434,
-                "y": 0.23999999463558198,
-                "z": 11.724599838256836
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 271.39019775390627,
-                "z": 0.0
-            },
-            "center": {
-                "x": 6.951168060302734,
-                "y": 0.17219965159893037,
-                "z": 9.875946998596192
-            },
-            "size": {
-                "x": 7.287308692932129,
-                "y": 0.30148547887802126,
-                "z": 4.884727954864502
-            },
-            "radius": 0.0,
-            "height": 0.0,
-            "direction": 0
-        },
-        {
-            "name": "bridge (1)",
-            "type": "box",
-            "position": {
-                "x": 6.8177642822265629,
-                "y": 0.23999999463558198,
-                "z": 4.456290245056152
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 271.39019775390627,
-                "z": 0.0
-            },
-            "center": {
-                "x": 6.773796081542969,
-                "y": 0.17219963669776917,
-                "z": 2.644564151763916
-            },
-            "size": {
-                "x": 7.361139297485352,
-                "y": 0.30148547887802126,
-                "z": 4.884727954864502
-            },
-            "radius": 0.0,
-            "height": 0.0,
-            "direction": 0
-        },
-        {
-            "name": "bridge (2)",
-            "type": "box",
-            "position": {
-                "x": 6.506343841552734,
-                "y": 0.23999999463558198,
-                "z": -2.820406436920166
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 271.39019775390627,
-                "z": 0.0
-            },
-            "center": {
-                "x": 6.462375640869141,
-                "y": 0.17219963669776917,
-                "z": -4.632132530212402
-            },
-            "size": {
-                "x": 7.361139297485352,
-                "y": 0.30148547887802126,
-                "z": 4.884727954864502
-            },
-            "radius": 0.0,
-            "height": 0.0,
-            "direction": 0
-        },
-        {
-            "name": "bridge",
-            "type": "box",
-            "position": {
-                "x": -24.582077026367189,
-                "y": 0.3100000023841858,
-                "z": 11.163592338562012
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 266.72998046875,
-                "z": 0.0
-            },
-            "center": {
-                "x": -24.478702545166017,
-                "y": 0.2421996295452118,
-                "z": 9.354283332824707
-            },
-            "size": {
-                "x": 7.361140727996826,
-                "y": 0.30148547887802126,
-                "z": 4.884728908538818
-            },
-            "radius": 0.0,
-            "height": 0.0,
-            "direction": 0
-        },
-        {
-            "name": "bridge (1)",
-            "type": "box",
-            "position": {
-                "x": -24.169231414794923,
-                "y": 0.3100000023841858,
-                "z": 3.9048280715942385
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 266.72998046875,
-                "z": 0.0
-            },
-            "center": {
-                "x": -24.06585693359375,
-                "y": 0.2421996295452118,
-                "z": 2.0955190658569338
-            },
-            "size": {
-                "x": 7.361140727996826,
-                "y": 0.30148547887802126,
-                "z": 4.884728908538818
-            },
-            "radius": 0.0,
-            "height": 0.0,
-            "direction": 0
-        },
-        {
-            "name": "bridge (2)",
-            "type": "box",
-            "position": {
-                "x": -23.888416290283204,
-                "y": 0.3100000023841858,
-                "z": -3.3731141090393068
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 266.72998046875,
-                "z": 0.0
-            },
-            "center": {
-                "x": -23.78504180908203,
-                "y": 0.2421996295452118,
-                "z": -5.182423114776611
-            },
-            "size": {
-                "x": 7.361140727996826,
-                "y": 0.30148547887802126,
-                "z": 4.884728908538818
-            },
-            "radius": 0.0,
-            "height": 0.0,
-            "direction": 0
-        },
-        {
-            "name": "bridge",
-            "type": "box",
-            "position": {
-                "x": 36.11347961425781,
-                "y": 0.23999999463558198,
-                "z": 11.670934677124024
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 274.0892333984375,
-                "z": 0.0
-            },
-            "center": {
-                "x": 35.98424530029297,
-                "y": 0.17219963669776917,
-                "z": 9.863288879394532
-            },
-            "size": {
-                "x": 7.361139297485352,
-                "y": 0.30148547887802126,
-                "z": 4.884727954864502
-            },
-            "radius": 0.0,
-            "height": 0.0,
-            "direction": 0
-        },
-        {
-            "name": "bridge (1)",
-            "type": "box",
-            "position": {
-                "x": 35.59314727783203,
-                "y": 0.23999999463558198,
-                "z": 4.419083118438721
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 274.0892333984375,
-                "z": 0.0
-            },
-            "center": {
-                "x": 35.46391296386719,
-                "y": 0.17219963669776917,
-                "z": 2.6114373207092287
-            },
-            "size": {
-                "x": 7.361139297485352,
-                "y": 0.30148547887802126,
-                "z": 4.884727954864502
-            },
-            "radius": 0.0,
-            "height": 0.0,
-            "direction": 0
-        },
-        {
-            "name": "bridge (2)",
-            "type": "box",
-            "position": {
-                "x": 34.939414978027347,
-                "y": 0.23999999463558198,
-                "z": -2.834876537322998
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 274.0892333984375,
-                "z": 0.0
-            },
-            "center": {
-                "x": 34.8101806640625,
-                "y": 0.17219963669776917,
-                "z": -4.642521858215332
-            },
-            "size": {
-                "x": 7.361139297485352,
-                "y": 0.30148547887802126,
-                "z": 4.884727954864502
-            },
-            "radius": 0.0,
-            "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Tree 1",
@@ -1996,7 +1817,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "tree_005",
@@ -2023,7 +1845,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "tree_005",
@@ -2050,7 +1873,8 @@
             },
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "tree_005 (1)",
@@ -2077,7 +1901,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "tree_005 (1)",
@@ -2104,7 +1929,8 @@
             },
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "tree_005 (3)",
@@ -2131,7 +1957,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "tree_005 (3)",
@@ -2158,7 +1985,8 @@
             },
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "tree_005 (2)",
@@ -2185,7 +2013,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "tree_005 (2)",
@@ -2212,7 +2041,8 @@
             },
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "tree_005 (4)",
@@ -2239,7 +2069,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "tree_005 (4)",
@@ -2266,7 +2097,8 @@
             },
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Bush",
@@ -2293,7 +2125,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (1)",
@@ -2320,7 +2153,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (2)",
@@ -2347,7 +2181,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (3)",
@@ -2374,7 +2209,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush",
@@ -2401,7 +2237,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (1)",
@@ -2428,7 +2265,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (2)",
@@ -2455,7 +2293,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (3)",
@@ -2482,7 +2321,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (1)",
@@ -2509,7 +2349,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (2)",
@@ -2536,7 +2377,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (3)",
@@ -2563,7 +2405,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (2)",
@@ -2590,7 +2433,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (3)",
@@ -2617,7 +2461,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (1)",
@@ -2644,7 +2489,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (2)",
@@ -2671,7 +2517,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (3)",
@@ -2698,7 +2545,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (1)",
@@ -2725,7 +2573,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (2)",
@@ -2752,7 +2601,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (3)",
@@ -2779,7 +2629,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (1)",
@@ -2806,7 +2657,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (2)",
@@ -2833,7 +2685,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (3)",
@@ -2860,7 +2713,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (1)",
@@ -2887,7 +2741,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (2)",
@@ -2914,7 +2769,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (3)",
@@ -2941,7 +2797,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (1)",
@@ -2968,7 +2825,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (2)",
@@ -2995,7 +2853,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "Bush (3)",
@@ -3022,7 +2881,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall",
@@ -3049,7 +2909,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall (1)",
@@ -3076,7 +2937,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall (2)",
@@ -3103,7 +2965,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall_002",
@@ -3130,7 +2993,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall_002 (2)",
@@ -3157,7 +3021,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall_002 (4)",
@@ -3184,7 +3049,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall_002 (1)",
@@ -3211,7 +3077,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall_002 (3)",
@@ -3238,7 +3105,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall_002 (5)",
@@ -3265,7 +3133,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall_001",
@@ -3292,7 +3161,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall_001 (1)",
@@ -3319,7 +3189,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "wall_001 (2)",
@@ -3346,7 +3217,8 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
         },
         {
             "name": "OilStorage (3)",
@@ -3373,7 +3245,8 @@
             },
             "radius": 1.509953260421753,
             "height": 4.070000171661377,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "OilStorage (2)",
@@ -3400,7 +3273,8 @@
             },
             "radius": 1.509953260421753,
             "height": 4.070000171661377,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "OilStorage (1)",
@@ -3427,7 +3301,8 @@
             },
             "radius": 1.509953260421753,
             "height": 4.070000171661377,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "OilStorage",
@@ -3454,7 +3329,8 @@
             },
             "radius": 1.509953260421753,
             "height": 4.070000171661377,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "canon_001",
@@ -3481,7 +3357,8 @@
             },
             "radius": 1.909244179725647,
             "height": 1.6319339275360108,
-            "direction": 1
+            "direction": 1,
+            "walkable": false
         },
         {
             "name": "Building01",
@@ -3508,7 +3385,260 @@
             },
             "radius": 0.0,
             "height": 0.0,
-            "direction": 0
+            "direction": 0,
+            "walkable": false
+        },
+        {
+            "name": "bridge",
+            "type": "box",
+            "position": {
+                "x": 6.996031761169434,
+                "y": 0.23999999463558198,
+                "z": 11.724599838256836
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 271.39019775390627,
+                "z": 0.0
+            },
+            "center": {
+                "x": 6.951168060302734,
+                "y": 0.17219965159893037,
+                "z": 9.875946998596192
+            },
+            "size": {
+                "x": 7.287308692932129,
+                "y": 0.30148547887802126,
+                "z": 4.884727954864502
+            },
+            "radius": 0.0,
+            "height": 0.0,
+            "direction": 0,
+            "walkable": true
+        },
+        {
+            "name": "bridge (1)",
+            "type": "box",
+            "position": {
+                "x": 6.8177642822265629,
+                "y": 0.23999999463558198,
+                "z": 4.456290245056152
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 271.39019775390627,
+                "z": 0.0
+            },
+            "center": {
+                "x": 6.773796081542969,
+                "y": 0.17219963669776917,
+                "z": 2.644564151763916
+            },
+            "size": {
+                "x": 7.361139297485352,
+                "y": 0.30148547887802126,
+                "z": 4.884727954864502
+            },
+            "radius": 0.0,
+            "height": 0.0,
+            "direction": 0,
+            "walkable": true
+        },
+        {
+            "name": "bridge (2)",
+            "type": "box",
+            "position": {
+                "x": 6.506343841552734,
+                "y": 0.23999999463558198,
+                "z": -2.820406436920166
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 271.39019775390627,
+                "z": 0.0
+            },
+            "center": {
+                "x": 6.462375640869141,
+                "y": 0.17219963669776917,
+                "z": -4.632132530212402
+            },
+            "size": {
+                "x": 7.361139297485352,
+                "y": 0.30148547887802126,
+                "z": 4.884727954864502
+            },
+            "radius": 0.0,
+            "height": 0.0,
+            "direction": 0,
+            "walkable": true
+        },
+        {
+            "name": "bridge",
+            "type": "box",
+            "position": {
+                "x": -24.582077026367189,
+                "y": 0.3100000023841858,
+                "z": 11.163592338562012
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 266.72998046875,
+                "z": 0.0
+            },
+            "center": {
+                "x": -24.478702545166017,
+                "y": 0.2421996295452118,
+                "z": 9.354283332824707
+            },
+            "size": {
+                "x": 7.361140727996826,
+                "y": 0.30148547887802126,
+                "z": 4.884728908538818
+            },
+            "radius": 0.0,
+            "height": 0.0,
+            "direction": 0,
+            "walkable": true
+        },
+        {
+            "name": "bridge (1)",
+            "type": "box",
+            "position": {
+                "x": -24.169231414794923,
+                "y": 0.3100000023841858,
+                "z": 3.9048280715942385
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 266.72998046875,
+                "z": 0.0
+            },
+            "center": {
+                "x": -24.06585693359375,
+                "y": 0.2421996295452118,
+                "z": 2.0955190658569338
+            },
+            "size": {
+                "x": 7.361140727996826,
+                "y": 0.30148547887802126,
+                "z": 4.884728908538818
+            },
+            "radius": 0.0,
+            "height": 0.0,
+            "direction": 0,
+            "walkable": true
+        },
+        {
+            "name": "bridge (2)",
+            "type": "box",
+            "position": {
+                "x": -23.888416290283204,
+                "y": 0.3100000023841858,
+                "z": -3.3731141090393068
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 266.72998046875,
+                "z": 0.0
+            },
+            "center": {
+                "x": -23.78504180908203,
+                "y": 0.2421996295452118,
+                "z": -5.182423114776611
+            },
+            "size": {
+                "x": 7.361140727996826,
+                "y": 0.30148547887802126,
+                "z": 4.884728908538818
+            },
+            "radius": 0.0,
+            "height": 0.0,
+            "direction": 0,
+            "walkable": true
+        },
+        {
+            "name": "bridge",
+            "type": "box",
+            "position": {
+                "x": 36.11347961425781,
+                "y": 0.23999999463558198,
+                "z": 11.670934677124024
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 274.0892333984375,
+                "z": 0.0
+            },
+            "center": {
+                "x": 35.98424530029297,
+                "y": 0.17219963669776917,
+                "z": 9.863288879394532
+            },
+            "size": {
+                "x": 7.361139297485352,
+                "y": 0.30148547887802126,
+                "z": 4.884727954864502
+            },
+            "radius": 0.0,
+            "height": 0.0,
+            "direction": 0,
+            "walkable": true
+        },
+        {
+            "name": "bridge (1)",
+            "type": "box",
+            "position": {
+                "x": 35.59314727783203,
+                "y": 0.23999999463558198,
+                "z": 4.419083118438721
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 274.0892333984375,
+                "z": 0.0
+            },
+            "center": {
+                "x": 35.46391296386719,
+                "y": 0.17219963669776917,
+                "z": 2.6114373207092287
+            },
+            "size": {
+                "x": 7.361139297485352,
+                "y": 0.30148547887802126,
+                "z": 4.884727954864502
+            },
+            "radius": 0.0,
+            "height": 0.0,
+            "direction": 0,
+            "walkable": true
+        },
+        {
+            "name": "bridge (2)",
+            "type": "box",
+            "position": {
+                "x": 34.939414978027347,
+                "y": 0.23999999463558198,
+                "z": -2.834876537322998
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 274.0892333984375,
+                "z": 0.0
+            },
+            "center": {
+                "x": 34.8101806640625,
+                "y": 0.17219963669776917,
+                "z": -4.642521858215332
+            },
+            "size": {
+                "x": 7.361139297485352,
+                "y": 0.30148547887802126,
+                "z": 4.884727954864502
+            },
+            "radius": 0.0,
+            "height": 0.0,
+            "direction": 0,
+            "walkable": true
         }
     ],
     "heightmaps": [
@@ -7713,10 +7843,20 @@
         {
             "id": "2",
             "position": {
-                "x": 13.0,
+                "x": 5.0,
                 "y": 5.0,
                 "z": 30.0
             }
         }
-    ]
+    ],
+    "tank": {
+        "collider_extents": {
+            "x": 0.8999999761581421,
+            "y": 1.0,
+            "z": 1.2000000476837159
+        }
+    },
+    "bullet": {
+        "collider_radius": 0.25
+    }
 }

@@ -59,8 +59,12 @@ namespace TankNet
 
         // ── Public API ────────────────────────────────────────────────────────
 
+        public bool IsConnected => _running;
+
         public void Connect(string host, int port, uint matchId)
         {
+            if (_running) Disconnect();   // clean up old socket/thread before reconnecting
+
             ServerHost = host; ServerPort = port; MatchId = matchId;
 
             _server = new IPEndPoint(IPAddress.Parse(host), port);
@@ -71,7 +75,6 @@ namespace TankNet
             _recvThread = new Thread(RecvLoop) { IsBackground = true };
             _recvThread.Start();
 
-            // Start send tick
             InvokeRepeating(nameof(SendTick), 0f, 1f / SendRateHz);
             Debug.Log($"[TankNet] connected → {host}:{port} matchId={matchId}");
         }
