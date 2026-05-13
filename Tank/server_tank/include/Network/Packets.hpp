@@ -35,11 +35,12 @@ struct PacketHeader {
 // ─── C2S: movement + shoot input ────────────────────────────────────────────
 
 struct ClientInput {
-    int8_t  moveX     = 0;      // -1 left, 0 none, +1 right
-    int8_t  moveZ     = 0;      // -1 back, 0 none, +1 forward
-    float   turretYaw = 0.f;
-    bool    shoot     = false;
-    uint8_t seq       = 0;
+    int8_t  moveX       = 0;      // -1 left, 0 none, +1 right
+    int8_t  moveZ       = 0;      // -1 back, 0 none, +1 forward
+    float   turretYaw   = 0.f;
+    bool    shoot       = false;
+    uint8_t seq         = 0;
+    float   launchForce = 20.f;   // bullet speed (m/s) when shoot=true
 };
 
 struct PacketMovement {
@@ -64,6 +65,23 @@ struct PacketMovement {
     }
 };
 
+struct PacketShoot {
+    uint8_t launchForce = 20;  // integer m/s in [FORCE_MIN, FORCE_MAX]
+
+    template<typename Stream>
+    bool Serialize(Stream& stream) {
+        serialize_int(stream, launchForce, NetConst::FORCE_MIN, NetConst::FORCE_MAX);
+        return true;
+    }
+
+    ClientInput toClientInput() const {
+        ClientInput ci{};
+        ci.shoot       = true;
+        ci.launchForce = static_cast<float>(launchForce);
+        return ci;
+    }
+};
+
 // ─── S2C: per-tank state entry ───────────────────────────────────────────────
 
 struct TankState {
@@ -78,6 +96,7 @@ struct TankState {
 
 struct BulletState {
     uint32_t bulletId = 0;
+    uint32_t ownerId  = 0;   // tankId that fired this bullet
     float    x = 0.f, y = 0.f, z = 0.f;
 };
 

@@ -50,7 +50,7 @@ private:
 
     void syncColliders();
     void applyPhysicsResults(float deltaTime);
-    void spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw);
+    void spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw, float speed);
     // Returns height + id of walkable box contributing (0 = terrain only)
     float surfaceHeight(float x, float z, uint32_t* outBoxId = nullptr) const;
     static Vector3 defaultSpawn(uint32_t playerId);

@@ -84,12 +84,14 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
     if (data.contains("bullet")) {
         const auto& b = data["bullet"];
         if (b.contains("collider_radius"))
-            _bulletConfig.radius = b["collider_radius"].get<float>();
+            _bulletConfig.radius    = b["collider_radius"].get<float>();
+        if (b.contains("hit_radius"))
+            _bulletConfig.hitRadius = b["hit_radius"].get<float>();
     }
 
-    LOG_INFO("GameMap: tank({:.3f},{:.3f},{:.3f}) bullet_r={:.3f}",
+    LOG_INFO("GameMap: tank({:.3f},{:.3f},{:.3f}) bullet_r={:.3f} hit_r={:.3f}",
              _tankConfig.extentX, _tankConfig.extentY, _tankConfig.extentZ,
-             _bulletConfig.radius);
+             _bulletConfig.radius, _bulletConfig.hitRadius);
 
     if (data.contains("spawns")) {
         for (const auto& sp : data["spawns"]) {

@@ -15,7 +15,8 @@ public:
     };
 
     struct BulletConfig {
-        float radius = 0.25f;
+        float radius    = 0.25f;  // wall / ground collision radius
+        float hitRadius = 0.80f;  // tank hit-detection radius (compensates network lag)
     };
 
     GameMap() = default;

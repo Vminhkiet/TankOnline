@@ -86,12 +86,15 @@ namespace Complete
             m_Fired = true;
 
             if (TankNet.TankNetClient.Instance != null)
-                TankNet.TankNetClient.Instance.RequestShoot();
+                TankNet.TankNetClient.Instance.RequestShoot(m_CurrentLaunchForce);
 
             Rigidbody shellInstance =
                 Instantiate (m_Shell, m_FireTransform.position, m_FireTransform.rotation) as Rigidbody;
 
-            shellInstance.velocity = m_CurrentLaunchForce * m_FireTransform.forward;
+            Vector3 fireDir = m_FireTransform.forward;
+            fireDir.y = 0f;
+            fireDir.Normalize();
+            shellInstance.velocity = m_CurrentLaunchForce * fireDir;
 
             m_ShootingAudio.clip = m_FireClip;
             m_ShootingAudio.Play ();

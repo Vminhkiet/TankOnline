@@ -42,9 +42,10 @@ namespace TankNet
         private byte       _seq;
 
         // Pending input (set from main thread, sent on tick)
-        private int _pendingMoveX;
-        private int _pendingMoveZ;
-        private bool _pendingShoot;
+        private int   _pendingMoveX;
+        private int   _pendingMoveZ;
+        private bool  _pendingShoot;
+        private float _pendingShootForce = 20f;
 
         // ── Unity lifecycle ───────────────────────────────────────────────────
 
@@ -105,7 +106,14 @@ namespace TankNet
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
         }
 
-        public void RequestShoot() => _pendingShoot = true;
+        public void RequestShoot(float force = 20f)
+        {
+            if (!_running) return;
+            // Send immediately so server bullet spawns in sync with local prediction shell
+            byte[] pkt = PacketBuilder.BuildShoot(MatchId, (int)force, _seq++);
+            try { _udp.Send(pkt, pkt.Length, _server); } catch { }
+            // Do NOT set _pendingShoot — SendTick would double-send and fire a second bullet
+        }
 
         // ── Send tick (called by InvokeRepeating at 20 Hz) ───────────────────
 
@@ -118,7 +126,7 @@ namespace TankNet
 
             if (_pendingShoot)
             {
-                byte[] shoot = PacketBuilder.BuildShoot(MatchId, _seq++);
+                byte[] shoot = PacketBuilder.BuildShoot(MatchId, (int)_pendingShootForce, _seq++);
                 _udp.Send(shoot, shoot.Length, _server);
                 _pendingShoot = false;
             }

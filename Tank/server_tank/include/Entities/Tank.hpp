@@ -17,7 +17,8 @@ public:
     float    velocityY = 0.f; // vertical velocity (gravity)
     int      health   = MAX_HEALTH;
     bool     isAlive  = true;
-    bool     wantsShoot = false; // set true by processInput when shoot pressed
+    bool     wantsShoot      = false; // set true by processInput when shoot pressed
+    float    wantsShootForce = 20.f;  // bullet speed (m/s) for next shot
 
     ClientInput lastInput; // last received input — reapplied every tick
 

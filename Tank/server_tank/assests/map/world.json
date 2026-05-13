@@ -7857,6 +7857,7 @@
         }
     },
     "bullet": {
-        "collider_radius": 0.25
+        "collider_radius": 0.25,
+        "hit_radius": 0.80
     }
 }

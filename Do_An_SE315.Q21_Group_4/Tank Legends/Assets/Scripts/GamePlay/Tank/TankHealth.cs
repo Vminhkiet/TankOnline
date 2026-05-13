@@ -58,6 +58,16 @@ namespace Complete
             }
         }
 
+        // Called by GameManager when a server snapshot arrives (online mode).
+        // Syncs health bar and triggers death sequence if health reached zero.
+        public void SyncFromServer(float serverHealth)
+        {
+            m_CurrentHealth = serverHealth;
+            SetHealthUI();
+            if (m_CurrentHealth <= 0f && !m_Dead)
+                OnDeath();
+        }
+
 
         private void SetHealthUI ()
         {

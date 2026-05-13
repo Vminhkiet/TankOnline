@@ -75,33 +75,74 @@ void GameWorld::update(float deltaTime)
     for (auto& [id, tank] : _tanks)
         if (tank.isAlive) tank.update(deltaTime);
 
-    // 1. Move bullets with swept collision (prevents tunneling through thin walls)
+    constexpr float GRAVITY        = 20.f;   // tank gravity
+    constexpr float BULLET_GRAVITY = 3.0f;   // reduced so 20-30 m/s bullets reach 20-30m
+
+    // 1. Move bullets — XZ-only tank hit (Y ignored on flat map), swept CCD for walls
+    const GameMap::TankConfig& tankCfg = _map.getTankConfig();
+    float bulletHitX = tankCfg.extentX + _map.getBulletConfig().hitRadius;
+    float bulletHitZ = tankCfg.extentZ + _map.getBulletConfig().hitRadius;
     for (auto& b : _bullets) {
         if (!b.isActive) continue;
 
         b.timeToLive -= deltaTime;
         if (b.timeToLive <= 0.f) {
+            LOG_INFO("[Bullet] EXPIRE id={} owner={} pos=({:.2f},{:.2f},{:.2f}) — TTL exhausted (miss)",
+                     b.id, b.ownerTankId, b.position.x, b.position.y, b.position.z);
             b.isActive = false;
             _physics.removeSphere(b.id);
             continue;
         }
 
+        b.velocity.y -= BULLET_GRAVITY * deltaTime;
+
         Vector3 delta   = b.velocity * deltaTime;
         float   hitFrac = 1.f;
         Vector3 hitNorm;
 
+        // Ground check is deferred to after physics tick so BULLET_VS_TANK
+        // manifolds are processed first (prevents bullets being killed by the
+        // ground before the physics overlap with the tank is detected).
+
         if (_physics.sweptSphereVsStatic(b.position, Bullet::RADIUS, delta, hitFrac, hitNorm)) {
-            b.position = b.position + delta * hitFrac;
+            Vector3 hitPos = b.position + delta * hitFrac;
+            LOG_INFO("[Bullet] HIT_WALL id={} owner={} hitPos=({:.2f},{:.2f},{:.2f}) norm=({:.2f},{:.2f},{:.2f})",
+                     b.id, b.ownerTankId, hitPos.x, hitPos.y, hitPos.z,
+                     hitNorm.x, hitNorm.y, hitNorm.z);
+            b.position = hitPos;
             b.isActive = false;
             _physics.removeSphere(b.id);
         } else {
             b.position = b.position + delta;
             _physics.updateSphere(b.id, b.position);
+
+            // XZ-only hit: project bullet onto each tank's local axes, ignore Y
+            for (auto& [tid, tank] : _tanks) {
+                if (!tank.isAlive || tid == b.ownerTankId) continue;
+                float dx = b.position.x - tank.position.x;
+                float dz = b.position.z - tank.position.z;
+                float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
+                float lx =  dx * cy - dz * sy;
+                float lz =  dx * sy + dz * cy;
+                if (std::fabs(lx) > bulletHitX || std::fabs(lz) > bulletHitZ) continue;
+                bool wasAlive = tank.isAlive;
+                tank.takeDamage(Tank::BULLET_DAMAGE);
+                if (tank.isDead() && wasAlive) {
+                    LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} KILLED (dealt {} dmg)",
+                             b.id, b.ownerTankId, tid, Tank::BULLET_DAMAGE);
+                    _kills[b.ownerTankId]++;
+                } else {
+                    LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} hp={} (dealt {} dmg)",
+                             b.id, b.ownerTankId, tid, tank.health, Tank::BULLET_DAMAGE);
+                }
+                b.isActive = false;
+                _physics.removeSphere(b.id);
+                break;
+            }
         }
     }
 
     // 2. Apply gravity and snap to terrain (heightmap + elevated box surfaces)
-    constexpr float GRAVITY = 20.f;
     for (auto& [id, tank] : _tanks) {
         if (!tank.isAlive) continue;
         uint32_t boxId  = 0;
@@ -142,7 +183,19 @@ void GameWorld::update(float deltaTime)
     // 5. Apply corrections + handle collision events
     applyPhysicsResults(deltaTime);
 
-    // 6. Respawn dead tanks (only when respawn is enabled, i.e. non-match mode)
+    // 6. Ground check — bullet lands, deactivate (matches client trajectory)
+    for (auto& b : _bullets) {
+        if (!b.isActive) continue;
+        float groundY = surfaceHeight(b.position.x, b.position.z);
+        if (b.position.y <= groundY + Bullet::RADIUS) {
+            LOG_INFO("[Bullet] LAND id={} owner={} pos=({:.2f},{:.2f},{:.2f})",
+                     b.id, b.ownerTankId, b.position.x, b.position.y, b.position.z);
+            b.isActive = false;
+            _physics.removeSphere(b.id);
+        }
+    }
+
+    // 7. Respawn dead tanks (only when respawn is enabled, i.e. non-match mode)
     if (_respawnOnDeath) {
         const GameMap::TankConfig& cfg = _map.getTankConfig();
         for (auto& [id, tank] : _tanks) {
@@ -238,49 +291,23 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
             it->second.position.y = targetY;
     }
 
-    // Collision events
-    for (const auto& m : _physics._manifolds) {
-        if (m.type == CollisionType::BULLET_VS_TANK) {
-            auto tankIt = _tanks.find(m.entityB);
-            if (tankIt != _tanks.end()) {
-                bool wasAlive = tankIt->second.isAlive;
-                tankIt->second.takeDamage(Tank::BULLET_DAMAGE);
-                LOG_INFO("GameWorld: bullet {} hit tank {} (hp={})",
-                         m.entityA, m.entityB, tankIt->second.health);
-                // Credit kill to bullet owner
-                if (wasAlive && tankIt->second.isDead()) {
-                    for (const auto& b : _bullets) {
-                        if (b.id == m.entityA) { _kills[b.ownerTankId]++; break; }
-                    }
-                }
-            }
-            for (auto& b : _bullets) {
-                if (b.id == m.entityA && b.isActive) {
-                    b.isActive = false;
-                    _physics.removeSphere(b.id);
-                    break;
-                }
-            }
-        }
-    }
-
     // Spawn bullets for tanks that fired this tick
     for (auto& [id, tank] : _tanks) {
         if (tank.wantsShoot && tank.isAlive) {
             Vector3 muzzlePos = tank.position + Vector3{0.f, _map.getTankConfig().extentY * 2.f * 0.7f, 0.f};
-            spawnBullet(id, muzzlePos, tank.yaw);
+            spawnBullet(id, muzzlePos, tank.yaw, tank.wantsShootForce);
             tank.wantsShoot = false;
         }
     }
 }
 
-void GameWorld::spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw)
+void GameWorld::spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw, float speed)
 {
     Bullet b;
     b.id          = _nextBulletId++;
     b.ownerTankId = ownerTankId;
     b.position    = pos;
-    b.velocity    = Vector3{ std::sin(yaw), 0.f, std::cos(yaw) } * Bullet::SPEED;
+    b.velocity    = Vector3{ std::sin(yaw), 0.f, std::cos(yaw) } * speed;
     b.timeToLive  = Bullet::TTL;
     b.isActive    = true;
     _bullets.push_back(b);
@@ -289,8 +316,11 @@ void GameWorld::spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw)
     sph.entityId = b.id;
     sph.isActive = true;
     sph.center   = b.position;
-    sph.radius   = Bullet::RADIUS;
+    sph.radius   = _map.getBulletConfig().hitRadius;   // from world.json "hit_radius"
     _physics.addSphere(sph);
+
+    LOG_INFO("[Bullet] SPAWN  id={} owner={} pos=({:.2f},{:.2f},{:.2f}) yaw={:.2f}rad spd={:.1f} ttl={:.2f}s",
+             b.id, ownerTankId, pos.x, pos.y, pos.z, yaw, speed, Bullet::TTL);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -318,6 +348,7 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
         if (!b.isActive) continue;
         BulletState bl;
         bl.bulletId = b.id;
+        bl.ownerId  = b.ownerTankId;
         bl.x = b.position.x;
         bl.y = b.position.y;
         bl.z = b.position.z;
