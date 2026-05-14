@@ -48,6 +48,16 @@ namespace Complete
 
         private void Awake()
         {
+            // Read MatchInfo from GlobalMatchState if available
+            if (GlobalMatchState.HasMatchInfo)
+            {
+                m_OnlineMode = true;
+                m_MatchId = GlobalMatchState.MatchId;
+                m_ServerHost = GlobalMatchState.ServerHost;
+                m_ServerPort = GlobalMatchState.ServerPort;
+                Debug.Log($"[GameManager] Loaded MatchInfo from GlobalMatchState: MatchId={m_MatchId}, {m_ServerHost}:{m_ServerPort}");
+            }
+
             // Đọc -playerid từ command line: TankLegends.exe -playerid 2
             string[] args = System.Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length - 1; i++)

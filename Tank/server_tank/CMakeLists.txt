@@ -16,6 +16,7 @@ endif()
 # ── External dependencies ────────────────────────────────────────────────────
 find_package(asio          CONFIG REQUIRED)
 find_package(fmt           CONFIG REQUIRED)
+find_package(glm           CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
 # ── Sources (exclude Kafka — not needed until production) ────────────────────
@@ -28,7 +29,6 @@ add_executable(server_tank ${SERVER_SOURCES} ${SERVER_HEADERS})
 # ── Include paths ────────────────────────────────────────────────────────────
 target_include_directories(server_tank PRIVATE
     include
-    D:/Library/glm-1.0.1-light
     ${CMAKE_CURRENT_SOURCE_DIR}/../bit_packing/src
 )
 
@@ -37,6 +37,7 @@ target_link_libraries(server_tank PRIVATE
     ws2_32
     winmm
     fmt::fmt
+    glm::glm
     bit_packing
     nlohmann_json::nlohmann_json
 )
