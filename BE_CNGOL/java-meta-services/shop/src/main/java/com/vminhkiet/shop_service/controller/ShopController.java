@@ -50,7 +50,7 @@ public class ShopController {
         } catch (Exception e) {
             // Nếu thằng Service văng lỗi 500, nó sẽ nhảy vào đây
             ItemDTO errorResponse = ItemDTO.builder()
-                    .name("Lỗi hệ thống !")
+                    .name("Lỗi hệ thống")
                     .description("Service đang bị lỗi hoặc DB trống: " + e.getMessage())
                     .build();
             return ResponseEntity.ok(errorResponse);
