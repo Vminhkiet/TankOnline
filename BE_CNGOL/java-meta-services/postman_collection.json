@@ -1,0 +1,261 @@
+{
+  "info": {
+    "name": "Java Meta Services - Auth & Shop API",
+    "_postman_id": "java-meta-services-collection",
+    "description": "Test collection for Java Meta Services. All requests go through API Gateway (port 8080).\n\n**Thứ tự test:**\n1. Login → copy accessToken vào biến {{token}}\n2. Dùng {{token}} để test các endpoint bảo vệ",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth Service",
+      "item": [
+        {
+          "name": "1. Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('token', body.jwt);",
+                  "    pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "    pm.test('Login thành công', () => pm.expect(pm.response.code).to.equal(200));",
+                  "    pm.test('Có accessToken', () => pm.expect(body.jwt).to.be.a('string'));",
+                  "    pm.test('Có refreshToken', () => pm.expect(body.refreshToken).to.be.a('string'));",
+                  "    console.log('Token đã lưu vào biến {{token}}');",
+                  "} else {",
+                  "    pm.test('Login thất bại', () => pm.expect(pm.response.code).to.equal(200));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/api/auth/login", "host": ["{{base_url}}"], "path": ["api", "auth", "login"] },
+            "description": "Đăng nhập. Token tự động lưu vào biến {{token}} và {{refreshToken}}."
+          }
+        },
+        {
+          "name": "2. Login sai password (expect 4xx)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sai password bị từ chối', () => {",
+                  "    pm.expect(pm.response.code).to.be.within(400, 499);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"wrongpassword\"\n}" },
+            "url": { "raw": "{{base_url}}/api/auth/login", "host": ["{{base_url}}"], "path": ["api", "auth", "login"] },
+            "description": "Phải trả 4xx - không được login với sai password."
+          }
+        },
+        {
+          "name": "3. Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Refresh thành công = 200', () => pm.expect(pm.response.code).to.equal(200));",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('token', body.jwt);",
+                  "    pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "    console.log('Token mới đã được cập nhật');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/auth/refresh", "host": ["{{base_url}}"], "path": ["api", "auth", "refresh"] },
+            "description": "Lấy access token mới bằng refresh token. Cần chạy Login trước."
+          }
+        },
+        {
+          "name": "4. Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Logout thành công = 200', () => pm.expect(pm.response.code).to.equal(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/auth/logout", "host": ["{{base_url}}"], "path": ["api", "auth", "logout"] },
+            "description": "Đăng xuất. Xóa refresh token khỏi Redis."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shop Service",
+      "item": [
+        {
+          "name": "5. Lấy tất cả items (cần token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Có token → 200', () => pm.expect(pm.response.code).to.equal(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/shop/items", "host": ["{{base_url}}"], "path": ["api", "shop", "items"] },
+            "description": "Lấy danh sách item. Cần chạy Login trước."
+          }
+        },
+        {
+          "name": "6. Shop KHÔNG có token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Không có token → 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/shop/items", "host": ["{{base_url}}"], "path": ["api", "shop", "items"] },
+            "description": "Test bảo mật: Không có token phải bị từ chối 401."
+          }
+        },
+        {
+          "name": "7. Shop token giả (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Token giả → 401', () => pm.expect(pm.response.code).to.equal(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer fake.invalid.token123" }],
+            "url": { "raw": "{{base_url}}/api/shop/items", "host": ["{{base_url}}"], "path": ["api", "shop", "items"] },
+            "description": "Test bảo mật: Token giả phải bị từ chối 401."
+          }
+        },
+        {
+          "name": "8. Bypass gateway trực tiếp port 8088 (expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Bypass gateway → 403', () => pm.expect(pm.response.code).to.equal(403));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "http://localhost:8088/api/shop/items", "host": ["http://localhost:8088"], "path": ["api", "shop", "items"] },
+            "description": "Test bảo mật: Gọi thẳng vào shop service (bypass API Gateway) phải bị từ chối 403."
+          }
+        },
+        {
+          "name": "9. Lấy item theo category",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/shop/items/category/WEAPON",
+              "host": ["{{base_url}}"],
+              "path": ["api", "shop", "items", "category", "WEAPON"]
+            },
+            "description": "Đổi WEAPON thành tên category thực tế trong DB."
+          }
+        },
+        {
+          "name": "10. Lấy item theo ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/shop/items/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "shop", "items", "1"]
+            }
+          }
+        },
+        {
+          "name": "11. Mua item",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"itemId\": 1,\n  \"quantity\": 1\n}" },
+            "url": { "raw": "{{base_url}}/api/shop/purchase", "host": ["{{base_url}}"], "path": ["api", "shop", "purchase"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Service",
+      "item": [
+        {
+          "name": "12. Lấy danh sách users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/user/users", "host": ["{{base_url}}"], "path": ["api", "user", "users"] }
+          }
+        }
+      ]
+    }
+  ]
+}
