@@ -164,16 +164,23 @@ void MatchManager::routeCommand(GameCommand cmd) {
 }
 
 void MatchManager::onMatchEnd(MatchResult r) {
-    LOG_INFO("MatchManager: match {} ended (winner={}, dur={:.1f}s)",
-             r.matchId, r.winnerId, r.durationSecs);
+    static constexpr const char* kOutcomeStr[] = { "running", "win", "draw", "timeout" };
+    const char* outcomeStr = kOutcomeStr[std::min(static_cast<int>(r.outcome), 3)];
 
-    // TODO: publish kết quả lên Kafka khi production
-    // json j;
-    // j["matchId"]      = r.matchId;
-    // j["outcome"]      = static_cast<int>(r.outcome);
-    // j["winnerId"]     = r.winnerId;
-    // j["durationSecs"] = r.durationSecs;
-    // for (auto& [pid, k] : r.kills)
-    //     j["kills"][std::to_string(pid)] = k;
-    // _producer.publish("match.result", j.dump());
+    LOG_INFO("MatchManager: match {} ended (outcome={}, winner={}, dur={:.1f}s)",
+             r.matchId, outcomeStr, r.winnerId, r.durationSecs);
+
+    json j;
+    j["matchId"]      = r.matchId;
+    j["outcome"]      = outcomeStr;
+    j["winnerId"]     = r.winnerId;
+    j["durationSecs"] = r.durationSecs;
+    j["kills"]        = json::object();
+    for (auto& [pid, k] : r.kills)
+        j["kills"][std::to_string(pid)] = k;
+
+    if (_producer.publish("match.result", j.dump()))
+        LOG_INFO("MatchManager: match {} result published to Kafka", r.matchId);
+    else
+        LOG_WARN("MatchManager: match {} result not published (Kafka unavailable)", r.matchId);
 }

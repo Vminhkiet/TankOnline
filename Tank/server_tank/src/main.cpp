@@ -37,8 +37,10 @@ int main() {
 
     const int udpPort = std::stoi(getEnv("UDP_PORT", "8080"));
 
-    // TODO: dùng Kafka khi production
-    // const std::string kafkaBrokers = getEnv("KAFKA_BROKERS",  "localhost:9092");
+    // Kafka broker list — set KAFKA_BROKERS=host:9092 to enable publishing.
+    // Leave empty (default) to run without Kafka (stub silently no-ops).
+    const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "");
+    // TODO: dùng khi production có Kafka consumer nhận match.create
     // const std::string kafkaGroupId = getEnv("KAFKA_GROUP_ID", "tank-server");
     // const std::string kafkaTopic   = getEnv("KAFKA_TOPIC_IN", "match.create");
 
@@ -51,7 +53,7 @@ int main() {
 
     // ── Match manager ────────────────────────────────────────────────────────
     MatchManager manager(network);
-    manager.start("");
+    manager.start(kafkaBrokers);
 
     // ── Test match (hardcode, xoá khi production dùng Kafka) ────────────────
     {

@@ -16,12 +16,22 @@ endif()
 # ── External dependencies ────────────────────────────────────────────────────
 find_package(asio          CONFIG REQUIRED)
 find_package(fmt           CONFIG REQUIRED)
-find_package(glm           CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
-# ── Sources (exclude Kafka — not needed until production) ────────────────────
+# ── Kafka: OFF = stub (no rdkafka), ON = real librdkafka ────────────────────
+# cmake -DENABLE_KAFKA=ON ..   (requires rdkafka via vcpkg or system install)
+option(ENABLE_KAFKA "Use real librdkafka Kafka producer" OFF)
+
+# ── Sources ──────────────────────────────────────────────────────────────────
 file(GLOB_RECURSE SERVER_SOURCES "src/*.cpp")
-list(FILTER SERVER_SOURCES EXCLUDE REGEX ".*/Kafka/Kafka(Consumer|Producer)\\.cpp$")
+if(ENABLE_KAFKA)
+    # Real rdkafka build: exclude stub and consumer, keep KafkaProducer.cpp
+    list(FILTER SERVER_SOURCES EXCLUDE REGEX ".*/Kafka/(KafkaConsumer|KafkaProducer_stub)\\.cpp$")
+    find_package(RdKafka CONFIG REQUIRED)
+else()
+    # Stub build: exclude real implementations (stub is compiled instead)
+    list(FILTER SERVER_SOURCES EXCLUDE REGEX ".*/Kafka/Kafka(Consumer|Producer)\\.cpp$")
+endif()
 file(GLOB_RECURSE SERVER_HEADERS "include/*.hpp" "include/*.h")
 
 add_executable(server_tank ${SERVER_SOURCES} ${SERVER_HEADERS})
@@ -29,6 +39,7 @@ add_executable(server_tank ${SERVER_SOURCES} ${SERVER_HEADERS})
 # ── Include paths ────────────────────────────────────────────────────────────
 target_include_directories(server_tank PRIVATE
     include
+    D:/Library/glm-1.0.1-light
     ${CMAKE_CURRENT_SOURCE_DIR}/../bit_packing/src
 )
 
@@ -37,9 +48,9 @@ target_link_libraries(server_tank PRIVATE
     ws2_32
     winmm
     fmt::fmt
-    glm::glm
     bit_packing
     nlohmann_json::nlohmann_json
+    $<$<BOOL:${ENABLE_KAFKA}>:RdKafka::rdkafka++>
 )
 
 # ── Copy assets to output dir ────────────────────────────────────────────────
