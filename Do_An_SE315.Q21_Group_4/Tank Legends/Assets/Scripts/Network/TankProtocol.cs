@@ -30,6 +30,8 @@ namespace TankNet
         public const int DIR_MAX         = 2;
         public const int SPEED_MIN       = 0;
         public const int SPEED_MAX       = 255;
+        public const int FORCE_MIN       = 15;
+        public const int FORCE_MAX       = 30;
     }
 
     // S2C raw structs — must match server #pragma pack(push,1) layout
@@ -49,6 +51,7 @@ namespace TankNet
     public struct BulletState
     {
         public uint  bulletId;
+        public uint  ownerId;   // tankId that fired this bullet
         public float x, y, z;
     }
 
@@ -90,10 +93,13 @@ namespace TankNet
             return w.ToBytes();
         }
 
-        public static byte[] BuildShoot(uint matchId, byte seq = 0)
+        public static byte[] BuildShoot(uint matchId, int launchForce = 20, byte seq = 0)
         {
             var w = new BitWriter(8);
             WriteHeader(w, Opcode.C2S_SHOOT, matchId, 8, seq);
+            int force = System.Math.Max(NetConst.FORCE_MIN,
+                        System.Math.Min(NetConst.FORCE_MAX, launchForce));
+            w.WriteInt(force, NetConst.FORCE_MIN, NetConst.FORCE_MAX);
             return w.ToBytes();
         }
     }

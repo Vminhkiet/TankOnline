@@ -1,8 +1,13 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
+using TankNet;
 
 namespace Complete
 {
+    /// <summary>
+    /// Bắn đạn: charge + UI slider; offline / mobile qua InputManager hoặc axis Unity;
+    /// khi có <see cref="TankNetClient"/> và đã kết nối thì gửi <see cref="TankNetClient.RequestShoot"/> (client prediction).
+    /// </summary>
     public class TankShooting : MonoBehaviour
     {
         public int m_PlayerNumber = 1;              // Used to identify the different players.
@@ -99,12 +104,18 @@ namespace Complete
             // Set the fired flag so only Fire is only called once.
             m_Fired = true;
 
-            // Create an instance of the shell and store a reference to it's rigidbody.
+
+            var net = TankNetClient.Instance;
+            if (net != null && net.IsConnected)
+                net.RequestShoot(m_CurrentLaunchForce);
+
             Rigidbody shellInstance =
                 Instantiate (m_Shell, m_FireTransform.position, m_FireTransform.rotation) as Rigidbody;
 
-            // Set the shell's velocity to the launch force in the fire position's forward direction.
-            shellInstance.velocity = m_CurrentLaunchForce * m_FireTransform.forward; 
+            Vector3 fireDir = m_FireTransform.forward;
+            fireDir.y = 0f;
+            fireDir.Normalize();
+            shellInstance.velocity = m_CurrentLaunchForce * fireDir;
 
             // Change the clip to the firing clip and play it.
             m_ShootingAudio.clip = m_FireClip;

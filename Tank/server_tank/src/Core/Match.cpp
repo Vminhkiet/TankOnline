@@ -198,7 +198,16 @@ void Match::handleShoot(GameCommand& cmd) {
     if (!resolvePlayer(cmd.sender, pid)) return;
     _sessions.updateHeartbeat(cmd.sender);
 
+    const auto& buf = cmd.rawBuffer;
     ClientInput ci{};
     ci.shoot = true;
+    if (!buf.empty()) {
+        ReadStream rs(reinterpret_cast<const uint32_t*>(buf.data()),
+                      static_cast<int>(buf.size()));
+        PacketHeader hdr{};
+        PacketShoot  pkt{};
+        if (hdr.Serialize(rs) && pkt.Serialize(rs))
+            ci = pkt.toClientInput();
+    }
     _world.processInput(pid, ci);
 }

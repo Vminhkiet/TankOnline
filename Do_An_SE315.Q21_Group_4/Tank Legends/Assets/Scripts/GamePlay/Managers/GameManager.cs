@@ -24,8 +24,10 @@ namespace Complete
         public int m_ServerPort = 8080;
         public uint m_MatchId = 1;
         public GameObject m_RemoteTankPrefab;
+        public GameObject m_RemoteBulletPrefab; // assign CompleteShell prefab — physics + ShellExplosion disabled at runtime
 
-        private readonly Dictionary<uint, GameObject> _remoteTanks = new();
+        private readonly Dictionary<uint, GameObject> _remoteTanks   = new();
+        private readonly Dictionary<uint, GameObject> _remoteBullets = new();
 
         // ── Snapshot interpolation ───────────────────────────────────────────
         private struct SnapEntry { public float t; public Vector3 pos; public Quaternion rot; }
@@ -46,6 +48,16 @@ namespace Complete
 
         private void Awake()
         {
+            // Read MatchInfo from GlobalMatchState if available
+            if (GlobalMatchState.HasMatchInfo)
+            {
+                m_OnlineMode = true;
+                m_MatchId = GlobalMatchState.MatchId;
+                m_ServerHost = GlobalMatchState.ServerHost;
+                m_ServerPort = GlobalMatchState.ServerPort;
+                Debug.Log($"[GameManager] Loaded MatchInfo from GlobalMatchState: MatchId={m_MatchId}, {m_ServerHost}:{m_ServerPort}");
+            }
+
             // Đọc -playerid từ command line: TankLegends.exe -playerid 2
             string[] args = System.Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length - 1; i++)
@@ -62,7 +74,11 @@ namespace Complete
         {
             // Match Unity physics tick to server tick rate so dt is identical on both sides
             if (m_OnlineMode)
+            {
                 Time.fixedDeltaTime = 1f / 60f;
+                // Match server BULLET_GRAVITY = 3.0 so bullet arc and landing point are identical
+                Physics.gravity = new Vector3(0f, -3.0f, 0f);
+            }
 
             m_StartWait = new WaitForSeconds (m_StartDelay);
             m_EndWait = new WaitForSeconds (m_EndDelay);
@@ -150,6 +166,10 @@ namespace Complete
                 if (go != null) Destroy(go);
             _remoteTanks.Clear();
             _remoteSnaps.Clear();
+
+            foreach (var go in _remoteBullets.Values)
+                if (go != null) Destroy(go);
+            _remoteBullets.Clear();
         }
 
         // Gọi từ Lobby sau khi matching service trả về thông tin server
@@ -181,6 +201,30 @@ namespace Complete
             }
         }
 
+        // Add a separate tall trigger BoxCollider (child) for bullet-only hit detection.
+        // The original BoxCollider is untouched so physics (wall/tank collisions) is unaffected.
+        // Bullet collision is XZ-only — mirrors the server which ignores Y when checking hits.
+        private static void AddBulletHitTrigger(GameObject tankGo)
+        {
+            var src = tankGo.GetComponent<BoxCollider>() ?? tankGo.GetComponentInChildren<BoxCollider>();
+
+            var child = new GameObject("BulletHitVolume");
+            child.transform.SetParent(tankGo.transform, false);
+
+            var col = child.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            if (src != null)
+            {
+                col.size   = new Vector3(src.size.x, 100f, src.size.z);
+                col.center = new Vector3(src.center.x, 0f,  src.center.z);
+            }
+            else
+            {
+                col.size   = new Vector3(2f, 100f, 2f);
+                col.center = Vector3.zero;
+            }
+        }
+
         private void SpawnLocalTankAt(TankState ts)
         {
             if (m_Tanks.Length == 0) return;
@@ -195,6 +239,8 @@ namespace Complete
             // Kinematic + no gravity: server is fully authoritative, Unity physics won't push tank
             var rb = m_Tanks[0].m_Instance.GetComponent<Rigidbody>();
             if (rb != null) { rb.isKinematic = true; rb.useGravity = false; }
+
+            AddBulletHitTrigger(m_Tanks[0].m_Instance);
 
             // Camera follow local tank
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
@@ -406,6 +452,115 @@ namespace Complete
             // Xóa remote tank không còn trong snapshot
             foreach (var id in new List<uint>(_remoteTanks.Keys))
                 if (!seen.Contains(id)) DespawnRemote(id);
+
+            // Render bullets fired by opponent tanks (skip own bullets — already shown locally)
+            UpdateRemoteBullets(snap.Bullets);
+        }
+
+        // Cached bullet prefab: m_RemoteBulletPrefab if assigned, otherwise auto-detected
+        // from TankShooting.m_Shell so no manual inspector step is required.
+        private GameObject _bulletPrefabCache;
+
+        private GameObject GetBulletPrefab()
+        {
+            if (_bulletPrefabCache != null) return _bulletPrefabCache;
+
+            if (m_RemoteBulletPrefab != null)
+            {
+                _bulletPrefabCache = m_RemoteBulletPrefab;
+                return _bulletPrefabCache;
+            }
+
+            // Auto-detect: grab the shell prefab from the tank prefab's TankShooting component
+            if (m_TankPrefab != null)
+            {
+                var ts = m_TankPrefab.GetComponent<TankShooting>();
+                if (ts != null && ts.m_Shell != null)
+                {
+                    _bulletPrefabCache = ts.m_Shell.gameObject;
+                    return _bulletPrefabCache;
+                }
+            }
+
+            Debug.LogWarning("[GameManager] Cannot find bullet prefab for remote bullets. " +
+                             "Assign m_RemoteBulletPrefab or ensure m_TankPrefab has TankShooting.");
+            return null;
+        }
+
+        private void UpdateRemoteBullets(TankNet.BulletState[] bullets)
+        {
+            var prefab = GetBulletPrefab();
+            if (prefab == null) return;
+
+            var activeBulletIds = new HashSet<uint>();
+
+            foreach (var bs in bullets)
+            {
+                // Skip bullets fired by this client — TankShooting already spawned them locally
+                if (bs.ownerId == m_MyPlayerId) continue;
+
+                activeBulletIds.Add(bs.bulletId);
+                var pos = new Vector3(bs.x, bs.y, bs.z);
+
+                if (!_remoteBullets.TryGetValue(bs.bulletId, out var go) || go == null)
+                {
+                    go = Instantiate(prefab, pos, Quaternion.identity);
+
+                    // Server is authoritative — disable local physics and damage
+                    var rb = go.GetComponent<Rigidbody>();
+                    if (rb != null) { rb.isKinematic = true; rb.velocity = Vector3.zero; }
+                    var explosion = go.GetComponent<ShellExplosion>();
+                    if (explosion != null) explosion.enabled = false;
+                    var col = go.GetComponent<Collider>();
+                    if (col != null) col.enabled = false;
+
+                    _remoteBullets[bs.bulletId] = go;
+                }
+
+                go.transform.position = pos;
+            }
+
+            // Remove bullets the server no longer reports (hit something or expired)
+            foreach (var id in new List<uint>(_remoteBullets.Keys))
+            {
+                if (!activeBulletIds.Contains(id))
+                {
+                    DestroyRemoteBullet(_remoteBullets[id]);
+                    _remoteBullets.Remove(id);
+                }
+            }
+        }
+
+        // Plays explosion effect then destroys the bullet GO.
+        // Mirrors ShellExplosion.OnTriggerEnter without applying local damage.
+        private void DestroyRemoteBullet(GameObject go)
+        {
+            if (go == null) return;
+
+            // Bullet's last snapshot position lags ~1 snapshot (50ms) behind the actual hit.
+            // At 20-30 m/s that is 1-1.5 m of visual offset.
+            // If the bullet was close to the local tank, snap the explosion there instead.
+            Vector3 explosionPos = go.transform.position;
+            const float STRIKE_RANGE = 5f;
+            if (m_Tanks.Length > 0 && m_Tanks[0].m_Instance != null)
+            {
+                float d = Vector3.Distance(explosionPos, m_Tanks[0].m_Instance.transform.position);
+                if (d < STRIKE_RANGE)
+                    explosionPos = m_Tanks[0].m_Instance.transform.position;
+            }
+
+            var exp = go.GetComponent<ShellExplosion>();
+            if (exp != null && exp.m_ExplosionParticles != null)
+            {
+                exp.m_ExplosionParticles.transform.SetParent(null);
+                exp.m_ExplosionParticles.transform.position = explosionPos;
+                exp.m_ExplosionParticles.Play();
+                if (exp.m_ExplosionAudio != null) exp.m_ExplosionAudio.Play();
+                Destroy(exp.m_ExplosionParticles.gameObject,
+                        exp.m_ExplosionParticles.main.duration);
+            }
+
+            Destroy(go);
         }
 
         private void ApplyLocalCorrection(TankState ts)
@@ -484,7 +639,10 @@ namespace Complete
                 else go.transform.position = corrected;
             }
 
-            if (!ts.IsAlive) go.SetActive(false);
+            // Sync health bar and trigger death sequence when server reports dead
+            var localHealth = go.GetComponent<TankHealth>();
+            if (localHealth != null) localHealth.SyncFromServer(ts.health);
+            else if (!ts.IsAlive) go.SetActive(false);
         }
 
         private void UpdateRemoteTank(TankState ts)
@@ -500,16 +658,38 @@ namespace Complete
                     new Vector3(ts.x, ts.y, ts.z),
                     Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0));
                 _remoteTanks[ts.tankId] = go;
+
                 var remoteRb = go.GetComponent<Rigidbody>();
                 if (remoteRb != null) { remoteRb.isKinematic = true; remoteRb.useGravity = false; }
+
+                AddBulletHitTrigger(go);
+
+                // Remote tank is driven purely by snapshots — disable all local input components
+                // so they don't read keyboard input or send packets to the server.
+                var remoteShooting = go.GetComponent<TankShooting>();
+                if (remoteShooting != null) remoteShooting.enabled = false;
+                var remoteMovement = go.GetComponent<TankMovement>();
+                if (remoteMovement != null) remoteMovement.enabled = false;
             }
 
-            go.SetActive(ts.IsAlive);
+            bool wasAlive = go.activeSelf;
+
             if (ts.IsAlive)
             {
+                go.SetActive(true);
+                var health = go.GetComponent<TankHealth>();
+                if (health != null) health.SyncFromServer(ts.health);
+
                 if (!_remoteSnaps.ContainsKey(ts.tankId))
                     _remoteSnaps[ts.tankId] = new List<SnapEntry>();
                 PushSnap(_remoteSnaps[ts.tankId], ts);
+            }
+            else if (wasAlive)
+            {
+                // Trigger full death sequence (explosion + audio) instead of raw SetActive(false)
+                var health = go.GetComponent<TankHealth>();
+                if (health != null) health.SyncFromServer(0f);
+                else                go.SetActive(false);
             }
         }
 

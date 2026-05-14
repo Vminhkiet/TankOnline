@@ -4,6 +4,7 @@
   "dependencies": [
     "asio",
     "fmt",
+    "glm",
     "librdkafka",
     "nlohmann-json"
   ]

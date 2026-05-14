@@ -31,4 +31,9 @@ namespace NetConst
 
     constexpr uint8_t  SPEED_MIN        = 0;
     constexpr uint8_t  SPEED_MAX        = 255;
+
+    // Packet Shoot (launch force, maps directly to bullet speed in m/s)
+    constexpr uint8_t  FORCE_MIN        = 15;
+    constexpr uint8_t  FORCE_MAX        = 30;
+
 }

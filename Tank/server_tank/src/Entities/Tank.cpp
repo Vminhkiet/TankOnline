@@ -9,7 +9,10 @@ void Tank::processInput(const ClientInput& input)
 {
     if (!isAlive) return;
     lastInput = input;
-    if (input.shoot) wantsShoot = true; // one-shot, cleared by GameWorld after firing
+    if (input.shoot) {
+        wantsShoot      = true;
+        wantsShootForce = input.launchForce;
+    }
 }
 
 void Tank::update(float deltaTime)

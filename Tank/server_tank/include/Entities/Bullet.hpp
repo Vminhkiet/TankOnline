@@ -3,7 +3,7 @@
 #include "Physics/PhysicsTypes.hpp"
 
 struct Bullet {
-    static constexpr float RADIUS = 0.25f;   // sphere collider radius (units)
+    static constexpr float RADIUS = 0.25f;   // wall / ground collision radius (matches map collider_radius)
     static constexpr float SPEED  = 60.f;    // units / second
     static constexpr float TTL    = 4.f;     // seconds before auto-destroy
 
