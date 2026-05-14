@@ -1,0 +1,63 @@
+# ========================
+# Visual Studio
+# ========================
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ========================
+# Java
+# ========================
+*.class
+*.jar
+*.war
+*.ear
+target/
+build/
+*.iml
+.idea/
+.settings/
+
+# Maven
+.mvn/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+# Gradle
+.gradle/
+
+# ========================
+# Go
+# ========================
+bin/
+obj/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go module
+go.mod
+go.sum
+go.work
+go.work.sum
+
+# IDE
+.vscode/
+
+# ========================
+# OS generated
+# ========================
+.DS_Store
+Thumbs.db
+
+deployment/K8s/minikube-linux-amd64

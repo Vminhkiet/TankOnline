@@ -34,4 +34,11 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
+
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        // Must return false so that the filter runs again when DeferredResult wakes up,
+        // otherwise SecurityContextHolder is empty and Spring Security denies the async dispatch.
+        return false;
+    }
 }

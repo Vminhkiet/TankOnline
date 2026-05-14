@@ -27,7 +27,9 @@ public class SessionService implements com.vminhkiet.auth_service.service.Sessio
         String key = "refresh:" + userId;
 
         if(Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
-            throw new RuntimeException("User already logged in on another device");
+            // Thay vì throw Exception chặn đăng nhập, ta sẽ báo log và ghi đè session cũ.
+            System.out.println("Warning: User " + userId + " is logging in again. Overwriting old session.");
+            redisTemplate.delete(key);
         }
         
         String refreshToken = UUID.randomUUID().toString();

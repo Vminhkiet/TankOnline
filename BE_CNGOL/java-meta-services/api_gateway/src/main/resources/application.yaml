@@ -65,7 +65,8 @@ management:
       enabled: true
 eureka:
   instance:
-    prefer-ip-address: true
+    hostname: localhost
+    prefer-ip-address: false
   client:
     fetch-registry: true
     register-with-eureka: true
