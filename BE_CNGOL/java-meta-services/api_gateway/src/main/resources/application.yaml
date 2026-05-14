@@ -1,0 +1,80 @@
+server:
+  port: 8080
+  max-http-header-size: 32768
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: auth-service-auth
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/auth/**
+
+        - id: auth-service-user
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/user/**
+        - id: shop_service_route
+          uri: http://localhost:8088
+          predicates:
+            - Path=/api/shop/**
+          filters:
+            - AddRequestHeader=X-Gateway-Origin, MySecretKey123
+
+        - id: matchmaking_service_route
+          uri: lb://matchmaking-service
+          predicates:
+            - Path=/api/matchmaking/**
+          filters:
+            - AddRequestHeader=X-Gateway-Origin, MySecretKey123
+
+        - id: monitoring_service_route
+          uri: lb://monitoring-service
+          predicates:
+            - Path=/api/tank/**,/api/monitoring/**
+    loadbalancer:
+      ribbon:
+        enabled: false
+jwt:
+  secret-key: MySuperSecretKey12345678901234567890
+
+app:
+  security:
+    public-endpoints:
+      - /api/auth/**
+      - /api/user/**
+      - /actuator/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  info:
+    env:
+      enabled: true
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.http.server.reactive: DEBUG
+    org.springframework.web.reactive: DEBUG
+    reactor.netty.http.client: DEBUG
