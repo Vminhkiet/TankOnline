@@ -14,7 +14,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.vminhkiet.matchmaking_service.model.Match;
 import com.vminhkiet.matchmaking_service.model.Player;
@@ -152,14 +156,21 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
                 .filter(id -> id > 0)
                 .collect(Collectors.toList());
 
-            Map<String, Object> body = new HashMap<>();
-            body.put("matchId",         (int) matchId);
-            body.put("playerIds",       playerIntIds);
-            body.put("mapName",         "world");
-            body.put("maxDurationSecs", 300);
+            Map<String, Object> bodyMap = new HashMap<>();
+            bodyMap.put("matchId",         (int) matchId);
+            bodyMap.put("playerIds",       playerIntIds);
+            bodyMap.put("mapName",         "world");
+            bodyMap.put("maxDurationSecs", 300);
+
+            // Serialize to JSON string first so Content-Length is set (not chunked)
+            String jsonBody = new ObjectMapper().writeValueAsString(bodyMap);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setContentLength(jsonBody.getBytes().length);
+            HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
 
             String url = "http://" + tankHost + ":" + tankMgmtPort + "/internal/match/create";
-            restTemplate.postForObject(url, body, String.class);
+            restTemplate.postForObject(url, entity, String.class);
             log.info("Notified Tank server: matchId={} players={}", matchId, playerIntIds);
         } catch (Exception e) {
             log.warn("Tank server unreachable at {}:{} — {}", tankHost, tankMgmtPort, e.getMessage());

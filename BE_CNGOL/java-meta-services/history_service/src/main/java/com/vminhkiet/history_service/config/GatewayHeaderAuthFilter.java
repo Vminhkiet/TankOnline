@@ -1,4 +1,4 @@
-package com.vminhkiet.matchmaking_service.config;
+package com.vminhkiet.history_service.config;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,26 +19,20 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+                                    FilterChain chain) throws ServletException, IOException {
         String userId = request.getHeader("X-User-Id");
         String roles  = request.getHeader("X-User-Roles");
 
         if (userId != null && !userId.isBlank()) {
             var auth = new UsernamePasswordAuthenticationToken(
-                    userId,
-                    null,
-                    roles != null ? AuthorityUtils.commaSeparatedStringToAuthorityList(roles) : List.of()
+                    userId, null,
+                    roles != null
+                        ? AuthorityUtils.commaSeparatedStringToAuthorityList(roles)
+                        : List.of()
             );
             SecurityContextHolder.getContext().setAuthentication(auth);
         }
 
-        filterChain.doFilter(request, response);
-    }
-
-    @Override
-    protected boolean shouldNotFilterAsyncDispatch() {
-        // Must return false so that the filter runs again when DeferredResult wakes up,
-        // otherwise SecurityContextHolder is empty and Spring Security denies the async dispatch.
-        return false;
+        chain.doFilter(request, response);
     }
 }

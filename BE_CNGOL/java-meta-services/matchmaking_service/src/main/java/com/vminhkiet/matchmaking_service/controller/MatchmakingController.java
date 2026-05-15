@@ -1,10 +1,12 @@
 package com.vminhkiet.matchmaking_service.controller;
 
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,14 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 import com.vminhkiet.matchmaking_service.model.Match;
 import com.vminhkiet.matchmaking_service.service.MatchMakingService;
 
-/**
- * Endpoint matchmaking — được gọi qua API Gateway sau khi JWT đã được xác thực.
- * Header X-User-Id được inject bởi GatewayHeaderAuthFilter từ JWT claims.
- *
- * Unity gọi:  POST http://localhost:8080/api/matchmaking/find
- *             Authorization: Bearer <jwt>
- * Response:   { matchId, serverHost, serverPort, players, createAt }
- */
 @RestController
 @RequestMapping("/api/matchmaking")
 public class MatchmakingController {
@@ -34,50 +28,78 @@ public class MatchmakingController {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    /**
-     * Xếp hàng tìm trận và chờ tối đa 30s.
-     * Khi đủ 2 người chơi, tạo match và trả địa chỉ UDP của Tank server.
-     */
+    // Player 1 waiting slot
+    private static volatile CompletableFuture<ResponseEntity<Map<String, Object>>> waitingPlayer = null;
+    private static volatile String waitingUserId = null;
+
     @PostMapping("/find")
-    public ResponseEntity<?> findMatch(Authentication authentication) {
-        String userId = authentication.getName();
-        try {
-            Match match = matchMakingService.findOrCreateMatch(userId);
-            return ResponseEntity.ok(match);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT)
-                    .body(Map.of("error", e.getMessage()));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Matchmaking bị gián đoạn"));
+    public synchronized CompletableFuture<ResponseEntity<Map<String, Object>>> findMatch(
+            Authentication authentication) {
+
+        String userId = authentication != null ? authentication.getName() : "anonymous";
+
+        CompletableFuture<ResponseEntity<Map<String, Object>>> future = new CompletableFuture<>();
+
+        // Auto-complete with bot match after 30s if no opponent found
+        future.completeOnTimeout(
+            createMatchResponse(List.of(userId, "bot-1")),
+            30, TimeUnit.SECONDS
+        ).whenComplete((res, ex) -> {
+            synchronized (MatchmakingController.class) {
+                if (waitingPlayer == future) {
+                    waitingPlayer = null;
+                    waitingUserId = null;
+                }
+            }
+        });
+
+        if (waitingPlayer == null) {
+            // First player — wait for opponent
+            waitingPlayer = future;
+            waitingUserId = userId;
+        } else {
+            // Second player — create match for both
+            String opponent = waitingUserId;
+            ResponseEntity<Map<String, Object>> resp = createMatchResponse(List.of(opponent, userId));
+
+            waitingPlayer.complete(resp);
+            future.complete(resp);
+            waitingPlayer = null;
+            waitingUserId = null;
         }
+
+        return future;
     }
 
-    /**
-     * Kiểm tra trạng thái xếp hàng của người dùng hiện tại.
-     * Trả về: waiting | matched | timeout | not_in_queue
-     */
     @GetMapping("/status")
-    public ResponseEntity<?> getStatus(Authentication authentication) {
-        String userId = authentication.getName();
+    public ResponseEntity<Map<String, Object>> getStatus(Authentication authentication) {
+        String userId = authentication != null ? authentication.getName() : "anonymous";
         Object status = redisTemplate.opsForValue()
                 .get("matchmaking:player:" + userId + ":status");
         return ResponseEntity.ok(Map.of(
-                "userId", userId,
-                "status", status != null ? status : "not_in_queue"
+                "userId",    userId,
+                "status",    status != null ? status : "not_in_queue",
+                "queueSize", waitingPlayer != null ? 1 : 0
         ));
     }
 
-    /**
-     * Hủy xếp hàng — đánh dấu trạng thái "cancelled".
-     * Lưu ý: không xóa khỏi Redis list do race-condition; server bỏ qua player cancelled khi dequeue.
-     */
     @DeleteMapping("/cancel")
-    public ResponseEntity<?> cancel(Authentication authentication) {
-        String userId = authentication.getName();
-        redisTemplate.opsForValue()
-                .set("matchmaking:player:" + userId + ":status", "cancelled");
-        return ResponseEntity.ok(Map.of("message", "Đã hủy xếp hàng"));
+    public synchronized ResponseEntity<Map<String, Object>> cancel() {
+        if (waitingPlayer != null) {
+            waitingPlayer.cancel(true);
+            waitingPlayer = null;
+            waitingUserId = null;
+        }
+        return ResponseEntity.ok(Map.of("message", "Cancelled"));
+    }
+
+    // Calls service.createMatch() which notifies Tank server via HTTP port 9090
+    private ResponseEntity<Map<String, Object>> createMatchResponse(List<String> players) {
+        Match match = matchMakingService.createMatch(players);
+        return ResponseEntity.ok(Map.of(
+                "matchId",    match.getMatchId(),
+                "serverHost", match.getServerHost(),
+                "serverPort", match.getServerPort()
+        ));
     }
 }
