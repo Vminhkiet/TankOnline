@@ -9,7 +9,7 @@
 
 using json = nlohmann::json;
 
-MatchManager::MatchManager(NetworkManager& network)
+MatchManager::MatchManager(INetworkBackend& network)
     : _pool(std::thread::hardware_concurrency())
     , _network(network)
 {}

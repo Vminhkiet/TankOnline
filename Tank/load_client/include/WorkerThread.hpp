@@ -25,9 +25,9 @@ private:
     int         _workerId;
     int         _firstId;
     int         _count;
-    const Config&   _cfg;
+    Config          _cfg;
     sockaddr_in     _serverAddr;
-    Metrics&        _metrics;
+    Metrics*        _metrics;
 
     std::vector<VirtualPlayer> _players;
     std::thread                _thread;

@@ -16,7 +16,7 @@ struct SnapshotHeader {
 };
 #pragma pack(pop)
 
-Match::Match(MatchConfig config, NetworkManager& network,
+Match::Match(MatchConfig config, INetworkBackend& network,
              std::function<void(MatchResult)> onEnd)
     : _config(std::move(config)), _network(network), _onEnd(std::move(onEnd))
 {

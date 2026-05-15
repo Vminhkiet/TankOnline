@@ -41,11 +41,13 @@ int main() {
     if (!udp.init(udpPort)) return 1;
 
     // ── Match config (same hardcode as server_tank for fair comparison) ───────
+    const int maxPlayers = std::stoi(getEnv("MAX_PLAYERS", "128"));
     MatchConfig cfg;
     cfg.matchId         = 1;
     cfg.mapName         = "world";
     cfg.maxDurationSecs = 600;
-    cfg.playerIds       = {1, 2};
+    cfg.playerIds.resize(maxPlayers);
+    for (int i = 0; i < maxPlayers; ++i) cfg.playerIds[i] = static_cast<uint32_t>(i + 1);
 
     // ── Game loop ─────────────────────────────────────────────────────────────
     GameLoop loop(udp, std::move(cfg));
@@ -59,6 +61,12 @@ int main() {
     int snapshotCounter = 0;
 
     uint8_t recvBuf[2048];
+
+    uint64_t totalTicks   = 0;
+    uint64_t overrunTicks = 0;
+    int64_t  sumWorkUs    = 0;
+    int64_t  maxWorkUs    = 0;
+    constexpr int STATS_EVERY = 300; // print every 5 s at 60 Hz
 
     while (g_running) {
         auto tickStart = std::chrono::steady_clock::now();
@@ -85,13 +93,32 @@ int main() {
         }
 
         // 5. Sleep for the remainder of the tick budget
-        auto tickEnd = std::chrono::steady_clock::now();
-        float workMs = std::chrono::duration<float, std::milli>(tickEnd - tickStart).count();
-        float remainMs = TICK_DT * 1000.0f - workMs;
-        if (remainMs > 0.5f)
-            std::this_thread::sleep_for(
-                std::chrono::microseconds(static_cast<long long>(remainMs * 1000.0f)));
+        auto tickEnd  = std::chrono::steady_clock::now();
+        int64_t workUs = std::chrono::duration_cast<std::chrono::microseconds>(tickEnd - tickStart).count();
+        sumWorkUs += workUs;
+        if (workUs > maxWorkUs) maxWorkUs = workUs;
+        ++totalTicks;
+        constexpr int64_t budgetUs = static_cast<int64_t>(1'000'000 / 60);
+        if (workUs > budgetUs) ++overrunTicks;
+
+        int64_t remainUs = budgetUs - workUs;
+        if (remainUs > 500)
+            std::this_thread::sleep_for(std::chrono::microseconds(remainUs));
+
+        if (totalTicks % STATS_EVERY == 0) {
+            double overrunPct = 100.0 * overrunTicks / totalTicks;
+            LOG_INFO("[Baseline] ticks={} avg={:.0f}µs max={}µs overruns={} ({:.1f}%)",
+                     totalTicks,
+                     static_cast<double>(sumWorkUs) / totalTicks,
+                     maxWorkUs, overrunTicks, overrunPct);
+        }
     }
+
+    double overrunPct = totalTicks > 0 ? 100.0 * overrunTicks / totalTicks : 0.0;
+    LOG_INFO("[Baseline] FINAL: ticks={} avg={:.0f}µs max={}µs overruns={} ({:.1f}%)",
+             totalTicks,
+             totalTicks > 0 ? static_cast<double>(sumWorkUs) / totalTicks : 0.0,
+             maxWorkUs, overrunTicks, overrunPct);
 
     udp.close();
     timeEndPeriod(1);
