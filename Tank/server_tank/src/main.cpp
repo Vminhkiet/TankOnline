@@ -41,7 +41,7 @@ int main() {
 
     // Kafka broker list — set KAFKA_BROKERS=host:9092 to enable publishing.
     // Leave empty (default) to run without Kafka (stub silently no-ops).
-    const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "");
+    const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "172.25.203.168:9092");
     const std::string kafkaGroupId = getEnv("KAFKA_GROUP_ID", "tank-server");
     const std::string kafkaTopic   = getEnv("KAFKA_TOPIC_IN",  "match.create");
 
