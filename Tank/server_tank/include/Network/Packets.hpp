@@ -100,4 +100,18 @@ struct BulletState {
     float    x = 0.f, y = 0.f, z = 0.f;
 };
 
+// ─── S2C: match-end notification (14 bytes, sent individually per player) ────
+// outcome: 0=win 1=lose 2=draw 3=timeout  (from recipient's POV)
+// winnerId: valid when outcome==win; 0 otherwise
+// myKills: kill count for the specific recipient of this packet
+
+struct MatchEndPacket {
+    uint32_t matchId      = 0;
+    uint16_t opcode       = 0;   // Opcode::S2C_MATCH_END
+    uint8_t  outcome      = 0;
+    uint32_t winnerId     = 0;
+    uint16_t durationSecs = 0;
+    uint16_t myKills      = 0;
+};
+
 #pragma pack(pop)

@@ -18,10 +18,11 @@ find_package(asio          CONFIG REQUIRED)
 find_package(fmt           CONFIG REQUIRED)
 find_package(glm           CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(RdKafka       CONFIG REQUIRED)
 
-# ── Sources (exclude Kafka — not needed until production) ────────────────────
+# ── Sources (exclude stubs — using real Kafka implementation) ────────────────
 file(GLOB_RECURSE SERVER_SOURCES "src/*.cpp")
-list(FILTER SERVER_SOURCES EXCLUDE REGEX ".*/Kafka/Kafka(Consumer|Producer)\\.cpp$")
+list(FILTER SERVER_SOURCES EXCLUDE REGEX ".*/Kafka/Kafka(Consumer|Producer)_stub\\.cpp$")
 file(GLOB_RECURSE SERVER_HEADERS "include/*.hpp" "include/*.h")
 
 add_executable(server_tank ${SERVER_SOURCES} ${SERVER_HEADERS})
@@ -40,6 +41,8 @@ target_link_libraries(server_tank PRIVATE
     glm::glm
     bit_packing
     nlohmann_json::nlohmann_json
+    RdKafka::rdkafka
+    RdKafka::rdkafka++
 )
 
 # ── Copy assets to output dir ────────────────────────────────────────────────

@@ -9,4 +9,5 @@ enum class Opcode : uint16_t {
     S2C_STATE_SYNC   = 2001,
     S2C_EVENT_SPAWN  = 2002,
     S2C_EVENT_HIT    = 2003,
+    S2C_MATCH_END    = 2004,  // raw binary: MatchEndPacket (14 bytes, per-player myKills)
 };

@@ -51,6 +51,7 @@ private:
     void registerHandlers();
     bool resolvePlayer(const sockaddr_in& addr, uint32_t& outPid);
     void broadcastSnapshot();
+    void broadcastMatchEnd(const MatchResult& r);
 
     void handleMove (GameCommand& cmd);
     void handleShoot(GameCommand& cmd);
