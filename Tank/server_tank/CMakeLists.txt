@@ -18,6 +18,7 @@ find_package(asio          CONFIG REQUIRED)
 find_package(fmt           CONFIG REQUIRED)
 find_package(glm           CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(httplib       CONFIG REQUIRED)
 
 # ── Sources (exclude Kafka — not needed until production) ────────────────────
 file(GLOB_RECURSE SERVER_SOURCES "src/*.cpp")
@@ -40,6 +41,7 @@ target_link_libraries(server_tank PRIVATE
     glm::glm
     bit_packing
     nlohmann_json::nlohmann_json
+    httplib::httplib
 )
 
 # ── Copy assets to output dir ────────────────────────────────────────────────

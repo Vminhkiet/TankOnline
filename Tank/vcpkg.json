@@ -6,6 +6,7 @@
     "fmt",
     "glm",
     "librdkafka",
-    "nlohmann-json"
+    "nlohmann-json",
+    "cpp-httplib"
   ]
 }

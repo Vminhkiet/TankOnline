@@ -11,7 +11,9 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Match {
-    private String matchId;
+    private long         matchId;     // numeric uint32-compatible — dùng cho Tank C++ và Unity
     private List<String> players;
-    private Instant createAt;
+    private Instant      createAt;
+    private String       serverHost;  // UDP host của Tank server, trả về cho Unity
+    private int          serverPort;  // UDP port của Tank server, trả về cho Unity
 }

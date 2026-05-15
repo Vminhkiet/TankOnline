@@ -5,7 +5,10 @@ import com.vminhkiet.matchmaking_service.model.Match;
 import java.util.List;
 
 public interface MatchMakingService {
-    void enqueuePlayer(Player player);
+    void   enqueuePlayer(Player player);
     Player dequeuePlayer();
-    Match createMatch(List<String> players);
+    Match  createMatch(List<String> players);
+
+    // Chờ tìm đối thủ (tối đa 30s). Ném RuntimeException nếu timeout.
+    Match  findOrCreateMatch(String userId) throws InterruptedException;
 }
