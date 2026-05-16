@@ -16,4 +16,5 @@ public class ItemResponse {
     private BigDecimal price;
     private String category;
     private Boolean available;
+    private String status;
 }

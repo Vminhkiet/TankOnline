@@ -7,11 +7,13 @@ public class MainScreenToggleButton : MonoBehaviour
     [SerializeField] private MainScreenButtonManager manager;
     [SerializeField] private GameObject targetPanel;
     [SerializeField] private GameObject buttonRoot;
+    [SerializeField] private bool hideMainAndOtherButtons = true;
 
     private Button cachedButton;
 
     public GameObject TargetPanel => targetPanel;
     public GameObject ButtonRoot => buttonRoot;
+    public bool HideMainAndOtherButtons => hideMainAndOtherButtons;
 
     private void Awake()
     {
@@ -39,7 +41,7 @@ public class MainScreenToggleButton : MonoBehaviour
     public void RefreshState(MainScreenToggleButton selectedButton)
     {
         bool isSelected = selectedButton == this;
-        bool shouldBeVisible = selectedButton == null || isSelected;
+        bool shouldBeVisible = selectedButton == null || isSelected || !selectedButton.HideMainAndOtherButtons;
 
         if (buttonRoot != null)
             buttonRoot.SetActive(shouldBeVisible);
@@ -52,6 +54,12 @@ public class MainScreenToggleButton : MonoBehaviour
         if (manager == null)
         {
             Debug.LogWarning("MainScreenToggleButton is missing a MainScreenButtonManager reference.", this);
+            return;
+        }
+
+        if (targetPanel == null)
+        {
+            Debug.LogWarning("MainScreenToggleButton is missing a target panel reference.", this);
             return;
         }
 

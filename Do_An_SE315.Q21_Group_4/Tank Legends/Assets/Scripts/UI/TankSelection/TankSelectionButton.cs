@@ -8,6 +8,8 @@ public class TankSelectionButton : MonoBehaviour
     [SerializeField] private TankDefinitionSO tankData;
     [SerializeField] private GameObject blurObject;
 
+    public TankDefinitionSO TankData => tankData;
+
     private Button cachedButton;
 
     private void Awake()

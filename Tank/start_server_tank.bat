@@ -2,7 +2,7 @@
 echo ==================================================
 echo       STARTING DEDICATED TANK SERVER (C++)
 echo ==================================================
-cd /d "%~dp0Tank\out\build\x64-Debug-vcpkg\server_tank\Debug"
+cd /d "%~dp0out\build\x64-Debug-vcpkg\server_tank\Debug"
 
 echo Running server_tank.exe...
 server_tank.exe

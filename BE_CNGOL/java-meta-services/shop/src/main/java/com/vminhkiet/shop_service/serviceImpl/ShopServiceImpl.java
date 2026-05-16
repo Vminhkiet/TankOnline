@@ -26,6 +26,8 @@ public class ShopServiceImpl implements GameService {
         private final ItemRepository itemRepository;
         private final PlayerItemRepository playerItemRepository;
         private final PurchaseRepository purchaseRepository;
+        private static final String STATUS_ON_SALE = "On Sale";
+        private static final String STATUS_DISCONTINUED = "Discontinued";
 
         @Override
         public List<ItemDTO> getAllItems() {
@@ -124,7 +126,12 @@ public class ShopServiceImpl implements GameService {
                                 .price(item.getPrice())
                                 .category(item.getCategory() != null ? item.getCategory().toString() : null)
                                 .available(item.getAvailble())
+                                .status(getItemStatus(item))
                                 .build();
+        }
+
+        private String getItemStatus(Item item) {
+                return Boolean.TRUE.equals(item.getAvailble()) ? STATUS_ON_SALE : STATUS_DISCONTINUED;
         }
 
         @Override

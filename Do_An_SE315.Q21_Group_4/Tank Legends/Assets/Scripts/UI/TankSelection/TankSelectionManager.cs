@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
 
@@ -23,6 +26,9 @@ public class TankSelectionManager : MonoBehaviour
     }
 
     [Header("Available Tanks")]
+    [SerializeField] private string shopApiUrl = "http://localhost:8080/api/shop/items";
+    [SerializeField] private bool useCachedShopItems = true;
+    [SerializeField, Min(0f)] private float shopItemsCacheDurationSeconds = 300f;
     [SerializeField] private TankDefinitionSO[] availableTanks;
     [SerializeField] private TankDefinitionSO defaultTank;
 
@@ -57,19 +63,185 @@ public class TankSelectionManager : MonoBehaviour
 
     public event Action<TankDefinitionSO> SelectionChanged;
 
-    private GameObject currentPreviewInstance;
+    private const string ShopItemsCacheJsonKey = "shop_items_cache_json";
+    private const string ShopItemsCacheTimestampKey = "shop_items_cache_timestamp";
 
-    private void Start()
+    private GameObject currentPreviewInstance;
+    private readonly Dictionary<string, ShopItemDTO> shopItemsByName = new Dictionary<string, ShopItemDTO>(StringComparer.OrdinalIgnoreCase);
+
+    private IEnumerator Start()
     {
+        bool hasUsableCache = useCachedShopItems && TryLoadCachedShopItems();
+
+        if (!hasUsableCache || IsShopItemsCacheExpired())
+        {
+            yield return StartCoroutine(FetchAvailableTanksFromAPI());
+        }
+
         TankDefinitionSO startupTank = defaultTank != null ? defaultTank : GetFirstAvailableTank();
 
         if (startupTank != null)
         {
             SelectTankInternal(startupTank, false);
-            return;
+            yield break;
         }
 
         RefreshUI(null);
+    }
+
+    [System.Serializable]
+    private class ShopItemDTO
+    {
+        public int id;
+        public string name;
+        public string description;
+        public string imageUrl;
+        public float price;
+        public string category;
+        public bool available;
+    }
+
+    [System.Serializable]
+    private class ShopItemArrayWrapper
+    {
+        public ShopItemDTO[] array;
+    }
+
+    private bool TryLoadCachedShopItems()
+    {
+        string cachedJson = PlayerPrefs.GetString(ShopItemsCacheJsonKey, "");
+
+        if (string.IsNullOrWhiteSpace(cachedJson))
+            return false;
+
+        return TryApplyShopItemsJson(cachedJson);
+    }
+
+    private bool IsShopItemsCacheExpired()
+    {
+        if (!useCachedShopItems)
+            return true;
+
+        if (shopItemsCacheDurationSeconds <= 0f)
+            return true;
+
+        string timestampValue = PlayerPrefs.GetString(ShopItemsCacheTimestampKey, "");
+
+        if (!long.TryParse(timestampValue, out long cachedUnixTime))
+            return true;
+
+        long nowUnixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        return nowUnixTime - cachedUnixTime >= shopItemsCacheDurationSeconds;
+    }
+
+    private IEnumerator FetchAvailableTanksFromAPI()
+    {
+        string jwt = PlayerPrefs.GetString("jwt", "");
+
+        if (string.IsNullOrEmpty(jwt))
+        {
+            Debug.LogWarning("Fetching shop items without JWT. Login first if the shop API requires authentication.");
+        }
+
+        using (UnityWebRequest request = UnityWebRequest.Get(shopApiUrl))
+        {
+            request.SetRequestHeader("Accept", "application/json");
+
+            if (!string.IsNullOrEmpty(jwt))
+            {
+                request.SetRequestHeader("Authorization", "Bearer " + jwt);
+            }
+
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string json = request.downloadHandler.text;
+                string cachedJson = PlayerPrefs.GetString(ShopItemsCacheJsonKey, "");
+
+                if (useCachedShopItems && json == cachedJson)
+                {
+                    PlayerPrefs.SetString(ShopItemsCacheTimestampKey, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString());
+                    PlayerPrefs.Save();
+                    yield break;
+                }
+
+                if (TryApplyShopItemsJson(json) && useCachedShopItems)
+                {
+                    PlayerPrefs.SetString(ShopItemsCacheJsonKey, json);
+                    PlayerPrefs.SetString(ShopItemsCacheTimestampKey, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString());
+                    PlayerPrefs.Save();
+                }
+            }
+            else
+            {
+                Debug.LogError(
+                    $"Failed to fetch shop items from {shopApiUrl}: HTTP {request.responseCode} - {request.error}\n" +
+                    $"Response: {request.downloadHandler.text}");
+            }
+        }
+    }
+
+    private bool TryApplyShopItemsJson(string json)
+    {
+        try
+        {
+            string wrappedJson = "{\"array\":" + json + "}";
+            ShopItemArrayWrapper wrapper = JsonUtility.FromJson<ShopItemArrayWrapper>(wrappedJson);
+
+            if (wrapper == null || wrapper.array == null)
+                return false;
+
+            UpdateAvailableTanks(wrapper.array);
+            return true;
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Failed to parse shop items: " + e.Message);
+            return false;
+        }
+    }
+
+    private void UpdateAvailableTanks(ShopItemDTO[] apiItems)
+    {
+        TankSelectionButton[] allButtons = FindObjectsOfType<TankSelectionButton>(true);
+        List<TankDefinitionSO> newAvailableTanks = new List<TankDefinitionSO>();
+        shopItemsByName.Clear();
+
+        foreach (var apiItem in apiItems)
+        {
+            if (apiItem != null && !string.IsNullOrWhiteSpace(apiItem.name))
+            {
+                shopItemsByName[apiItem.name] = apiItem;
+            }
+        }
+
+        foreach (var button in allButtons)
+        {
+            if (button.TankData != null)
+            {
+                bool isAvailable = false;
+
+                if (shopItemsByName.TryGetValue(button.TankData.TankName, out ShopItemDTO apiItem))
+                {
+                    isAvailable = apiItem.available;
+                }
+
+                button.gameObject.SetActive(isAvailable);
+                
+                if (isAvailable && !newAvailableTanks.Contains(button.TankData))
+                {
+                    newAvailableTanks.Add(button.TankData);
+                }
+            }
+        }
+
+        availableTanks = newAvailableTanks.ToArray();
+        
+        if (defaultTank != null && !newAvailableTanks.Contains(defaultTank))
+        {
+            defaultTank = newAvailableTanks.Count > 0 ? newAvailableTanks[0] : null;
+        }
     }
 
     private void OnDestroy()
@@ -239,8 +411,8 @@ public class TankSelectionManager : MonoBehaviour
         }
 
         tankNameText.SetText(tankData.TankName);
-        descriptionText.SetText(tankData.Description);
-        priceText.SetText(FormatPrice(tankData.Price));
+        descriptionText.SetText(GetDisplayDescription(tankData));
+        priceText.SetText(FormatPrice(GetDisplayPrice(tankData)));
         abilityNameText.SetText(tankData.SpecialAbility.AbilityName);
         abilityDescriptionText.SetText(tankData.SpecialAbility.Description);
 
@@ -251,6 +423,27 @@ public class TankSelectionManager : MonoBehaviour
         }
 
         ApplyStats(tankData.Stats);
+    }
+
+    private string GetDisplayDescription(TankDefinitionSO tankData)
+    {
+        if (shopItemsByName.TryGetValue(tankData.TankName, out ShopItemDTO shopItem) &&
+            !string.IsNullOrWhiteSpace(shopItem.description))
+        {
+            return shopItem.description;
+        }
+
+        return tankData.Description;
+    }
+
+    private int GetDisplayPrice(TankDefinitionSO tankData)
+    {
+        if (shopItemsByName.TryGetValue(tankData.TankName, out ShopItemDTO shopItem))
+        {
+            return Mathf.Max(0, Mathf.RoundToInt(shopItem.price));
+        }
+
+        return tankData.Price;
     }
 
     private void ApplyStats(TankStats stats)
