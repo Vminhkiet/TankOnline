@@ -41,7 +41,7 @@ int main() {
 
     // Kafka broker list — set KAFKA_BROKERS=host:9092 to enable publishing.
     // Leave empty (default) to run without Kafka (stub silently no-ops).
-    const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "172.25.203.168:9092");
+    const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "localhost:9092");
     const std::string kafkaGroupId = getEnv("KAFKA_GROUP_ID", "tank-server");
     const std::string kafkaTopic   = getEnv("KAFKA_TOPIC_IN",  "match.create");
 
@@ -71,10 +71,10 @@ int main() {
 
     // ── Create N test matches (NUM_MATCHES env var, default 1) ──────────────
     // Each match gets 2 player slots: match M → playerIds {2M-1, 2M}
-    const int numMatches = std::stoi(getEnv("NUM_MATCHES", "1"));
+    const int numMatches = std::stoi(getEnv("NUM_MATCHES", "10")); // Create 10 matches for more range
     for (int m = 1; m <= numMatches; ++m) {
         MatchConfig cfg;
-        cfg.matchId         = static_cast<uint32_t>(m);
+        cfg.matchId         = static_cast<uint32_t>(1002 + m); // Will create 1003, 1004...
         cfg.mapName         = "world";
         cfg.maxDurationSecs = 600;
         cfg.playerIds       = { static_cast<uint32_t>(2*m - 1),

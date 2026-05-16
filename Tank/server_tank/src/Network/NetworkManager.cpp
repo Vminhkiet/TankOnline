@@ -101,9 +101,13 @@ void NetworkManager::handleReader(IoContext* ctx, DWORD lengthBuf) {
 
     PacketHeader hdr;
     if (!hdr.Serialize(rs)) {
-        LOG_ERR("NetworkManager: bad packet header from client");
+        LOG_ERR("NetworkManager: bad packet header from {}:{}",
+                ntohl(ctx->clientAddr.sin_addr.s_addr), ntohs(ctx->clientAddr.sin_port));
         postReceive(ctx); return;
     }
+
+    LOG_INFO("NetworkManager: parsed header → matchId={} opcode={}",
+             hdr.matchId, static_cast<uint16_t>(hdr.opcode));
 
     GameCommand cmd;
     cmd.sender   = ctx->clientAddr;

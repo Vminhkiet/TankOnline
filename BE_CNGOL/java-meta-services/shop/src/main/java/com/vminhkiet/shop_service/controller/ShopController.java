@@ -29,6 +29,11 @@ public class ShopController {
         return ResponseEntity.ok(shopService.getAllItems());
     }
 
+    @GetMapping("/items/version")
+    public ResponseEntity<java.util.Map<String, Long>> getShopVersion() {
+        return ResponseEntity.ok(java.util.Map.of("version", shopService.getShopVersion()));
+    }
+
     @GetMapping("/items/category/{category}")
     public ResponseEntity<List<ItemDTO>> getItemsByCategory(@PathVariable String category) {
         return ResponseEntity.ok(shopService.getItemsByCategory(category));
@@ -69,7 +74,7 @@ public class ShopController {
 
         // 3. Gọi Service đã sửa để xử lý mua danh sách item
         try {
-            PurchaseResponse response = gameService.purchaseItem(playerId, request);
+            PurchaseResponse response = shopService.purchaseItem(playerId, request);
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             // Trả về lỗi nếu trong quá trình mua có món đồ không tồn tại hoặc không bán
@@ -77,19 +82,17 @@ public class ShopController {
         }
     }
 
-    private final GameService gameService;
-
     @PostMapping("/admin/items")
     public ResponseEntity<ItemDTO> createItem(@RequestBody ItemDTO itemDTO) {
 
-        return ResponseEntity.ok(gameService.createItem(itemDTO));
+        return ResponseEntity.ok(shopService.createItem(itemDTO));
     }
 
     @PutMapping("/admin/items/{id}")
     public ResponseEntity<?> updateItem(@PathVariable Long id, @RequestBody ItemDTO itemDTO) {
         try {
-            // Vì gameService.updateItem trả về ItemDTO, nên biến hứng phải là ItemDTO
-            ItemDTO response = gameService.updateItem(id, itemDTO);
+            // Vì shopService.updateItem trả về ItemDTO, nên biến hứng phải là ItemDTO
+            ItemDTO response = shopService.updateItem(id, itemDTO);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             // Nếu lỗi (không tìm thấy ID), tạo một ItemDTO lỗi để trả về 200
@@ -105,7 +108,7 @@ public class ShopController {
     @DeleteMapping("/admin/items/{id}")
     public ResponseEntity<String> deleteItem(@PathVariable Long id) {
 
-        gameService.deleteItem(id);
+        shopService.deleteItem(id);
         return ResponseEntity.ok("Xóa thành công vật phẩm ID: " + id);
     }
 }

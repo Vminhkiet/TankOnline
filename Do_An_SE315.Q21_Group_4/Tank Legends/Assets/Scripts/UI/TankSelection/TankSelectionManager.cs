@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
 
@@ -23,6 +26,8 @@ public class TankSelectionManager : MonoBehaviour
     }
 
     [Header("Available Tanks")]
+    [SerializeField] private string shopApiUrl = "http://localhost:8080/api/shop/items";
+    [SerializeField] private string shopVersionUrl = "http://localhost:8080/api/shop/items/version";
     [SerializeField] private TankDefinitionSO[] availableTanks;
     [SerializeField] private TankDefinitionSO defaultTank;
 
@@ -57,19 +62,234 @@ public class TankSelectionManager : MonoBehaviour
 
     public event Action<TankDefinitionSO> SelectionChanged;
 
-    private GameObject currentPreviewInstance;
+    private const string ShopItemsCacheJsonKey = "shop_items_cache_json";
+    private const string ShopVersionCacheKey = "shop_items_cache_version";
 
-    private void Start()
+    private GameObject currentPreviewInstance;
+    private readonly Dictionary<string, ShopItemDTO> shopItemsByName = new Dictionary<string, ShopItemDTO>(StringComparer.OrdinalIgnoreCase);
+    private long cachedShopVersion = -1;
+    private bool shopDataLoaded = false;
+
+    private IEnumerator Start()
     {
+        // Load cached data for immediate display
+        TryLoadCachedShopItems();
+
+        // Then check server version and re-fetch if needed
+        yield return StartCoroutine(RefreshShopIfNeeded());
+
         TankDefinitionSO startupTank = defaultTank != null ? defaultTank : GetFirstAvailableTank();
 
         if (startupTank != null)
         {
             SelectTankInternal(startupTank, false);
-            return;
+            yield break;
         }
 
         RefreshUI(null);
+    }
+
+    [System.Serializable]
+    private class ShopItemDTO
+    {
+        public int id;
+        public string name;
+        public string description;
+        public string imageUrl;
+        public float price;
+        public string category;
+        public bool available;
+    }
+
+    [System.Serializable]
+    private class ShopItemArrayWrapper
+    {
+        public ShopItemDTO[] array;
+    }
+
+    [System.Serializable]
+    private class ShopVersionResponse
+    {
+        public long version;
+    }
+
+    /// <summary>
+    /// Call this whenever the shop UI is opened (e.g. from a button).
+    /// It checks the server version first, and only re-fetches items if something changed.
+    /// </summary>
+    public void OnEnable()
+    {
+        StartCoroutine(RefreshShopIfNeeded());
+    }
+
+    private IEnumerator RefreshShopIfNeeded()
+    {
+        // Step 1: Ask the server for the current version number (very lightweight)
+        long serverVersion = -1;
+        using (UnityWebRequest versionRequest = UnityWebRequest.Get(shopVersionUrl))
+        {
+            versionRequest.SetRequestHeader("Accept", "application/json");
+            string jwt = PlayerPrefs.GetString("jwt", "");
+            if (!string.IsNullOrEmpty(jwt))
+                versionRequest.SetRequestHeader("Authorization", "Bearer " + jwt);
+
+            yield return versionRequest.SendWebRequest();
+
+            if (versionRequest.result == UnityWebRequest.Result.Success)
+            {
+                try
+                {
+                    ShopVersionResponse versionResponse = JsonUtility.FromJson<ShopVersionResponse>(versionRequest.downloadHandler.text);
+                    serverVersion = versionResponse.version;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("Failed to parse shop version: " + e.Message);
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"Failed to check shop version: {versionRequest.error}. Will re-fetch items.");
+            }
+        }
+
+        // Step 2: Compare with cached version
+        if (serverVersion >= 0 && serverVersion == cachedShopVersion && shopDataLoaded)
+        {
+            Debug.Log($"Shop data is up-to-date (version {cachedShopVersion}). Skipping fetch.");
+            yield break;
+        }
+
+        // Step 3: Version changed or no cache — do a full fetch
+        Debug.Log($"Shop data changed (cached={cachedShopVersion}, server={serverVersion}). Fetching new items...");
+        yield return StartCoroutine(FetchAvailableTanksFromAPI(serverVersion));
+    }
+
+    private bool TryLoadCachedShopItems()
+    {
+        string cachedJson = PlayerPrefs.GetString(ShopItemsCacheJsonKey, "");
+        string cachedVersionStr = PlayerPrefs.GetString(ShopVersionCacheKey, "-1");
+
+        if (string.IsNullOrWhiteSpace(cachedJson))
+            return false;
+
+        if (long.TryParse(cachedVersionStr, out long ver))
+            cachedShopVersion = ver;
+
+        bool success = TryApplyShopItemsJson(cachedJson);
+        if (success)
+            shopDataLoaded = true;
+        return success;
+    }
+
+    private IEnumerator FetchAvailableTanksFromAPI(long newVersion)
+    {
+        string jwt = PlayerPrefs.GetString("jwt", "");
+
+        using (UnityWebRequest request = UnityWebRequest.Get(shopApiUrl))
+        {
+            request.SetRequestHeader("Accept", "application/json");
+
+            if (!string.IsNullOrEmpty(jwt))
+            {
+                request.SetRequestHeader("Authorization", "Bearer " + jwt);
+            }
+
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string json = request.downloadHandler.text;
+
+                if (TryApplyShopItemsJson(json))
+                {
+                    shopDataLoaded = true;
+                    cachedShopVersion = newVersion;
+
+                    PlayerPrefs.SetString(ShopItemsCacheJsonKey, json);
+                    PlayerPrefs.SetString(ShopVersionCacheKey, newVersion.ToString());
+                    PlayerPrefs.Save();
+
+                    // Re-select current tank if it became unavailable
+                    if (CurrentTank != null && !System.Array.Exists(availableTanks, t => t == CurrentTank))
+                    {
+                        TankDefinitionSO fallback = GetFirstAvailableTank();
+                        if (fallback != null)
+                            SelectTankInternal(fallback, false);
+                        else
+                            RefreshUI(null);
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError(
+                    $"Failed to fetch shop items from {shopApiUrl}: HTTP {request.responseCode} - {request.error}\n" +
+                    $"Response: {request.downloadHandler.text}");
+            }
+        }
+    }
+
+    private bool TryApplyShopItemsJson(string json)
+    {
+        try
+        {
+            string wrappedJson = "{\"array\":" + json + "}";
+            ShopItemArrayWrapper wrapper = JsonUtility.FromJson<ShopItemArrayWrapper>(wrappedJson);
+
+            if (wrapper == null || wrapper.array == null)
+                return false;
+
+            UpdateAvailableTanks(wrapper.array);
+            return true;
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Failed to parse shop items: " + e.Message);
+            return false;
+        }
+    }
+
+    private void UpdateAvailableTanks(ShopItemDTO[] apiItems)
+    {
+        TankSelectionButton[] allButtons = FindObjectsOfType<TankSelectionButton>(true);
+        List<TankDefinitionSO> newAvailableTanks = new List<TankDefinitionSO>();
+        shopItemsByName.Clear();
+
+        foreach (var apiItem in apiItems)
+        {
+            if (apiItem != null && !string.IsNullOrWhiteSpace(apiItem.name))
+            {
+                shopItemsByName[apiItem.name] = apiItem;
+            }
+        }
+
+        foreach (var button in allButtons)
+        {
+            if (button.TankData != null)
+            {
+                bool isAvailable = false;
+
+                if (shopItemsByName.TryGetValue(button.TankData.TankName, out ShopItemDTO apiItem))
+                {
+                    isAvailable = apiItem.available;
+                }
+
+                button.gameObject.SetActive(isAvailable);
+                
+                if (isAvailable && !newAvailableTanks.Contains(button.TankData))
+                {
+                    newAvailableTanks.Add(button.TankData);
+                }
+            }
+        }
+
+        availableTanks = newAvailableTanks.ToArray();
+        
+        if (defaultTank != null && !newAvailableTanks.Contains(defaultTank))
+        {
+            defaultTank = newAvailableTanks.Count > 0 ? newAvailableTanks[0] : null;
+        }
     }
 
     private void OnDestroy()
@@ -239,8 +459,8 @@ public class TankSelectionManager : MonoBehaviour
         }
 
         tankNameText.SetText(tankData.TankName);
-        descriptionText.SetText(tankData.Description);
-        priceText.SetText(FormatPrice(tankData.Price));
+        descriptionText.SetText(GetDisplayDescription(tankData));
+        priceText.SetText(FormatPrice(GetDisplayPrice(tankData)));
         abilityNameText.SetText(tankData.SpecialAbility.AbilityName);
         abilityDescriptionText.SetText(tankData.SpecialAbility.Description);
 
@@ -251,6 +471,27 @@ public class TankSelectionManager : MonoBehaviour
         }
 
         ApplyStats(tankData.Stats);
+    }
+
+    private string GetDisplayDescription(TankDefinitionSO tankData)
+    {
+        if (shopItemsByName.TryGetValue(tankData.TankName, out ShopItemDTO shopItem) &&
+            !string.IsNullOrWhiteSpace(shopItem.description))
+        {
+            return shopItem.description;
+        }
+
+        return tankData.Description;
+    }
+
+    private int GetDisplayPrice(TankDefinitionSO tankData)
+    {
+        if (shopItemsByName.TryGetValue(tankData.TankName, out ShopItemDTO shopItem))
+        {
+            return Mathf.Max(0, Mathf.RoundToInt(shopItem.price));
+        }
+
+        return tankData.Price;
     }
 
     private void ApplyStats(TankStats stats)

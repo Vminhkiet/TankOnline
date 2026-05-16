@@ -63,4 +63,22 @@ public class HistoryController {
     public ResponseEntity<List<Map<String, Object>>> getLeaderboard() {
         return ResponseEntity.ok(historyService.getLeaderboard());
     }
+
+    /**
+     * Admin: Lay lich su tran dau cua bat ky player nao.
+     * GET /api/history/player/{playerId}
+     */
+    @GetMapping("/player/{playerId}")
+    public ResponseEntity<List<MatchHistoryResponse>> getPlayerHistory(@PathVariable String playerId) {
+        return ResponseEntity.ok(historyService.getRecentMatches(playerId));
+    }
+
+    /**
+     * Admin: Lay thong ke cua bat ky player nao.
+     * GET /api/history/player/{playerId}/stats
+     */
+    @GetMapping("/player/{playerId}/stats")
+    public ResponseEntity<PlayerStatsResponse> getPlayerStats(@PathVariable String playerId) {
+        return ResponseEntity.ok(historyService.getStats(playerId));
+    }
 }

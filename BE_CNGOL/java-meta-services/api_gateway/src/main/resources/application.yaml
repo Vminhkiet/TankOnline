@@ -11,6 +11,12 @@ spring:
         locator:
           enabled: true
           lower-case-service-id: true
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
       routes:
         - id: auth-service-auth
           uri: lb://auth-service
@@ -55,7 +61,7 @@ app:
     public-endpoints:
       - /api/auth/**
       - /api/user/**
-      - /api/history/leaderboard
+      - /api/history/**
       - /actuator/**
 
 management:

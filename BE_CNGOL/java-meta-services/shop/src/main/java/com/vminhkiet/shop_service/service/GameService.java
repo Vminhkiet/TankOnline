@@ -20,4 +20,6 @@ public interface GameService {
     ItemDTO updateItem(Long id, ItemDTO itemDTO);
 
     void deleteItem(Long id);
+
+    long getShopVersion();
 }

@@ -159,8 +159,12 @@ void MatchManager::createMatch(MatchConfig config) {
 void MatchManager::routeCommand(GameCommand cmd) {
     std::shared_lock lock(_matchesMutex);
     auto it = _matches.find(cmd.matchId);
-    if (it != _matches.end() && it->second->isRunning())
+    if (it != _matches.end() && it->second->isRunning()) {
         it->second->pushCommand(std::move(cmd));
+    } else {
+        LOG_WARN("MatchManager: no running match for matchId={} (known matches: {})",
+                 cmd.matchId, _matches.size());
+    }
 }
 
 void MatchManager::onMatchEnd(MatchResult r) {

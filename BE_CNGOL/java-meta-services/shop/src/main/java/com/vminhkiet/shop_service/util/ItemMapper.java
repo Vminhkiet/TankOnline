@@ -21,6 +21,7 @@ public class ItemMapper {
                 // Kiểm tra category nếu nó là Object thì dùng toString(), nếu là String thì để nguyên
                 .category(item.getCategory() != null ? item.getCategory().toString() : null)
                 .available(item.getAvailble())
+                .status(Boolean.TRUE.equals(item.getAvailble()) ? "On Sale" : "Discontinued")
                 .build();
     }
 }

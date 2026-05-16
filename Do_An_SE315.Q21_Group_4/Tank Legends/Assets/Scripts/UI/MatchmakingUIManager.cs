@@ -40,7 +40,6 @@ public class MatchmakingUIManager : MonoBehaviour
     {
         if (isSearching) return;
         
-        if (findMatchPanel != null) findMatchPanel.SetActive(true);
         StartCoroutine(FindMatchCoroutine());
         StartCoroutine(UpdateTimerCoroutine());
     }

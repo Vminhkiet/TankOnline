@@ -15,4 +15,5 @@ public class ItemDTO {
     private BigDecimal price;
     private String category;
     private Boolean available; 
+    private String status;
 }

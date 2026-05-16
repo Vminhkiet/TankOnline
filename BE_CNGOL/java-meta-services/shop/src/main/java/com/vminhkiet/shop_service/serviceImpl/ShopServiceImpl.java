@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,6 +27,9 @@ public class ShopServiceImpl implements GameService {
         private final ItemRepository itemRepository;
         private final PlayerItemRepository playerItemRepository;
         private final PurchaseRepository purchaseRepository;
+        private static final String STATUS_ON_SALE = "On Sale";
+        private static final String STATUS_DISCONTINUED = "Discontinued";
+        private final AtomicLong shopVersion = new AtomicLong(0);
 
         @Override
         public List<ItemDTO> getAllItems() {
@@ -124,7 +128,12 @@ public class ShopServiceImpl implements GameService {
                                 .price(item.getPrice())
                                 .category(item.getCategory() != null ? item.getCategory().toString() : null)
                                 .available(item.getAvailble())
+                                .status(getItemStatus(item))
                                 .build();
+        }
+
+        private String getItemStatus(Item item) {
+                return Boolean.TRUE.equals(item.getAvailble()) ? STATUS_ON_SALE : STATUS_DISCONTINUED;
         }
 
         @Override
@@ -141,6 +150,7 @@ public class ShopServiceImpl implements GameService {
                                 .build();
 
                 Item savedItem = itemRepository.save(item);
+                shopVersion.incrementAndGet();
                 return convertToDTO(savedItem);
         }
 
@@ -160,6 +170,7 @@ public class ShopServiceImpl implements GameService {
                 item.setCategory(itemDTO.getCategory());
                 // 3. Lưu lại (Hàm save sẽ tự hiểu là Update vì đã có ID)
                 Item updatedItem = itemRepository.save(item);
+                shopVersion.incrementAndGet();
                 return convertToDTO(updatedItem);
         }
 
@@ -171,10 +182,16 @@ public class ShopServiceImpl implements GameService {
                                 .orElseThrow(() -> new RuntimeException("Item không tồn tại để xóa"));
                 item.setAvailble(false);
                 itemRepository.save(item);
+                shopVersion.incrementAndGet();
 
                 /*
                  * Cách 2: Xóa vĩnh viễn (Chỉ dùng khi chưa có giao dịch nào liên quan)
                  * itemRepository.deleteById(id);
                  */
+        }
+
+        @Override
+        public long getShopVersion() {
+                return shopVersion.get();
         }
 }

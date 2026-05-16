@@ -40,6 +40,8 @@ public class MainScreenButtonManager : MonoBehaviour
         if (button == null)
             return;
 
+        RegisterButton(button);
+
         if (CurrentButton == button)
         {
             ShowMainPanel();
@@ -63,12 +65,16 @@ public class MainScreenButtonManager : MonoBehaviour
     private void ShowButtonPanel(MainScreenToggleButton button)
     {
         CurrentButton = button;
-        bool keepMainPanelActive = ShouldKeepMainPanelActive(button);
+        bool keepMainPanelActive = !button.HideMainAndOtherButtons || ShouldKeepMainPanelActive(button);
+
+        SetAllTargetPanelsActiveState(button);
+
+        if (button.TargetPanel != null)
+            button.TargetPanel.SetActive(true);
 
         if (mainPanel != null)
             mainPanel.SetActive(keepMainPanelActive);
 
-        SetAllTargetPanelsActiveState(button);
         RefreshAllButtons();
     }
 
