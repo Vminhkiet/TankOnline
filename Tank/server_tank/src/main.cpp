@@ -105,6 +105,10 @@ int main() {
                 cfg.maxDurationSecs = j.value("maxDuration", 300);
                 for (auto& pid : j.at("players"))
                     cfg.playerIds.push_back(pid.get<uint32_t>());
+                if (j.contains("userIds")) {
+                    for (auto& [pidStr, uid] : j.at("userIds").items())
+                        cfg.userIds[static_cast<uint32_t>(std::stoul(pidStr))] = uid.get<std::string>();
+                }
                 manager.createMatch(std::move(cfg));
             } catch (const std::exception& e) {
                 LOG_ERR("main: bad match.create payload: {}", e.what());

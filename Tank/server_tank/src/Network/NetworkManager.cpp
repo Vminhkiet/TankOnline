@@ -93,6 +93,9 @@ void NetworkManager::workerThread() {
 void NetworkManager::handleReader(IoContext* ctx, DWORD lengthBuf) {
     if (lengthBuf == 0) { postReceive(ctx); return; }
 
+    LOG_INFO("NetworkManager: recv {} bytes from {}:{}", lengthBuf,
+             ntohl(ctx->clientAddr.sin_addr.s_addr), ntohs(ctx->clientAddr.sin_port));
+
     ReadStream rs(reinterpret_cast<const uint32_t*>(ctx->buffer),
                   static_cast<int>(lengthBuf));
 

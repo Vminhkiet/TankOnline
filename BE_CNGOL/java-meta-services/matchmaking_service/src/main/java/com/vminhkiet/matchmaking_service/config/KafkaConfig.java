@@ -25,7 +25,7 @@ public class KafkaConfig {
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
             ProducerConfig.ACKS_CONFIG, "1",
             ProducerConfig.RETRIES_CONFIG, 3,
-            ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000  // don't block >1s when Kafka is down
+            ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000
         ));
     }
 

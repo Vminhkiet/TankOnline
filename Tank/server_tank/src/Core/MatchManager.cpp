@@ -175,9 +175,13 @@ void MatchManager::onMatchEnd(MatchResult r) {
     j["outcome"]      = outcomeStr;
     j["winnerId"]     = r.winnerId;
     j["durationSecs"] = r.durationSecs;
+    j["mapName"]      = r.mapName;
     j["kills"]        = json::object();
     for (auto& [pid, k] : r.kills)
         j["kills"][std::to_string(pid)] = k;
+    j["userIds"]      = json::object();
+    for (auto& [pid, uid] : r.userIds)
+        j["userIds"][std::to_string(pid)] = uid;
 
     if (_producer.publish("match.result", j.dump()))
         LOG_INFO("MatchManager: match {} result published to Kafka", r.matchId);

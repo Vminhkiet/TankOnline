@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: history-service
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: history-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   datasource:
     url: jdbc:postgresql://localhost:5432/history_service_db
     username: auth_user

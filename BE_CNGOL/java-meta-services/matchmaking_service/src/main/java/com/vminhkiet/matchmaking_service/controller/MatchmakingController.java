@@ -10,11 +10,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.vminhkiet.matchmaking_service.model.Match;
-import com.vminhkiet.matchmaking_service.service.MatchMakingService;
-
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -37,7 +35,7 @@ public class MatchmakingController {
     private record WaitingEntry(
         long userId,
         int playerId,
-        DeferredResult<ResponseEntity<Map<String, Object>>> result
+        CompletableFuture<ResponseEntity<Map<String, Object>>> future
     ) {}
 
     private final AtomicReference<WaitingEntry> waitingSlot  = new AtomicReference<>();
@@ -46,62 +44,56 @@ public class MatchmakingController {
     private final ObjectMapper                  objectMapper  = new ObjectMapper();
 
     @PostMapping("/find")
-    public DeferredResult<ResponseEntity<Map<String, Object>>> findMatch() {
+    public CompletableFuture<ResponseEntity<Map<String, Object>>> findMatch() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         long userId = parseLong(auth != null ? (String) auth.getPrincipal() : null, 0L);
 
-        DeferredResult<ResponseEntity<Map<String, Object>>> myResult = new DeferredResult<>(60_000L);
+        CompletableFuture<ResponseEntity<Map<String, Object>>> myFuture = new CompletableFuture<>();
         int myPlayerId = playerCounter.getAndIncrement();
-        WaitingEntry myEntry = new WaitingEntry(userId, myPlayerId, myResult);
+        WaitingEntry myEntry = new WaitingEntry(userId, myPlayerId, myFuture);
 
-        myResult.onTimeout(() -> {
-            waitingSlot.compareAndSet(myEntry, null);
-            myResult.setErrorResult(
-                ResponseEntity.status(408).body(Map.of("error", "Timeout waiting for another player"))
-            );
-        });
-
-        // Spin until either registered as waiter or paired with existing waiter.
         while (true) {
             WaitingEntry existing = waitingSlot.get();
 
             if (existing == null) {
                 if (waitingSlot.compareAndSet(null, myEntry)) {
-                    // Registered as player 1 — response will arrive via player 2's thread.
-                    return myResult;
+                    return myFuture;
                 }
             } else {
                 if (waitingSlot.compareAndSet(existing, null)) {
-                    // Claimed existing waiter — we are player 2.
                     int matchId = matchCounter.getAndIncrement();
-                    publishMatch(matchId, existing.playerId(), myPlayerId);
+                    publishMatch(matchId, existing.playerId(), existing.userId(), myPlayerId, userId);
 
-                    existing.result().setResult(ResponseEntity.ok(Map.of(
+                    existing.future().complete(ResponseEntity.ok(Map.of(
                         "matchId",    matchId,
                         "serverHost", serverHost,
                         "serverPort", serverPort,
                         "playerId",   existing.playerId()
                     )));
-                    myResult.setResult(ResponseEntity.ok(Map.of(
+                    myFuture.complete(ResponseEntity.ok(Map.of(
                         "matchId",    matchId,
                         "serverHost", serverHost,
                         "serverPort", serverPort,
                         "playerId",   myPlayerId
                     )));
-                    return myResult;
+                    return myFuture;
                 }
             }
         }
     }
 
-    private void publishMatch(int matchId, int p1PlayerId, int p2PlayerId) {
+    private void publishMatch(int matchId, int p1PlayerId, long p1UserId, int p2PlayerId, long p2UserId) {
         try {
-            String payload = objectMapper.writeValueAsString(Map.of(
-                "matchId",     matchId,
-                "mapName",     "world",
-                "maxDuration", 300,
-                "players",     List.of(p1PlayerId, p2PlayerId)
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("matchId",     matchId);
+            body.put("mapName",     "world");
+            body.put("maxDuration", 300);
+            body.put("players",     List.of(p1PlayerId, p2PlayerId));
+            body.put("userIds",     Map.of(
+                String.valueOf(p1PlayerId), String.valueOf(p1UserId),
+                String.valueOf(p2PlayerId), String.valueOf(p2UserId)
             ));
+            String payload = objectMapper.writeValueAsString(body);
             kafkaTemplate.send(matchTopic, String.valueOf(matchId), payload);
         } catch (Exception e) {
             System.err.println("[MatchmakingController] Kafka publish failed for match "

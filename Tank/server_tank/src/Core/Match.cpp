@@ -97,6 +97,8 @@ void Match::tick(float dt) {
             r.outcome      = MatchOutcome::Draw;
             r.durationSecs = _elapsed;
             r.kills        = _world.getKills();
+            r.userIds      = _config.userIds;
+            r.mapName      = _config.mapName;
             _running.store(false);
             _onEnd(r);
             return;
@@ -114,6 +116,8 @@ void Match::tick(float dt) {
         _config.playerIds, result);
 
     if (outcome != MatchOutcome::Running) {
+        result.userIds = _config.userIds;
+        result.mapName = _config.mapName;
         broadcastMatchEnd(result);
         _running.store(false);
         LOG_INFO("Match {}: ended (outcome={}, winner={}, dur={:.1f}s)",
