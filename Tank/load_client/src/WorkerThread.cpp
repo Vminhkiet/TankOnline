@@ -15,11 +15,11 @@ WorkerThread::WorkerThread(int workerId,
     , _count(clientCount)
     , _cfg(cfg)
     , _serverAddr(serverAddr)
-    , _metrics(metrics)
+    , _metrics(&metrics)
 {
     _players.reserve(clientCount);
     for (int i = 0; i < clientCount; ++i)
-        _players.emplace_back(firstClientId + i, serverAddr, metrics);
+        _players.emplace_back(firstClientId + i, serverAddr, _metrics, cfg.matchId);
 }
 
 void WorkerThread::start()

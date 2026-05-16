@@ -12,13 +12,16 @@ if(NOT TARGET bit_packing)
                      ${CMAKE_CURRENT_BINARY_DIR}/bit_packing)
 endif()
 
-# ── Header-only deps từ vcpkg_installed (không cần compile .lib) ─────────────
-# ASIO, GLM, nlohmann-json, fmt đều hỗ trợ header-only
-set(VCPKG_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg_installed/x64-windows/include")
+# ── External dependencies ────────────────────────────────────────────────────
+find_package(asio          CONFIG REQUIRED)
+find_package(fmt           CONFIG REQUIRED)
+find_package(glm           CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(RdKafka       CONFIG REQUIRED)
 
-# ── Sources ───────────────────────────────────────────────────────────────────
+# ── Sources (exclude stubs — using real Kafka implementation) ────────────────
 file(GLOB_RECURSE SERVER_SOURCES "src/*.cpp")
-list(FILTER SERVER_SOURCES EXCLUDE REGEX ".*/Kafka/Kafka(Consumer|Producer)\\.cpp$")
+list(FILTER SERVER_SOURCES EXCLUDE REGEX ".*/Kafka/Kafka(Consumer|Producer)_stub\\.cpp$")
 file(GLOB_RECURSE SERVER_HEADERS "include/*.hpp" "include/*.h")
 
 add_executable(server_tank ${SERVER_SOURCES} ${SERVER_HEADERS})
@@ -47,6 +50,9 @@ target_link_libraries(server_tank PRIVATE
     ws2_32
     winmm
     bit_packing
+    nlohmann_json::nlohmann_json
+    RdKafka::rdkafka
+    RdKafka::rdkafka++
 )
 
 # ── Copy assets to output dir ─────────────────────────────────────────────────

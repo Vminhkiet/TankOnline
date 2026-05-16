@@ -8,12 +8,12 @@
 #include "Network/SessionManager.hpp"
 #include "Network/CommandDispatcher.hpp"
 #include "Network/GameCommand.hpp"
-#include "Network/NetworkManager.hpp"
+#include "Network/INetworkBackend.hpp"
 
 class Match {
 public:
     Match(MatchConfig config,
-          NetworkManager& network,
+          INetworkBackend& network,
           std::function<void(MatchResult)> onEnd);
 
     uint32_t id()              const { return _config.matchId; }
@@ -33,7 +33,7 @@ private:
     GameWorld     _world;
     SessionManager _sessions;
     CommandDispatcher _dispatcher;
-    NetworkManager&  _network;
+    INetworkBackend& _network;
     std::function<void(MatchResult)> _onEnd;
 
     std::deque<GameCommand>  _cmdQueue;
@@ -51,6 +51,7 @@ private:
     void registerHandlers();
     bool resolvePlayer(const sockaddr_in& addr, uint32_t& outPid);
     void broadcastSnapshot();
+    void broadcastMatchEnd(const MatchResult& r);
 
     void handleMove (GameCommand& cmd);
     void handleShoot(GameCommand& cmd);

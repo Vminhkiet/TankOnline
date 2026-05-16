@@ -32,6 +32,7 @@ Config parseArgs(int argc, char* argv[])
         else if (key == "--duration") cfg.duration    = std::atoi(val());
         else if (key == "--rate")     cfg.tickRate    = std::atoi(val());
         else if (key == "--shoot")    cfg.shootChance = static_cast<float>(std::atof(val()));
+        else if (key == "--match")    cfg.matchId     = static_cast<uint32_t>(std::atoi(val()));
         else if (key == "--verbose")  cfg.verbose     = true;
         else if (key == "--help")     { printUsage(argv[0]); std::exit(0); }
     }
@@ -78,7 +79,7 @@ int main(int argc, char* argv[])
 
     // Distribute clients evenly across threads
     Metrics metrics;
-    std::vector<WorkerThread> workers;
+    std::vector<std::unique_ptr<WorkerThread>> workers;
     workers.reserve(numThreads);
 
     int assigned  = 0;
@@ -88,12 +89,13 @@ int main(int argc, char* argv[])
     for (int t = 0; t < numThreads; ++t) {
         int count = baseCount + (t < extra ? 1 : 0);
         if (count == 0) break;
-        workers.emplace_back(t, assigned, count, cfg, serverAddr, metrics);
+        workers.push_back(std::make_unique<WorkerThread>(
+            t, assigned, count, cfg, serverAddr, metrics));
         assigned += count;
     }
 
     // Start all workers
-    for (auto& w : workers) w.start();
+    for (auto& w : workers) w->start();
 
     printf("  Workers started. Running for %d seconds...\n\n", cfg.duration);
     printf("  %-5s  %-30s  %-20s  %-15s\n",
@@ -118,8 +120,8 @@ int main(int argc, char* argv[])
     }
 
     // Stop workers
-    for (auto& w : workers) w.stop();
-    for (auto& w : workers) w.join();
+    for (auto& w : workers) w->stop();
+    for (auto& w : workers) w->join();
 
     int actualDuration = static_cast<int>(
         std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - startT).count());

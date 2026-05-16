@@ -9,14 +9,14 @@
 #include "Core/MatchConfig.hpp"
 #include "Kafka/KafkaProducer.hpp"
 #include "Utils/ThreadPool.hpp"
-#include "Network/NetworkManager.hpp"
+#include "Network/INetworkBackend.hpp"
 
 class MatchManager {
 public:
     static constexpr int MAX_CONCURRENT_MATCHES = 64;
     static constexpr int TICK_RATE_HZ           = 60;
 
-    explicit MatchManager(NetworkManager& network);
+    explicit MatchManager(INetworkBackend& network);
     ~MatchManager();
 
     void start(const std::string& kafkaBrokers);
@@ -38,7 +38,7 @@ private:
     ThreadPool         _pool;
     std::jthread       _tickThread;
     KafkaProducer      _producer;
-    NetworkManager&    _network;
+    INetworkBackend&   _network;
     std::atomic<bool>  _running{false};
 
     // Wall-clock time of the previous tick start — used to compute measured dt

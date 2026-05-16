@@ -1,16 +1,15 @@
 #include "Core/MatchManager.hpp"
+#include "Network/INetworkBackend.hpp"
 #include "Network/NetworkManager.hpp"
+#include "Network/BlockingBackend.hpp"
 #include "Utils/Logger.hpp"
 #include <csignal>
 #include <iostream>
 #include <string>
 #include <cstdlib>
-#include <thread>
-#include <sstream>
-#include <timeapi.h>
+#include <timeapi.h>   // timeBeginPeriod / timeEndPeriod (winmm)
 
-#define ASIO_STANDALONE
-#include <asio.hpp>
+#include "Kafka/KafkaConsumer.hpp"
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
@@ -22,213 +21,102 @@ static std::string getEnv(const char* key, const char* def) {
 static std::atomic<bool> g_running{true};
 static void onSignal(int) { g_running = false; }
 
-// ── HTTP helpers ──────────────────────────────────────────────────────────────
-
-static std::string httpOk(const std::string& body) {
-    std::ostringstream ss;
-    ss << "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-       << "Content-Length: " << body.size() << "\r\nConnection: close\r\n\r\n" << body;
-    return ss.str();
-}
-static std::string httpBad(const std::string& msg) {
-    std::string body = "{\"error\":\"" + msg + "\"}";
-    std::ostringstream ss;
-    ss << "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n"
-       << "Content-Length: " << body.size() << "\r\nConnection: close\r\n\r\n" << body;
-    return ss.str();
-}
-
-// ── HTTP session handler ──────────────────────────────────────────────────────
-// Fix: read the ENTIRE request (headers + body) into one buffer before parsing.
-// This avoids ASIO partial-read bugs and handles both Content-Length
-// and Transfer-Encoding: chunked from Spring RestTemplate.
-
-static void handleSession(asio::ip::tcp::socket sock, MatchManager& manager) {
-    try {
-        asio::streambuf buf;
-        asio::error_code ec;
-
-        // 1. Read until end of headers (\r\n\r\n)
-        asio::read_until(sock, buf, "\r\n\r\n", ec);
-        if (ec && ec != asio::error::eof) return;
-
-        // 2. Extract everything read so far into a string
-        std::string raw(asio::buffers_begin(buf.data()), asio::buffers_end(buf.data()));
-        buf.consume(buf.size());
-
-        // 3. Split headers and partial body already in buffer
-        size_t headerEnd = raw.find("\r\n\r\n");
-        if (headerEnd == std::string::npos) return;
-
-        std::string headers  = raw.substr(0, headerEnd);
-        std::string body     = raw.substr(headerEnd + 4);
-
-        // 4. Parse first request line
-        size_t firstNl    = headers.find("\r\n");
-        std::string reqLine = headers.substr(0, firstNl);
-
-        bool isPost    = reqLine.find("POST /internal/match/create") != std::string::npos;
-        bool isMetrics = reqLine.find("GET /metrics") != std::string::npos;
-
-        if (isMetrics) {
-            std::string resp = httpOk("{\"status\":\"online\"}");
-            asio::write(sock, asio::buffer(resp), ec);
-            return;
-        }
-
-        if (!isPost) {
-            std::string resp = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
-            asio::write(sock, asio::buffer(resp), ec);
-            return;
-        }
-
-        // 5. Read remaining body bytes
-        //    Case A: Content-Length header present
-        size_t clPos = headers.find("Content-Length:");
-        if (clPos != std::string::npos) {
-            size_t clEnd   = headers.find("\r\n", clPos);
-            int contentLen = std::stoi(headers.substr(clPos + 15, clEnd - clPos - 15));
-            int remaining  = contentLen - (int)body.size();
-            if (remaining > 0) {
-                std::vector<char> more(remaining);
-                asio::read(sock, asio::buffer(more), ec);
-                body.append(more.data(), more.size());
-            }
-        } else {
-            // Case B: Transfer-Encoding: chunked — read until connection closes
-            asio::error_code readEc;
-            while (!readEc) {
-                std::array<char, 4096> tmp;
-                size_t n = sock.read_some(asio::buffer(tmp), readEc);
-                if (n > 0) body.append(tmp.data(), n);
-            }
-            // Decode chunked: each chunk is "HEX\r\nDATA\r\n", ends with "0\r\n\r\n"
-            // Simple decode: collect all non-hex-size lines
-            std::string decoded;
-            std::istringstream ss(body);
-            std::string line;
-            bool expectData = false;
-            while (std::getline(ss, line)) {
-                if (!line.empty() && line.back() == '\r') line.pop_back();
-                if (!expectData) {
-                    // This line is a chunk size in hex — skip it
-                    expectData = true;
-                } else {
-                    // This line is chunk data
-                    if (!line.empty()) decoded += line;
-                    expectData = false;
-                }
-            }
-            body = decoded;
-        }
-
-        // 6. Parse JSON and create match
-        try {
-            if (body.empty()) {
-                LOG_ERR("mgmt: empty body received");
-                std::string resp = httpBad("empty body");
-                asio::write(sock, asio::buffer(resp), ec);
-                return;
-            }
-
-            auto j = json::parse(body);
-            MatchConfig cfg;
-            cfg.matchId         = j.at("matchId").get<uint32_t>();
-            cfg.mapName         = j.value("mapName", "world");
-            cfg.maxDurationSecs = j.value("maxDurationSecs", 300);
-            for (auto& pid : j.at("playerIds"))
-                cfg.playerIds.push_back(pid.get<uint32_t>());
-
-            manager.createMatch(std::move(cfg));
-            LOG_INFO("mgmt: match created via HTTP (matchId={})", cfg.matchId);
-
-            std::string resp = httpOk("{\"status\":\"ok\"}");
-            asio::write(sock, asio::buffer(resp), ec);
-
-        } catch (const std::exception& e) {
-            LOG_ERR("mgmt: JSON parse error — {}", e.what());
-            std::string resp = httpBad(e.what());
-            asio::write(sock, asio::buffer(resp), ec);
-        }
-
-    } catch (...) {}
-}
-
-static void startMgmtServer(MatchManager& manager, int port) {
-    try {
-        asio::io_context ioc;
-        asio::ip::tcp::acceptor acceptor(
-            ioc,
-            asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)
-        );
-        LOG_INFO("mgmt: HTTP server listening on :{}", port);
-
-        while (g_running) {
-            asio::ip::tcp::socket sock(ioc);
-            asio::error_code ec;
-            acceptor.accept(sock, ec);
-            if (ec) continue;
-
-            std::thread([s = std::move(sock), &manager]() mutable {
-                handleSession(std::move(s), manager);
-            }).detach();
-        }
-    } catch (const std::exception& e) {
-        LOG_ERR("mgmt: server error — {}", e.what());
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
 int main() {
+    // Reduce Windows multimedia timer resolution from default 15 ms to 1 ms.
+    // This makes sleep_for accurate to ~1 ms instead of ~15 ms, preventing the
+    // tick loop from running at ~64 Hz instead of 60 Hz.
     timeBeginPeriod(1);
 
     std::cout << "=========================================\n"
-              << "        SERVER-TANK  v0.3 (match mode)  \n"
+              << "        SERVER-TANK  v0.2 (match mode)  \n"
               << "=========================================\n\n";
 
     std::signal(SIGINT,  onSignal);
     std::signal(SIGTERM, onSignal);
 
-    Logger::getInstance().init("server.log");
+    const std::string logFile = getEnv("LOG_FILE", "server.log");
+    Logger::getInstance().init(logFile);
 
-    const int udpPort  = std::stoi(getEnv("UDP_PORT",  "8080"));
-    const int mgmtPort = std::stoi(getEnv("MGMT_PORT", "9090"));
+    const int udpPort = std::stoi(getEnv("UDP_PORT", "8080"));
 
-    NetworkManager network;
-    if (!network.start(udpPort)) {
+    // Kafka broker list — set KAFKA_BROKERS=host:9092 to enable publishing.
+    // Leave empty (default) to run without Kafka (stub silently no-ops).
+    const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "172.25.203.168:9092");
+    const std::string kafkaGroupId = getEnv("KAFKA_GROUP_ID", "tank-server");
+    const std::string kafkaTopic   = getEnv("KAFKA_TOPIC_IN",  "match.create");
+
+    // ── Network backend (switchable via BACKEND env var) ────────────────────
+    // BACKEND=iocp     → Windows IOCP, hardware_concurrency*2 worker threads (default)
+    // BACKEND=blocking → Dedicated blocking-recvfrom threads (baseline comparison)
+    const std::string backendEnv = getEnv("BACKEND", "iocp");
+    const int blockingReceivers  = std::stoi(getEnv("BLOCKING_RECEIVERS", "2"));
+
+    std::unique_ptr<INetworkBackend> netPtr;
+    if (backendEnv == "blocking") {
+        netPtr = std::make_unique<BlockingBackend>(blockingReceivers);
+        std::cout << "  Backend  : Blocking-recvfrom (" << blockingReceivers << " receiver threads)\n\n";
+    } else {
+        netPtr = std::make_unique<NetworkManager>();
+        std::cout << "  Backend  : IOCP (hardware_concurrency * 2 workers)\n\n";
+    }
+
+    if (!netPtr->start(udpPort)) {
         LOG_ERR("main: failed to bind UDP port {}", udpPort);
         return 1;
     }
 
-    MatchManager manager(network);
-    manager.start("");
+    // ── Match manager ────────────────────────────────────────────────────────
+    MatchManager manager(*netPtr);
+    manager.start(kafkaBrokers);
 
-    std::thread mgmtThread([&manager, mgmtPort]() {
-        startMgmtServer(manager, mgmtPort);
-    });
-    mgmtThread.detach();
-
-#ifdef TANK_DEV_HARDCODE_MATCH
-    {
+    // ── Create N test matches (NUM_MATCHES env var, default 1) ──────────────
+    // Each match gets 2 player slots: match M → playerIds {2M-1, 2M}
+    const int numMatches = std::stoi(getEnv("NUM_MATCHES", "1"));
+    for (int m = 1; m <= numMatches; ++m) {
         MatchConfig cfg;
-        cfg.matchId         = 1;
+        cfg.matchId         = static_cast<uint32_t>(m);
         cfg.mapName         = "world";
         cfg.maxDurationSecs = 600;
-        cfg.playerIds       = {1, 2};
+        cfg.playerIds       = { static_cast<uint32_t>(2*m - 1),
+                                 static_cast<uint32_t>(2*m) };
         manager.createMatch(std::move(cfg));
-        LOG_INFO("main: DEV test match (matchId=1, players=[1,2])");
     }
-#endif
+    LOG_INFO("main: {} test match(es) created", numMatches);
 
-    LOG_INFO("main: UDP={} MGMT_HTTP={}", udpPort, mgmtPort);
+    KafkaConsumer consumer;
+    bool kafkaOk = !kafkaBrokers.empty() &&
+                   consumer.connect(kafkaBrokers, kafkaGroupId, {kafkaTopic});
+    if (!kafkaBrokers.empty() && !kafkaOk)
+        LOG_WARN("main: Kafka unavailable — running without dynamic match creation");
 
-    while (g_running)
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    LOG_INFO("main: running (UDP={}, kafka={})", udpPort, kafkaOk ? "on" : "off");
+
+    while (g_running) {
+        if (!kafkaOk) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+        bool ok = consumer.poll(500, [&](const KafkaMessage& msg) {
+            try {
+                auto j = json::parse(msg.payload);
+                MatchConfig cfg;
+                cfg.matchId         = j.at("matchId").get<uint32_t>();
+                cfg.mapName         = j.value("mapName", "world");
+                cfg.maxDurationSecs = j.value("maxDuration", 300);
+                for (auto& pid : j.at("players"))
+                    cfg.playerIds.push_back(pid.get<uint32_t>());
+                manager.createMatch(std::move(cfg));
+            } catch (const std::exception& e) {
+                LOG_ERR("main: bad match.create payload: {}", e.what());
+            }
+        });
+        if (!ok) { LOG_ERR("main: Kafka fatal error"); break; }
+    }
+    consumer.close();
 
     LOG_INFO("main: shutting down");
     manager.stop();
-    network.stop();
+    netPtr->stop();
     timeEndPeriod(1);
     return 0;
 }

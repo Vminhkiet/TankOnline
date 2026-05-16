@@ -9,7 +9,8 @@
 
 class VirtualPlayer {
 public:
-    VirtualPlayer(uint32_t id, const sockaddr_in& serverAddr, Metrics& metrics);
+    VirtualPlayer(uint32_t id, const sockaddr_in& serverAddr, Metrics* metrics,
+                  uint32_t matchId = 1);
 
     // Open socket; returns false on failure
     bool init();
@@ -26,9 +27,10 @@ public:
 private:
     uint32_t    _id;
     sockaddr_in _server;
-    Metrics&    _metrics;
+    Metrics*    _metrics;
     UdpSocket   _sock;
 
+    uint32_t _matchId = 1;
     uint8_t  _seq  = 0;
     uint16_t _tick = 0;
     bool     _loggedIn = false;
