@@ -9,7 +9,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.request.async.DeferredResult;
+
+import com.vminhkiet.matchmaking_service.model.Match;
+import com.vminhkiet.matchmaking_service.service.MatchMakingService;
 
 import java.util.List;
 import java.util.Map;

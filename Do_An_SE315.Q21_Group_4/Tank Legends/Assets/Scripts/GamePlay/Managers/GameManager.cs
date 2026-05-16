@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using TMPro;
 using TankNet;
 
 namespace Complete
@@ -24,7 +25,22 @@ namespace Complete
         public int m_ServerPort = 8080;
         public uint m_MatchId = 1;
         public GameObject m_RemoteTankPrefab;
-        public GameObject m_RemoteBulletPrefab; // assign CompleteShell prefab — physics + ShellExplosion disabled at runtime
+        public GameObject m_RemoteBulletPrefab;
+
+        [Header("Match End UI")]
+        public GameObject     matchEndPanel;
+        public TextMeshProUGUI matchEndResultText;
+        public TextMeshProUGUI matchEndStatsText;
+        public string          lobbySceneName = "Lobby";
+
+        // ── Match tracking (online) ───────────────────────────────────────────
+        private float   _matchStartTime;
+        private bool    _matchEnded;
+        private int     _myKills;
+        private int     _myDeaths;
+        private string  _opponentId = "bot-1";
+        private int     _totalPlayersSeen;
+        private readonly Dictionary<uint, bool> _prevAliveStatus = new();
 
         private readonly Dictionary<uint, GameObject> _remoteTanks   = new();
         private readonly Dictionary<uint, GameObject> _remoteBullets = new();
@@ -48,6 +64,9 @@ namespace Complete
 
         private void Awake()
         {
+            _matchStartTime = Time.time;
+            if (matchEndPanel != null) matchEndPanel.SetActive(false);
+
             // Read MatchInfo from GlobalMatchState if available
             if (GlobalMatchState.HasMatchInfo)
             {
@@ -455,6 +474,9 @@ namespace Complete
 
             // Render bullets fired by opponent tanks (skip own bullets — already shown locally)
             UpdateRemoteBullets(snap.Bullets);
+
+            // Check if match should end
+            if (!_matchEnded) CheckMatchEnd(snap);
         }
 
         // Cached bullet prefab: m_RemoteBulletPrefab if assigned, otherwise auto-detected
@@ -730,6 +752,93 @@ namespace Complete
                 if (m_Tanks[i].m_Instance != null)
                     m_Tanks[i].DisableControl();
             }
+        }
+
+        // ── Match end detection (online mode) ────────────────────────────────
+
+        private void CheckMatchEnd(SnapshotData snap)
+        {
+            // Track alive status changes to count kills/deaths
+            foreach (var ts in snap.Tanks)
+            {
+                if (!_prevAliveStatus.ContainsKey(ts.tankId))
+                {
+                    // First time seeing this tank
+                    _prevAliveStatus[ts.tankId] = ts.IsAlive;
+                    _totalPlayersSeen++;
+                    // Record opponent ID (anyone who isn't us)
+                    if (ts.tankId != m_MyPlayerId && ts.tankId != 0)
+                        _opponentId = ts.tankId.ToString();
+                }
+                else
+                {
+                    bool wasAlive = _prevAliveStatus[ts.tankId];
+                    if (wasAlive && !ts.IsAlive)
+                    {
+                        if (ts.tankId == m_MyPlayerId) _myDeaths++;
+                        else                           _myKills++;
+                    }
+                    _prevAliveStatus[ts.tankId] = ts.IsAlive;
+                }
+            }
+
+            // Wait until we've seen all players before judging
+            if (_totalPlayersSeen < 2) return;
+
+            int alivePlayers   = 0;
+            bool myPlayerAlive = false;
+            foreach (var ts in snap.Tanks)
+            {
+                if (ts.IsAlive) alivePlayers++;
+                if (ts.tankId == m_MyPlayerId && ts.IsAlive) myPlayerAlive = true;
+            }
+
+            if (alivePlayers <= 1)
+            {
+                _matchEnded = true;
+                bool draw = (alivePlayers == 0);
+                StartCoroutine(TriggerMatchEnd(myPlayerAlive && !draw, draw));
+            }
+        }
+
+        private IEnumerator TriggerMatchEnd(bool won, bool draw)
+        {
+            DisableTankControl();
+            TankNetClient.Instance?.Disconnect();
+
+            int durationSecs = Mathf.Max(1, (int)(Time.time - _matchStartTime));
+
+            // Show match end panel
+            if (matchEndPanel != null) matchEndPanel.SetActive(true);
+
+            string resultText = draw ? "DRAW!" : (won ? "YOU WIN!" : "YOU LOSE!");
+            if (matchEndResultText != null)
+                matchEndResultText.text = resultText;
+
+            if (matchEndStatsText != null)
+                matchEndStatsText.text =
+                    $"Kills: {_myKills}   Deaths: {_myDeaths}\n" +
+                    $"Duration: {durationSecs / 60}:{durationSecs % 60:00}";
+
+            // Save match to history service
+            MatchHistoryUIManager.SaveMatchResult(
+                caller:      this,
+                matchId:     (long)m_MatchId,
+                opponentId:  _opponentId,
+                won:         won,
+                draw:        draw,
+                kills:       _myKills,
+                deaths:      _myDeaths,
+                durationSecs: durationSecs
+            );
+
+            // Wait then return to lobby
+            yield return new WaitForSeconds(5f);
+
+            GlobalMatchState.Clear();
+            SceneManager.LoadScene(
+                string.IsNullOrEmpty(lobbySceneName) ? "Lobby" : lobbySceneName
+            );
         }
     }
 }

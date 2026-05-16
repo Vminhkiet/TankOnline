@@ -1,8 +1,21 @@
 server:
   port: 8082
 
+spring:
+  application:
+    name: matchmaking-service
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: "123456"
+
 eureka:
+  instance:
+    prefer-ip-address: true
   client:
+    fetch-registry: true
+    register-with-eureka: true
     service-url:
       defaultZone: http://localhost:8761/eureka/
 
@@ -14,3 +27,12 @@ management:
   endpoint:
     health:
       show-details: always
+
+# ── Địa chỉ Tank C++ server ────────────────────────────────────────────────────
+# udp-port : Unity kết nối UDP để chơi game
+# mgmt-port: Java gọi HTTP để tạo match (Tank server phải đang chạy)
+tank:
+  server:
+    host: 127.0.0.1
+    udp-port: 8080
+    mgmt-port: 9090
