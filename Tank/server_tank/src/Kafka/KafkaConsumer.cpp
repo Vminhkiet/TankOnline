@@ -54,9 +54,10 @@ bool KafkaConsumer::poll(int timeoutMs,
         return true;
     }
     if (msg->err() != RdKafka::ERR_NO_ERROR) {
+        auto errCode = msg->err();
         LOG_ERR("KafkaConsumer: error: {}", msg->errstr());
         delete msg;
-        return msg->err() != RdKafka::ERR__ALL_BROKERS_DOWN;
+        return errCode != RdKafka::ERR__ALL_BROKERS_DOWN;
     }
 
     KafkaMessage km;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -24,126 +24,14 @@ import {
   Wallet,
   Wifi,
   XCircle,
-  Store
+  Store,
+  Trophy,
+  History,
+  Eye
 } from 'lucide-react';
 import './styles.css';
 
-const playersSeed = [
-  {
-    playerId: 'TL-1042',
-    username: 'IronMek',
-    createdAt: '2025-09-14',
-    lastLogin: '2026-05-02 13:58',
-    isBanned: false,
-    banReason: '',
-    banExpires: '',
-    onlineStatus: 'online',
-    matchId: '001',
-    warningCount: 1,
-    totalMatches: 348,
-    totalPlaytime: '126h 20m',
-    position: 'A7 / Ridge',
-    ping: 34,
-    role: 'player',
-    kills: 18,
-    currency: 12840
-  },
-  {
-    playerId: 'TL-2201',
-    username: 'NovaShell',
-    createdAt: '2025-12-03',
-    lastLogin: '2026-05-02 14:05',
-    isBanned: false,
-    banReason: '',
-    banExpires: '',
-    onlineStatus: 'online',
-    matchId: '001',
-    warningCount: 0,
-    totalMatches: 121,
-    totalPlaytime: '44h 05m',
-    position: 'C2 / Depot',
-    ping: 58,
-    role: 'player',
-    kills: 9,
-    currency: 6220
-  },
-  {
-    playerId: 'TL-3130',
-    username: 'ByteTiger',
-    createdAt: '2024-11-22',
-    lastLogin: '2026-05-02 13:41',
-    isBanned: false,
-    banReason: '',
-    banExpires: '',
-    onlineStatus: 'online',
-    matchId: '001',
-    warningCount: 5,
-    totalMatches: 812,
-    totalPlaytime: '309h 47m',
-    position: 'B5 / Bridge',
-    ping: 126,
-    role: 'player',
-    kills: 23,
-    currency: 20510
-  },
-  {
-    playerId: 'TL-4044',
-    username: 'RedBarrel',
-    createdAt: '2026-04-30',
-    lastLogin: '2026-05-01 21:17',
-    isBanned: true,
-    banReason: 'Chat abuse',
-    banExpires: '2026-05-05 00:00',
-    onlineStatus: 'offline',
-    matchId: '',
-    warningCount: 3,
-    totalMatches: 18,
-    totalPlaytime: '5h 11m',
-    position: 'D1 / Spawn',
-    ping: 0,
-    role: 'player',
-    kills: 4,
-    currency: 930
-  },
-  {
-    playerId: 'TL-5188',
-    username: 'MinaDev',
-    createdAt: '2024-03-08',
-    lastLogin: '2026-05-02 14:09',
-    isBanned: false,
-    banReason: '',
-    banExpires: '',
-    onlineStatus: 'online',
-    matchId: '003',
-    warningCount: 0,
-    totalMatches: 64,
-    totalPlaytime: '38h 28m',
-    position: 'Spectator',
-    ping: 22,
-    role: 'dev',
-    kills: 0,
-    currency: 50000
-  },
-  {
-    playerId: 'TL-6095',
-    username: 'TankDad',
-    createdAt: '2025-02-16',
-    lastLogin: '2026-05-02 13:50',
-    isBanned: false,
-    banReason: '',
-    banExpires: '',
-    onlineStatus: 'online',
-    matchId: '001',
-    warningCount: 2,
-    totalMatches: 522,
-    totalPlaytime: '203h 02m',
-    position: 'E4 / Quarry',
-    ping: 71,
-    role: 'moderator',
-    kills: 15,
-    currency: 11800
-  }
-];
+const API_BASE = 'http://localhost:8080';
 
 const logsSeed = [
   { level: 'error', time: '14:22:10', playerId: 'TL-3130', source: 'physics', message: 'Tank collider escaped nav bounds near Bridge' },
@@ -239,7 +127,8 @@ const roleProfiles = [
 
 function App() {
   const [session, setSession] = useState(null);
-  const [players, setPlayers] = useState(playersSeed);
+  const [players, setPlayers] = useState([]);
+  const [playersLoading, setPlayersLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [logFilter, setLogFilter] = useState('all');
   const [playerLogQuery, setPlayerLogQuery] = useState('');
@@ -250,6 +139,78 @@ function App() {
   const consoleRef = useRef(null);
   const shouldFollowConsoleRef = useRef(true);
 
+  // Leaderboard state
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+
+  // Match history lookup state
+  const [historyPlayerId, setHistoryPlayerId] = useState('');
+  const [playerHistory, setPlayerHistory] = useState([]);
+  const [playerStats, setPlayerStats] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Fetch real players from Auth Service
+  const fetchPlayers = useCallback(async () => {
+    try {
+      setPlayersLoading(true);
+      const res = await fetch(`${API_BASE}/api/user/users`);
+      if (res.ok) {
+        const data = await res.json();
+        setPlayers(data.map(u => ({
+          playerId: `UID-${u.id}`,
+          rawId: u.id,
+          username: u.username,
+          email: u.email || '-',
+          role: u.role ? u.role.replace('ROLE_', '').toLowerCase() : 'user',
+          address: u.address || null
+        })));
+      }
+    } catch (err) {
+      console.error('Failed to fetch players:', err);
+    } finally {
+      setPlayersLoading(false);
+    }
+  }, []);
+
+  // Fetch leaderboard from History Service
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      setLeaderboardLoading(true);
+      const res = await fetch(`${API_BASE}/api/history/leaderboard`);
+      if (res.ok) {
+        setLeaderboard(await res.json());
+      }
+    } catch (err) {
+      console.error('Failed to fetch leaderboard:', err);
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }, []);
+
+  // Fetch per-player history + stats
+  const fetchPlayerHistory = useCallback(async (pid) => {
+    if (!pid) return;
+    try {
+      setHistoryLoading(true);
+      const [histRes, statsRes] = await Promise.all([
+        fetch(`${API_BASE}/api/history/player/${pid}`),
+        fetch(`${API_BASE}/api/history/player/${pid}/stats`)
+      ]);
+      if (histRes.ok) setPlayerHistory(await histRes.json());
+      if (statsRes.ok) setPlayerStats(await statsRes.json());
+    } catch (err) {
+      console.error('Failed to fetch player history:', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  // Initial data load
+  useEffect(() => {
+    fetchPlayers();
+    fetchLeaderboard();
+  }, [fetchPlayers, fetchLeaderboard]);
+
   const filteredPlayers = useMemo(() => {
     const value = query.trim().toLowerCase();
     if (!value) return players;
@@ -257,12 +218,8 @@ function App() {
       [
         player.playerId,
         player.username,
-        player.onlineStatus,
-        player.matchId,
-        player.role,
-        player.banReason,
-        player.createdAt,
-        player.lastLogin
+        player.email,
+        player.role
       ].some((item) =>
         String(item).toLowerCase().includes(value)
       )
@@ -277,7 +234,7 @@ function App() {
     });
   }, [logFilter, playerLogQuery]);
 
-  const onlinePlayers = players.filter((player) => player.onlineStatus === 'online').length;
+  const totalPlayers = players.length;
   const selectedMatch = matchesSeed.find((match) => match.id === selectedMatchId) ?? matchesSeed[0];
 
   useEffect(() => {
@@ -348,6 +305,8 @@ function App() {
           {[
             ['Players', Users],
             ['Store', Store],
+            ['Leaderboard', Trophy],
+            ['History', History],
             ['Servers', Server],
             ['Debug', TerminalSquare],
             ['Logs', Bell],
@@ -388,84 +347,166 @@ function App() {
         <section className="metric-grid">
           <Metric icon={Server} label="Server" value="Online" sub="asia-main-01" tone="success" />
           <Metric icon={Cpu} label="CPU / RAM" value="42% / 68%" sub="basic monitor" tone="blue" />
-          <Metric icon={Users} label="Players" value={`${onlinePlayers}/64`} sub="active now" tone="yellow" />
+          <Metric icon={Users} label="Registered" value={`${totalPlayers}`} sub="total players" tone="yellow" />
           <Metric icon={Activity} label="DAU" value="12.8k" sub="+8.4% today" tone="green" />
         </section>
 
         <div className="dashboard-grid">
           <section className="panel span-2" id="players">
-            <PanelHeader icon={Users} title="Player Management" action="Kick / ban actions are staged" />
+            <PanelHeader icon={Users} title="Player Management" action="Data from Auth Service" />
             <div className="toolbar">
               <label className="search-box">
                 <Search size={17} />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search playerId, username, match, ban reason" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search ID, username, email, role" />
               </label>
               <span className="count-chip">{filteredPlayers.length} players</span>
+              <button onClick={fetchPlayers}><RefreshCcw size={16} /> Refresh</button>
             </div>
             <div className="table-wrap">
+              {playersLoading ? (
+                <p style={{ padding: '1rem' }}>Loading players from Auth Service...</p>
+              ) : (
               <table className="player-admin-table">
                 <thead>
                   <tr>
-                    <th>Player Identity</th>
-                    <th>Account Info</th>
-                    <th>Ban Status</th>
-                    <th>Online</th>
-                    <th>Current Match</th>
-                    <th>Warnings</th>
-                    <th>Basic Stats</th>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredPlayers.map((player) => (
                     <tr key={player.playerId}>
+                      <td><strong>{player.playerId}</strong></td>
+                      <td><strong>{player.username}</strong></td>
+                      <td>{player.email}</td>
                       <td>
-                        <strong>{player.playerId}</strong>
-                        <span>{player.username} / {player.role}</span>
-                      </td>
-                      <td>
-                        <strong>{player.createdAt}</strong>
-                        <span>Last: {player.lastLogin}</span>
-                      </td>
-                      <td>
-                        <StatusBadge status={player.isBanned ? 'banned' : 'clear'} />
-                        <span>{player.isBanned ? `${player.banReason} / ${player.banExpires}` : 'No active ban'}</span>
-                      </td>
-                      <td>
-                        <StatusBadge status={player.onlineStatus} />
-                        <span>{player.ping ? `${player.ping}ms` : '-'}</span>
-                      </td>
-                      <td>
-                        {player.matchId ? (
-                          <button className="link-button" onClick={() => setSelectedMatchId(player.matchId)}>
-                            {player.matchId}
-                          </button>
-                        ) : '-'}
-                      </td>
-                      <td>
-                        <strong className={player.warningCount >= 3 ? 'warn-text' : ''}>{player.warningCount}</strong>
-                      </td>
-                      <td>
-                        <strong>{player.totalMatches} matches</strong>
-                        <span>{player.totalPlaytime}</span>
+                        <StatusBadge status={player.role === 'admin' ? 'banned' : player.role === 'user' ? 'online' : 'clear'} label={player.role} />
                       </td>
                       <td>
                         <div className="action-row">
-                          <button title="Kick player" onClick={() => kickPlayer(player.playerId)}><XCircle size={16} /> Kick</button>
-                          <button title="Toggle ban player" className="danger" onClick={() => toggleBanPlayer(player.playerId)}>
-                            <Ban size={16} /> {player.isBanned ? 'Unban' : 'Ban'}
+                          <button title="View match history" onClick={() => { setHistoryPlayerId(String(player.rawId)); fetchPlayerHistory(String(player.rawId)); pushCommand(`Viewing history for ${player.username}`); }}>
+                            <Eye size={16} /> History
                           </button>
                         </div>
                       </td>
                     </tr>
                   ))}
+                  {filteredPlayers.length === 0 && (
+                    <tr><td colSpan="5" style={{textAlign:'center', padding:'1rem'}}>{playersLoading ? 'Loading...' : 'No players found. Is Auth Service running?'}</td></tr>
+                  )}
                 </tbody>
               </table>
+              )}
             </div>
           </section>
 
           <section className="panel span-2" id="store">
             <StoreManagementPanel pushCommand={pushCommand} />
+          </section>
+
+          <section className="panel span-2" id="leaderboard">
+            <PanelHeader icon={Trophy} title="Leaderboard" action="Top players by kills" />
+            <div className="toolbar">
+              <button onClick={fetchLeaderboard}><RefreshCcw size={16} /> Refresh</button>
+            </div>
+            <div className="table-wrap">
+              {leaderboardLoading ? (
+                <p style={{ padding: '1rem' }}>Loading leaderboard...</p>
+              ) : (
+              <table className="player-admin-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Player ID</th>
+                    <th>Total Kills</th>
+                    <th>Total Matches</th>
+                    <th>Wins</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.map((entry, idx) => (
+                    <tr key={entry.playerId}>
+                      <td><strong>#{idx + 1}</strong></td>
+                      <td>
+                        <button className="link-button" onClick={() => { setHistoryPlayerId(String(entry.playerId)); fetchPlayerHistory(String(entry.playerId)); }}>
+                          {entry.playerId}
+                        </button>
+                      </td>
+                      <td><strong>{entry.totalKills}</strong></td>
+                      <td>{entry.totalMatches}</td>
+                      <td>{entry.wins}</td>
+                    </tr>
+                  ))}
+                  {leaderboard.length === 0 && (
+                    <tr><td colSpan="5" style={{textAlign:'center', padding:'1rem'}}>No match data yet. Is History Service running?</td></tr>
+                  )}
+                </tbody>
+              </table>
+              )}
+            </div>
+          </section>
+
+          <section className="panel span-2" id="history">
+            <PanelHeader icon={History} title="Match History Lookup" action="Search by player ID" />
+            <div className="toolbar">
+              <label className="search-box">
+                <Search size={17} />
+                <input value={historyPlayerId} onChange={(e) => setHistoryPlayerId(e.target.value)} placeholder="Enter Player ID (e.g. 1, 2...)" />
+              </label>
+              <button className="primary" onClick={() => fetchPlayerHistory(historyPlayerId)}><Search size={16} /> Lookup</button>
+            </div>
+
+            {playerStats && (
+              <div className="analytics-stack" style={{ marginBottom: '1rem' }}>
+                <MiniStat label="Total Matches" value={playerStats.totalMatches} delta={`${(playerStats.winRate * 100).toFixed(1)}% win`} />
+                <MiniStat label="W / L / D" value={`${playerStats.wins} / ${playerStats.losses} / ${playerStats.draws}`} delta="" />
+                <MiniStat label="K / D" value={`${playerStats.totalKills} / ${playerStats.totalDeaths}`} delta={`Best: ${playerStats.bestKillStreak} kills`} />
+              </div>
+            )}
+
+            <div className="table-wrap">
+              {historyLoading ? (
+                <p style={{ padding: '1rem' }}>Loading match history...</p>
+              ) : (
+              <table className="player-admin-table">
+                <thead>
+                  <tr>
+                    <th>Match ID</th>
+                    <th>Opponent</th>
+                    <th>Result</th>
+                    <th>K / D</th>
+                    <th>Duration</th>
+                    <th>Map</th>
+                    <th>Played At</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {playerHistory.map((match) => (
+                    <tr key={match.id}>
+                      <td><strong>{match.matchId}</strong></td>
+                      <td>{match.opponentId}</td>
+                      <td>
+                        <StatusBadge
+                          status={match.result === 'WIN' ? 'online' : match.result === 'LOSE' ? 'banned' : 'clear'}
+                          label={match.result}
+                        />
+                      </td>
+                      <td><strong>{match.kills}</strong> / {match.deaths}</td>
+                      <td>{Math.floor(match.durationSecs / 60)}m {match.durationSecs % 60}s</td>
+                      <td>{match.mapName}</td>
+                      <td>{match.playedAt ? new Date(match.playedAt).toLocaleString() : '-'}</td>
+                    </tr>
+                  ))}
+                  {playerHistory.length === 0 && (
+                    <tr><td colSpan="7" style={{textAlign:'center', padding:'1rem'}}>{historyPlayerId ? 'No matches found for this player.' : 'Enter a player ID and click Lookup.'}</td></tr>
+                  )}
+                </tbody>
+              </table>
+              )}
+            </div>
           </section>
 
           <section className="panel" id="servers">

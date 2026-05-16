@@ -29,6 +29,11 @@ public class ShopController {
         return ResponseEntity.ok(shopService.getAllItems());
     }
 
+    @GetMapping("/items/version")
+    public ResponseEntity<java.util.Map<String, Long>> getShopVersion() {
+        return ResponseEntity.ok(java.util.Map.of("version", shopService.getShopVersion()));
+    }
+
     @GetMapping("/items/category/{category}")
     public ResponseEntity<List<ItemDTO>> getItemsByCategory(@PathVariable String category) {
         return ResponseEntity.ok(shopService.getItemsByCategory(category));

@@ -45,6 +45,11 @@ spring:
           uri: lb://monitoring-service
           predicates:
             - Path=/api/tank/**,/api/monitoring/**
+
+        - id: history_service_route
+          uri: lb://history-service
+          predicates:
+            - Path=/api/history/**
     loadbalancer:
       ribbon:
         enabled: false
@@ -56,6 +61,7 @@ app:
     public-endpoints:
       - /api/auth/**
       - /api/user/**
+      - /api/history/**
       - /actuator/**
 
 management:

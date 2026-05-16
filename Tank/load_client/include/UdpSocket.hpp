@@ -13,6 +13,8 @@ public:
 
     UdpSocket(const UdpSocket&)            = delete;
     UdpSocket& operator=(const UdpSocket&) = delete;
+    UdpSocket(UdpSocket&& o) noexcept : _sock(o._sock) { o._sock = INVALID_SOCKET; }
+    UdpSocket& operator=(UdpSocket&& o) noexcept { close(); _sock = o._sock; o._sock = INVALID_SOCKET; return *this; }
 
     // Bind to any local port; set recv timeout to recvTimeoutMs (0 = non-blocking)
     bool open(int recvTimeoutMs = 0);

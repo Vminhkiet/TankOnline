@@ -16,7 +16,7 @@ struct SnapshotHeader {
 };
 #pragma pack(pop)
 
-Match::Match(MatchConfig config, NetworkManager& network,
+Match::Match(MatchConfig config, INetworkBackend& network,
              std::function<void(MatchResult)> onEnd)
     : _config(std::move(config)), _network(network), _onEnd(std::move(onEnd))
 {
@@ -92,11 +92,14 @@ void Match::tick(float dt) {
         // Nếu đã từng có người chơi mà giờ tất cả đã out → kết thúc match
         if (_peakConnected > 0 && _sessions.size() == 0) {
             LOG_INFO("Match {}: all players disconnected, ending match", _config.matchId);
-            _running.store(false);
             MatchResult r;
             r.matchId      = _config.matchId;
             r.outcome      = MatchOutcome::Draw;
             r.durationSecs = _elapsed;
+            r.kills        = _world.getKills();
+            r.userIds      = _config.userIds;
+            r.mapName      = _config.mapName;
+            _running.store(false);
             _onEnd(r);
             return;
         }
@@ -113,6 +116,9 @@ void Match::tick(float dt) {
         _config.playerIds, result);
 
     if (outcome != MatchOutcome::Running) {
+        result.userIds = _config.userIds;
+        result.mapName = _config.mapName;
+        broadcastMatchEnd(result);
         _running.store(false);
         LOG_INFO("Match {}: ended (outcome={}, winner={}, dur={:.1f}s)",
                  _config.matchId,
@@ -191,6 +197,33 @@ void Match::handleMove(GameCommand& cmd) {
     if (!pkt.Serialize(rs)) return;
 
     _world.processInput(pid, pkt.toClientInput());
+}
+
+void Match::broadcastMatchEnd(const MatchResult& r) {
+    MatchEndPacket pkt;
+    pkt.matchId      = r.matchId;
+    pkt.opcode       = static_cast<uint16_t>(Opcode::S2C_MATCH_END);
+    pkt.winnerId     = r.winnerId;
+    pkt.durationSecs = static_cast<uint16_t>(r.durationSecs);
+
+    for (uint32_t pid : _config.playerIds) {
+        sockaddr_in addr{};
+        if (!_sessions.getAddress(pid, addr)) continue;
+
+        // outcome from this player's perspective
+        if (r.outcome == MatchOutcome::Win)
+            pkt.outcome = static_cast<uint8_t>(pid == r.winnerId ? 0 : 1); // 0=win 1=lose
+        else
+            pkt.outcome = static_cast<uint8_t>(r.outcome); // 2=draw 3=timeout
+
+        auto it = r.kills.find(pid);
+        pkt.myKills = static_cast<uint16_t>(it != r.kills.end() ? it->second : 0);
+
+        _network.send(addr, reinterpret_cast<const uint8_t*>(&pkt), sizeof(pkt));
+    }
+
+    LOG_INFO("Match {}: S2C_MATCH_END broadcast ({} recipients)",
+             r.matchId, _sessions.size());
 }
 
 void Match::handleShoot(GameCommand& cmd) {

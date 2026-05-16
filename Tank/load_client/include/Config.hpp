@@ -11,6 +11,7 @@ struct Config {
     int         tickRate    = 20;   // packets/sec per client (simulated tick)
     float       shootChance = 0.05f;// probability of shooting each tick
     bool        verbose     = false;// print per-player events
+    uint32_t    matchId     = 1;    // which match to target
 };
 
 // Parse --key value pairs from argv
@@ -26,6 +27,7 @@ inline void printUsage(const char* prog) {
         "  --duration    <n>     test seconds       (default: 30)\n"
         "  --rate        <n>     ticks/sec/client   (default: 20)\n"
         "  --shoot       <0..1>  shoot probability  (default: 0.05)\n"
+        "  --match       <n>     target matchId     (default: 1)\n"
         "  --verbose             log per-player     (default: off)\n"
         , prog);
 }

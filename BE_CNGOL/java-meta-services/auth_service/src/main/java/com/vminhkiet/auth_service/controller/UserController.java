@@ -18,7 +18,8 @@ public class UserController {
     @Autowired
     private UserService userService;
 
-    @PreAuthorize("hasRole('ADMIN')")
+    // TODO: Re-enable when admin web sends JWT
+    // @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/users")
     public ResponseEntity<List<User>> getAllUsers(){
         List<User> users = userService.getAllUser();
