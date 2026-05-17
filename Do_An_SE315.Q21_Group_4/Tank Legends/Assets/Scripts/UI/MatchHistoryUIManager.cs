@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Networking;
 using TMPro;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
@@ -9,51 +10,55 @@ using System.Text;
 [System.Serializable]
 public class SaveMatchRequest
 {
-    public long   matchId;
+    public long matchId;
     public string opponentId;
-    public string result;       // "WIN" | "LOSE" | "DRAW"
-    public int    kills;
-    public int    deaths;
-    public int    durationSecs;
+    public string result; // "WIN" | "LOSE" | "DRAW"
+    public int kills;
+    public int deaths;
+    public int durationSecs;
     public string mapName;
 }
 
 [System.Serializable]
 public class MatchHistoryItem
 {
-    public long   matchId;
+    public long matchId;
     public string opponentId;
     public string result;
-    public int    kills;
-    public int    deaths;
-    public int    durationSecs;
+    public int kills;
+    public int deaths;
+    public int durationSecs;
     public string mapName;
     public string playedAt;
 }
 
 [System.Serializable]
-public class MatchHistoryList { public List<MatchHistoryItem> items; }
+public class MatchHistoryList
+{
+    public List<MatchHistoryItem> items;
+}
 
 [System.Serializable]
 public class PlayerStats
 {
-    public int    totalMatches;
-    public int    wins;
-    public int    losses;
-    public int    draws;
-    public int    totalKills;
-    public int    totalDeaths;
+    public int totalMatches;
+    public int wins;
+    public int losses;
+    public int draws;
+    public int totalKills;
+    public int totalDeaths;
     public double winRate;
-    public int    bestKillStreak;
+    public int bestKillStreak;
 }
 
 public class MatchHistoryUIManager : MonoBehaviour
 {
+    private const string MatchPath = "/api/history/match";
+    private const string HistoryPath = "/api/history/me";
+    private const string StatsPath = "/api/history/me/stats";
+
     [Header("API")]
-    public string saveMatchUrl   = "http://localhost:8080/api/history/match";
-    public string historyUrl     = "http://localhost:8080/api/history/me";
-    public string statsUrl       = "http://localhost:8080/api/history/me/stats";
-    public string leaderboardUrl = "http://localhost:8080/api/history/leaderboard";
+    [SerializeField] private string apiBaseUrl = "http://localhost:8080";
 
     [Header("Stats UI")]
     public TextMeshProUGUI totalMatchesText;
@@ -62,166 +67,273 @@ public class MatchHistoryUIManager : MonoBehaviour
     public TextMeshProUGUI bestStreakText;
 
     [Header("History List")]
-    public Transform      historyContainer;   // Scroll View Content
-    public GameObject     historyItemPrefab;  // Prefab co Text components
+    public Transform historyContainer;
+    public GameObject historyItemPrefab;
+
+    private readonly Dictionary<string, Sprite> _resultSprites = new Dictionary<string, Sprite>();
+    private readonly Dictionary<string, Sprite> _mapSprites = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+
+    private void Awake()
+    {
+        LoadResultSprites();
+        LoadMapSprites();
+    }
 
     private void Start()
     {
-        // Load history when Lobby scene opens
         string jwt = PlayerPrefs.GetString("jwt", "");
-        if (!string.IsNullOrEmpty(jwt))
+        if (string.IsNullOrEmpty(jwt))
         {
-            StartCoroutine(LoadStats());
-            StartCoroutine(LoadHistory());
+            Debug.LogWarning("[History] Start skipped load: jwt is empty.");
+            return;
         }
+
+        StartCoroutine(LoadStats());
+        StartCoroutine(LoadHistory());
     }
 
-    // ── Save match result (call this from GameManager when match ends) ─────────
-
-    public static void SaveMatchResult(MonoBehaviour caller, long matchId,
-        string opponentId, bool won, bool draw, int kills, int deaths, int durationSecs)
+    public static void SaveMatchResult(MonoBehaviour caller, long matchId, string opponentId, bool won, bool draw, int kills, int deaths, int durationSecs)
     {
         var mgr = FindObjectOfType<MatchHistoryUIManager>();
-        if (mgr != null)
-            caller.StartCoroutine(mgr.SaveMatchCoroutine(
-                matchId, opponentId, won, draw, kills, deaths, durationSecs));
-        else
-            caller.StartCoroutine(StaticSave(matchId, opponentId, won, draw,
-                kills, deaths, durationSecs));
+        if (mgr == null)
+        {
+            Debug.LogWarning("[History] SaveMatchResult skipped: MatchHistoryUIManager not found in scene.");
+            return;
+        }
+
+        caller.StartCoroutine(mgr.SaveMatchCoroutine(matchId, opponentId, won, draw, kills, deaths, durationSecs));
     }
 
-    public IEnumerator SaveMatchCoroutine(long matchId, string opponentId,
-        bool won, bool draw, int kills, int deaths, int durationSecs)
-    {
-        yield return StaticSave(matchId, opponentId, won, draw,
-            kills, deaths, durationSecs);
-    }
-
-    private static IEnumerator StaticSave(long matchId, string opponentId,
-        bool won, bool draw, int kills, int deaths, int durationSecs)
+    public IEnumerator SaveMatchCoroutine(long matchId, string opponentId, bool won, bool draw, int kills, int deaths, int durationSecs)
     {
         string jwt = PlayerPrefs.GetString("jwt", "");
-        if (string.IsNullOrEmpty(jwt)) yield break;
-
-        string result = draw ? "DRAW" : (won ? "WIN" : "LOSE");
-        var req = new SaveMatchRequest
+        if (string.IsNullOrEmpty(jwt))
         {
-            matchId     = matchId,
-            opponentId  = opponentId,
-            result      = result,
-            kills       = kills,
-            deaths      = deaths,
+            Debug.LogWarning("[History] SaveMatch skipped: jwt is empty.");
+            yield break;
+        }
+
+        string url = BuildApiUrl(MatchPath);
+        string result = draw ? "DRAW" : (won ? "WIN" : "LOSE");
+
+        var reqBody = new SaveMatchRequest
+        {
+            matchId = matchId,
+            opponentId = opponentId,
+            result = result,
+            kills = kills,
+            deaths = deaths,
             durationSecs = durationSecs,
-            mapName     = "world"
+            mapName = "world"
         };
 
-        string json = JsonUtility.ToJson(req);
-        using var webReq = new UnityWebRequest("http://localhost:8080/api/history/match", "POST");
-        webReq.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-        webReq.downloadHandler = new DownloadHandlerBuffer();
-        webReq.SetRequestHeader("Content-Type",  "application/json");
-        webReq.SetRequestHeader("Authorization", "Bearer " + jwt);
-        yield return webReq.SendWebRequest();
+        string json = JsonUtility.ToJson(reqBody);
 
-        if (webReq.result == UnityWebRequest.Result.Success)
-            Debug.Log("[History] Match saved.");
-        else
-            Debug.LogWarning("[History] Save failed: " + webReq.error);
+        using var req = CreateAuthorizedRequest(url, "POST", jwt, json);
+        Debug.Log($"[History] SaveMatch request | url={url}");
+        yield return req.SendWebRequest();
+
+        if (req.result != UnityWebRequest.Result.Success)
+        {
+            Debug.LogError($"[History] SaveMatch failed | url={url} | status={(long)req.responseCode} | error={req.error} | body={req.downloadHandler?.text}");
+            yield break;
+        }
+
+        Debug.Log($"[History] SaveMatch success | status={(long)req.responseCode} | body={req.downloadHandler?.text}");
     }
-
-    // ── Load player stats ─────────────────────────────────────────────────────
 
     private IEnumerator LoadStats()
     {
         string jwt = PlayerPrefs.GetString("jwt", "");
-        using var req = UnityWebRequest.Get(statsUrl);
-        req.SetRequestHeader("Authorization", "Bearer " + jwt);
+        if (string.IsNullOrEmpty(jwt))
+        {
+            Debug.LogWarning("[History] LoadStats skipped: jwt is empty.");
+            yield break;
+        }
+
+        string url = BuildApiUrl(StatsPath);
+        using var req = CreateAuthorizedRequest(url, UnityWebRequest.kHttpVerbGET, jwt);
+        Debug.Log($"[History] LoadStats request | url={url}");
+
         yield return req.SendWebRequest();
 
-        if (req.result != UnityWebRequest.Result.Success) yield break;
+        if (req.result != UnityWebRequest.Result.Success)
+        {
+            Debug.LogError($"[History] LoadStats failed | url={url} | status={(long)req.responseCode} | error={req.error} | body={req.downloadHandler?.text}");
+            yield break;
+        }
 
-        PlayerStats stats = JsonUtility.FromJson<PlayerStats>(req.downloadHandler.text);
+        Debug.Log($"[History] LoadStats success | status={(long)req.responseCode} | body={req.downloadHandler?.text}");
+
+        PlayerStats stats;
+        try
+        {
+            stats = JsonUtility.FromJson<PlayerStats>(req.downloadHandler.text);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[History] LoadStats parse failed | ex={ex.Message} | body={req.downloadHandler?.text}");
+            yield break;
+        }
+
+        if (stats == null)
+        {
+            Debug.LogWarning("[History] LoadStats parsed null stats.");
+            yield break;
+        }
+
         if (totalMatchesText) totalMatchesText.text = stats.totalMatches.ToString();
-        if (winRateText)      winRateText.text      = $"{(stats.winRate * 100):F0}%";
-        if (totalKillsText)   totalKillsText.text   = stats.totalKills.ToString();
-        if (bestStreakText)   bestStreakText.text    = stats.bestKillStreak.ToString();
-
-        // Debug log — xem trong Unity Console khi chua co UI
-        Debug.Log($"[History] Stats: {stats.totalMatches} matches | " +
-                  $"Win rate: {(stats.winRate * 100):F0}% | " +
-                  $"Kills: {stats.totalKills} | Best streak: {stats.bestKillStreak}");
+        if (winRateText) winRateText.text = $"{(stats.winRate * 100):F0}%";
+        if (totalKillsText) totalKillsText.text = stats.totalKills.ToString();
+        if (bestStreakText) bestStreakText.text = stats.bestKillStreak.ToString();
     }
-
-    // ── Load match history list ───────────────────────────────────────────────
 
     private IEnumerator LoadHistory()
     {
         string jwt = PlayerPrefs.GetString("jwt", "");
-        using var req = UnityWebRequest.Get(historyUrl);
-        req.SetRequestHeader("Authorization", "Bearer " + jwt);
-        yield return req.SendWebRequest();
-
-        if (req.result != UnityWebRequest.Result.Success) yield break;
-
-        // Debug log — in ra Console de test khi chua co UI
-        string wrapped = "{\"items\":" + req.downloadHandler.text + "}";
-        MatchHistoryList list = JsonUtility.FromJson<MatchHistoryList>(wrapped);
-        Debug.Log($"[History] Loaded {list.items.Count} matches:");
-        foreach (var item in list.items)
+        if (string.IsNullOrEmpty(jwt))
         {
-            int min = item.durationSecs / 60, sec = item.durationSecs % 60;
-            Debug.Log($"  [{item.result}] vs {item.opponentId} | " +
-                      $"{item.kills}K/{item.deaths}D | {min}:{sec:00} | {item.mapName}");
+            Debug.LogWarning("[History] LoadHistory skipped: jwt is empty.");
+            yield break;
         }
 
-        if (historyContainer == null || historyItemPrefab == null) yield break;
+        string url = BuildApiUrl(HistoryPath);
+        using var req = CreateAuthorizedRequest(url, UnityWebRequest.kHttpVerbGET, jwt);
+        Debug.Log($"[History] LoadHistory request | url={url}");
 
-        // Clear old items
+        yield return req.SendWebRequest();
+
+        if (req.result != UnityWebRequest.Result.Success)
+        {
+            Debug.LogError($"[History] LoadHistory failed | url={url} | status={(long)req.responseCode} | error={req.error} | body={req.downloadHandler?.text}");
+            yield break;
+        }
+
+        Debug.Log($"[History] LoadHistory success | status={(long)req.responseCode} | body={req.downloadHandler?.text}");
+
+        string wrapped = "{\"items\":" + req.downloadHandler.text + "}";
+        MatchHistoryList list;
+        try
+        {
+            list = JsonUtility.FromJson<MatchHistoryList>(wrapped);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[History] LoadHistory parse failed | ex={ex.Message} | body={req.downloadHandler?.text}");
+            yield break;
+        }
+
+        if (list == null || list.items == null)
+        {
+            Debug.LogWarning("[History] LoadHistory parsed null/empty list.");
+            yield break;
+        }
+
+        if (historyContainer == null || historyItemPrefab == null)
+        {
+            Debug.LogWarning("[History] Missing historyContainer or historyItemPrefab.");
+            yield break;
+        }
+
         foreach (Transform child in historyContainer)
             Destroy(child.gameObject);
 
+        int instantiatedCount = 0;
         foreach (var item in list.items)
         {
             GameObject go = Instantiate(historyItemPrefab, historyContainer);
             PopulateHistoryItem(go, item);
+            instantiatedCount++;
         }
+
+        Debug.Log($"[History] Instantiated {instantiatedCount} history cards into container '{historyContainer.name}'.");
     }
 
     private void PopulateHistoryItem(GameObject go, MatchHistoryItem item)
     {
-        // Find text components by name — adjust to match your prefab
-        var texts = go.GetComponentsInChildren<TextMeshProUGUI>();
-        foreach (var t in texts)
+        var view = go.GetComponent<MatchHistoryCardView>();
+        if (view == null)
         {
-            switch (t.gameObject.name)
-            {
-                case "ResultText":
-                    t.text  = item.result;
-                    t.color = item.result == "WIN"
-                        ? new Color(0.2f, 0.8f, 0.2f)
-                        : item.result == "LOSE"
-                            ? new Color(0.9f, 0.2f, 0.2f)
-                            : Color.yellow;
-                    break;
-                case "OpponentText":
-                    t.text = "vs " + (item.opponentId == "bot-1" ? "Bot" : item.opponentId);
-                    break;
-                case "KillsText":
-                    t.text = $"{item.kills}K / {item.deaths}D";
-                    break;
-                case "DurationText":
-                    int min = item.durationSecs / 60;
-                    int sec = item.durationSecs % 60;
-                    t.text = $"{min:00}:{sec:00}";
-                    break;
-                case "MapText":
-                    t.text = item.mapName;
-                    break;
-            }
+            Debug.LogWarning("[History] Missing MatchHistoryCardView on history item prefab instance.");
+            return;
+        }
+
+        string resultKey = (item.result ?? string.Empty).Trim().ToUpperInvariant();
+        _resultSprites.TryGetValue(resultKey, out var resultSprite);
+
+        string mapKey = (item.mapName ?? string.Empty).Trim();
+        _mapSprites.TryGetValue(mapKey, out var mapSprite);
+
+        view.Bind(item, resultSprite, mapSprite);
+    }
+
+    private void LoadResultSprites()
+    {
+        _resultSprites.Clear();
+
+        Sprite[] sprites = Resources.LoadAll<Sprite>("Sprites/UI");
+        foreach (var s in sprites)
+        {
+            if (s.name.Equals("Win", StringComparison.OrdinalIgnoreCase))
+                _resultSprites["WIN"] = s;
+            else if (s.name.Equals("Lose", StringComparison.OrdinalIgnoreCase))
+                _resultSprites["LOSE"] = s;
+            else if (s.name.Equals("Draw", StringComparison.OrdinalIgnoreCase))
+                _resultSprites["DRAW"] = s;
+        }
+
+        if (!_resultSprites.ContainsKey("WIN") || !_resultSprites.ContainsKey("LOSE") || !_resultSprites.ContainsKey("DRAW"))
+        {
+            Debug.LogWarning("[History] Missing one or more result sprites in Resources/Sprites/UI (Win/Lose/Draw).");
         }
     }
 
-    // ── Public refresh (call after saving) ───────────────────────────────────
+    private void LoadMapSprites()
+    {
+        _mapSprites.Clear();
+
+        Sprite[] sprites = Resources.LoadAll<Sprite>("Sprites/Maps");
+        foreach (var s in sprites)
+        {
+            if (!_mapSprites.ContainsKey(s.name))
+                _mapSprites[s.name] = s;
+        }
+
+        if (_mapSprites.Count == 0)
+        {
+            Debug.LogWarning("[History] No map sprites found in Resources/Sprites/Maps.");
+        }
+    }
+
+    private string BuildApiUrl(string path)
+    {
+        string baseUrl = (apiBaseUrl ?? string.Empty).Trim().TrimEnd('/');
+        if (string.IsNullOrEmpty(baseUrl))
+            baseUrl = "http://localhost:8080";
+
+        string normalizedPath = path.StartsWith("/") ? path : "/" + path;
+        return baseUrl + normalizedPath;
+    }
+
+    private static UnityWebRequest CreateAuthorizedRequest(string url, string method, string jwt, string jsonBody = null)
+    {
+        UnityWebRequest req = new UnityWebRequest(url, method)
+        {
+            downloadHandler = new DownloadHandlerBuffer()
+        };
+
+        req.SetRequestHeader("Accept", "application/json");
+        if (!string.IsNullOrEmpty(jwt))
+            req.SetRequestHeader("Authorization", "Bearer " + jwt);
+
+        if (!string.IsNullOrEmpty(jsonBody))
+        {
+            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(jsonBody));
+            req.SetRequestHeader("Content-Type", "application/json");
+        }
+
+        return req;
+    }
 
     public void RefreshHistory()
     {

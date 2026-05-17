@@ -27,7 +27,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/auth/",
             "/api/shop/",
             "/api/user/",
-            "/api/history/"
+            "/api/history/leaderboard"
     );
 
     @Override

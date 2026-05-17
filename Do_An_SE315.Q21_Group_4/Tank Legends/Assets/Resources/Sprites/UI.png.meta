@@ -144,7 +144,7 @@ TextureImporter:
         width: 449
         height: 91
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       outline: []
       physicsShape: []
@@ -157,7 +157,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: UI_1
+      name: Win
       rect:
         serializedVersion: 2
         x: 134
@@ -165,7 +165,7 @@ TextureImporter:
         width: 176
         height: 76
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       outline: []
       physicsShape: []
@@ -178,7 +178,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: UI_2
+      name: Lose
       rect:
         serializedVersion: 2
         x: 142
@@ -186,7 +186,7 @@ TextureImporter:
         width: 156
         height: 79
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       outline: []
       physicsShape: []
@@ -199,7 +199,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: UI_3
+      name: Draw
       rect:
         serializedVersion: 2
         x: 136
@@ -207,7 +207,7 @@ TextureImporter:
         width: 171
         height: 71
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       outline: []
       physicsShape: []
@@ -230,10 +230,10 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     nameFileIdTable:
+      Draw: 1084948095
+      Lose: -776976665
       UI_0: -1186225034
-      UI_1: 1981133817
-      UI_2: -776976665
-      UI_3: 1084948095
+      Win: 1981133817
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

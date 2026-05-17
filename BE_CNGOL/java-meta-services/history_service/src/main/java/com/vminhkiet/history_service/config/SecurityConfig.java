@@ -24,7 +24,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/history/**").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/history/leaderboard").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(gatewayHeaderAuthFilter, BasicAuthenticationFilter.class);
