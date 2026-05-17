@@ -44,6 +44,7 @@ int main() {
     const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "localhost:9092");
     const std::string kafkaGroupId = getEnv("KAFKA_GROUP_ID", "tank-server");
     const std::string kafkaTopic   = getEnv("KAFKA_TOPIC_IN",  "match.create");
+    const std::string kafkaSessionInvalidatedTopic = getEnv("KAFKA_TOPIC_SESSION_INVALIDATED", "user.session.invalidated");
 
     // ── Network backend (switchable via BACKEND env var) ────────────────────
     // BACKEND=iocp     → Windows IOCP, hardware_concurrency*2 worker threads (default)
@@ -85,7 +86,7 @@ int main() {
 
     KafkaConsumer consumer;
     bool kafkaOk = !kafkaBrokers.empty() &&
-                   consumer.connect(kafkaBrokers, kafkaGroupId, {kafkaTopic});
+                   consumer.connect(kafkaBrokers, kafkaGroupId, {kafkaTopic, kafkaSessionInvalidatedTopic});
     if (!kafkaBrokers.empty() && !kafkaOk)
         LOG_WARN("main: Kafka unavailable — running without dynamic match creation");
 
@@ -99,19 +100,36 @@ int main() {
         bool ok = consumer.poll(500, [&](const KafkaMessage& msg) {
             try {
                 auto j = json::parse(msg.payload);
-                MatchConfig cfg;
-                cfg.matchId         = j.at("matchId").get<uint32_t>();
-                cfg.mapName         = j.value("mapName", "world");
-                cfg.maxDurationSecs = j.value("maxDuration", 300);
-                for (auto& pid : j.at("players"))
-                    cfg.playerIds.push_back(pid.get<uint32_t>());
-                if (j.contains("userIds")) {
-                    for (auto& [pidStr, uid] : j.at("userIds").items())
-                        cfg.userIds[static_cast<uint32_t>(std::stoul(pidStr))] = uid.get<std::string>();
+
+                if (msg.topic == kafkaTopic) {
+                    MatchConfig cfg;
+                    cfg.matchId         = j.at("matchId").get<uint32_t>();
+                    cfg.mapName         = j.value("mapName", "world");
+                    cfg.maxDurationSecs = j.value("maxDuration", 300);
+                    for (auto& pid : j.at("players"))
+                        cfg.playerIds.push_back(pid.get<uint32_t>());
+                    if (j.contains("userIds")) {
+                        for (auto& [pidStr, uid] : j.at("userIds").items())
+                            cfg.userIds[static_cast<uint32_t>(std::stoul(pidStr))] = uid.get<std::string>();
+                    }
+                    manager.createMatch(std::move(cfg));
+                    return;
                 }
-                manager.createMatch(std::move(cfg));
+
+                if (msg.topic == kafkaSessionInvalidatedTopic) {
+                    const std::string userId = j.at("userId").is_string()
+                        ? j.at("userId").get<std::string>()
+                        : std::to_string(j.at("userId").get<long long>());
+                    const uint16_t code = static_cast<uint16_t>(j.value("code", 1003));
+                    const std::string message = j.value("message", std::string("Logged in from another device"));
+                    const uint32_t disconnectAfterMs = 10000;
+                    manager.forceLogoutByUserId(userId, code, message, disconnectAfterMs);
+                    return;
+                }
+
+                LOG_WARN("main: received Kafka message from unexpected topic={}", msg.topic);
             } catch (const std::exception& e) {
-                LOG_ERR("main: bad match.create payload: {}", e.what());
+                LOG_ERR("main: bad kafka payload topic={} err={}", msg.topic, e.what());
             }
         });
         if (!ok) { LOG_ERR("main: Kafka fatal error"); break; }

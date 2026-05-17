@@ -3,6 +3,8 @@
 #include <mutex>
 #include <atomic>
 #include <functional>
+#include <unordered_map>
+#include <string>
 #include "Core/MatchConfig.hpp"
 #include "World/GameWorld.hpp"
 #include "Network/SessionManager.hpp"
@@ -28,6 +30,10 @@ public:
     // Called from tick dispatcher thread (one match per pool task).
     void tick(float dt);
 
+    // Force logout active player by auth userId; returns true if a session was found and kick sent.
+    bool forceLogoutByUserId(const std::string& userId, uint16_t code,
+                             const std::string& message, uint32_t disconnectAfterMs);
+
 private:
     MatchConfig   _config;
     GameWorld     _world;
@@ -43,6 +49,7 @@ private:
 
     uint32_t  _nextSlot      = 0;
     int       _tickCount     = 0;
+    std::unordered_map<std::string, uint32_t> _userToPlayer; // auth userId -> playerId
     int       _peakConnected = 0;   // max simultaneous sessions ever
     std::mutex _slotMutex;
 

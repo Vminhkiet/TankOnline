@@ -114,4 +114,16 @@ struct MatchEndPacket {
     uint16_t myKills      = 0;
 };
 
+// Raw S2C force-logout header + variable UTF-8 message bytes
+// Packet layout:
+// [ForceLogoutPacket header][message bytes]
+// total packet size = sizeof(ForceLogoutPacket) + messageLen
+struct ForceLogoutPacket {
+    uint32_t matchId      = 0;
+    uint16_t opcode       = 0;   // Opcode::S2C_FORCE_LOGOUT
+    uint16_t code         = 1003;
+    uint16_t messageLen   = 0;   // bytes of UTF-8 message appended after header
+    uint32_t disconnectAfterMs = 10000; // client should show reason before forced disconnect
+};
+
 #pragma pack(pop)

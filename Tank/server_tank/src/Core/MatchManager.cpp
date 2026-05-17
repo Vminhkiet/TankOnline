@@ -167,6 +167,24 @@ void MatchManager::routeCommand(GameCommand cmd) {
     }
 }
 
+bool MatchManager::forceLogoutByUserId(const std::string& userId, uint16_t code,
+                                       const std::string& message, uint32_t disconnectAfterMs) {
+    std::shared_lock lock(_matchesMutex);
+    bool kicked = false;
+    for (auto& [id, m] : _matches) {
+        if (!m || !m->isRunning()) continue;
+        if (m->forceLogoutByUserId(userId, code, message, disconnectAfterMs)) {
+            LOG_INFO("MatchManager: duplicate-login kick routed to match {} for userId={}", id, userId);
+            kicked = true;
+            break;
+        }
+    }
+    if (!kicked) {
+        LOG_WARN("MatchManager: duplicate-login event for userId={} but no active session found", userId);
+    }
+    return kicked;
+}
+
 void MatchManager::onMatchEnd(MatchResult r) {
     static constexpr const char* kOutcomeStr[] = { "running", "win", "draw", "timeout" };
     const char* outcomeStr = kOutcomeStr[std::min(static_cast<int>(r.outcome), 3)];
