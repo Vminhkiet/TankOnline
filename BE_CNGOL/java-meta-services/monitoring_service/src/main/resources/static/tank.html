@@ -110,7 +110,7 @@
         </div>
     </div>
 
-    <div class="row g-3">
+    <div class="row g-3 mb-4">
         <!-- Network -->
         <div class="col-md-6">
             <div class="card p-3">
@@ -123,6 +123,7 @@
                             <td>Packets dropped</td>
                             <td id="netDrop" class="text-end text-danger fw-bold">—</td>
                         </tr>
+                        <tr><td>Process memory</td><td id="netMem" class="text-end">—</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -138,6 +139,21 @@
                         <tr><td>match.result produced</td><td id="kafkaOut" class="text-end">—</td></tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Java services health -->
+    <div class="row g-3">
+        <div class="col-12">
+            <div class="card p-3">
+                <div class="card-header mb-3">
+                    Java Microservices Health
+                    <a href="/" class="btn btn-sm btn-outline-info ms-3" target="_blank">Spring Boot Admin →</a>
+                </div>
+                <div id="javaServices" class="d-flex flex-wrap gap-2">
+                    <span class="text-muted small">Đang tải...</span>
+                </div>
             </div>
         </div>
     </div>
@@ -173,6 +189,20 @@ function setBar(barId, labelId, val, suffix = ' µs') {
     }
 }
 
+function renderJavaServices(services) {
+    if (!services || !Object.keys(services).length) return;
+    const container = document.getElementById('javaServices');
+    container.innerHTML = Object.entries(services).map(([name, status]) => {
+        const up = status === 'UP';
+        const color = up ? '#00d4aa' : '#ff6b6b';
+        return `<span style="background:#0f3460;border:1px solid ${color};border-radius:6px;padding:6px 14px;font-size:0.85rem">
+            <span style="color:${color};font-weight:bold">${up ? '●' : '○'}</span>
+            &nbsp;<b>${name}</b>&nbsp;
+            <span style="color:${color}">${status}</span>
+        </span>`;
+    }).join('');
+}
+
 function refresh() {
     fetch('/api/tank/metrics')
         .then(r => r.json())
@@ -184,6 +214,9 @@ function refresh() {
             document.getElementById('offlineAlert').classList.toggle('d-none', online);
             document.getElementById('lastUpdate').textContent =
                 'Cập nhật lúc: ' + new Date().toLocaleTimeString('vi-VN');
+
+            // Java services always rendered (agent polls even when tank is offline)
+            if (data.java_services) renderJavaServices(data.java_services);
 
             if (online) {
                 setText('kpiPlayers', data.connected_players);
@@ -203,6 +236,7 @@ function refresh() {
                 setText('netSend', data.packets_sent_per_sec, ' pkt/s');
                 const drop = data.packets_dropped ?? '—';
                 document.getElementById('netDrop').textContent = drop === 0 ? '0 ✓' : drop;
+                setText('netMem', data.process_memory_mb, ' MB');
 
                 setText('kafkaIn', data.kafka_events_consumed);
                 setText('kafkaOut', data.kafka_events_produced);
