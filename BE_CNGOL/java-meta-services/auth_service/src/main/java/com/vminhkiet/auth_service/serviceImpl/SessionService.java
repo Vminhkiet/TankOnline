@@ -4,6 +4,8 @@ import java.util.concurrent.TimeUnit;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -20,15 +22,24 @@ public class SessionService implements com.vminhkiet.auth_service.service.Sessio
     @Autowired
     private JwtProvider jwtProvider;
 
+    @Autowired
+    private SessionInvalidationProducer sessionInvalidationProducer;
+
     private static final long REFRESH_TTL_DAYS = 7;
+    private static final Logger logger = LoggerFactory.getLogger(SessionService.class);
 
     @Override
     public String login(Long userId, String roles) {
         String key = "refresh:" + userId;
 
         if(Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
-            // Thay vì throw Exception chặn đăng nhập, ta sẽ báo log và ghi đè session cũ.
-            System.out.println("Warning: User " + userId + " is logging in again. Overwriting old session.");
+            // Có session cũ chưa logout -> gửi sự kiện kick user cũ trước khi ghi đè session mới
+            try {
+                sessionInvalidationProducer.publishDuplicateLoginKick(userId);
+                logger.warn("Duplicate login detected for userId={}. Published session invalidation event (code=1003).", userId);
+            } catch (Exception ex) {
+                logger.error("Failed to publish session invalidation event for userId={}. Continue login flow.", userId, ex);
+            }
             redisTemplate.delete(key);
         }
         

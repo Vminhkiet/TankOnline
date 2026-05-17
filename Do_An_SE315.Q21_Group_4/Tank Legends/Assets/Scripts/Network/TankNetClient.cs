@@ -8,6 +8,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using UnityEngine;
 
@@ -26,6 +27,7 @@ namespace TankNet
         public static TankNetClient Instance { get; private set; }
 
         public event Action<SnapshotData> OnSnapshot;
+        public event Action<ushort, string, uint> OnForceLogout; // (code, message, disconnectAfterMs)
 
         [Header("Network")]
         public string ServerHost = "127.0.0.1";
@@ -142,16 +144,37 @@ namespace TankNet
                 try
                 {
                     byte[] data = _udp.Receive(ref from);
-                    if (data.Length < Marshal.SizeOf<SnapshotHeader>()) continue;
+                    if (data.Length < 6) continue; // at least matchId + opcode
 
-                    // S2C_SNAPSHOT uses raw binary header (not bit-packed)
-                    var hdr = BytesToStruct<SnapshotHeader>(data, 0);
-                    if ((Opcode)hdr.opcode != Opcode.S2C_SNAPSHOT) continue;
-                    if (hdr.matchId != MatchId) continue;
+                    ushort opcode = BitConverter.ToUInt16(data, 4);
 
-                    var snap = ParseSnapshot(data, hdr);
-                    // Marshal to main thread
-                    UnityMainThread.Post(() => OnSnapshot?.Invoke(snap));
+                    if ((Opcode)opcode == Opcode.S2C_SNAPSHOT)
+                    {
+                        if (data.Length < Marshal.SizeOf<SnapshotHeader>()) continue;
+
+                        var hdr = BytesToStruct<SnapshotHeader>(data, 0);
+                        if (hdr.matchId != MatchId) continue;
+
+                        var snap = ParseSnapshot(data, hdr);
+                        UnityMainThread.Post(() => OnSnapshot?.Invoke(snap));
+                        continue;
+                    }
+
+                    if ((Opcode)opcode == Opcode.S2C_FORCE_LOGOUT)
+                    {
+                        if (data.Length < Marshal.SizeOf<ForceLogoutHeader>()) continue;
+                        var hdr = BytesToStruct<ForceLogoutHeader>(data, 0);
+                        if (hdr.matchId != MatchId) continue;
+
+                        int headerSize = Marshal.SizeOf<ForceLogoutHeader>();
+                        int msgLen = Math.Min(hdr.messageLen, (ushort)Math.Max(0, data.Length - headerSize));
+                        string reason = msgLen > 0
+                            ? Encoding.UTF8.GetString(data, headerSize, msgLen)
+                            : "Logged in from another device";
+
+                        UnityMainThread.Post(() => OnForceLogout?.Invoke(hdr.code, reason, hdr.disconnectAfterMs));
+                        continue;
+                    }
                 }
                 catch (SocketException) { /* timeout or closed */ }
                 catch (Exception e) { Debug.LogWarning($"[TankNet] recv: {e.Message}"); }

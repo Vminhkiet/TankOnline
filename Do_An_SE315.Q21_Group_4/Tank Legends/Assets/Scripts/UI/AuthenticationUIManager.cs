@@ -286,28 +286,10 @@ public class AuthenticationUIManager : MonoBehaviour
     private IEnumerator LogoutCoroutine()
     {
         isBusy = true;
-        string jwt = PlayerPrefs.GetString("jwt", "");
 
-        if (!string.IsNullOrEmpty(jwt))
-        {
-            using (UnityWebRequest req = new UnityWebRequest(logoutApiUrl, "POST"))
-            {
-                req.uploadHandler   = new UploadHandlerRaw(new byte[0]);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type",  "application/json");
-                req.SetRequestHeader("Authorization", "Bearer " + jwt);
+        yield return LogoutRequestCoroutine(logoutApiUrl);
 
-                yield return req.SendWebRequest();
-
-                if (req.result != UnityWebRequest.Result.Success)
-                    Debug.LogWarning("[Auth] Logout server error (ignored): " + req.error);
-            }
-        }
-
-        PlayerPrefs.DeleteKey("jwt");
-        PlayerPrefs.DeleteKey("refreshToken");
-        PlayerPrefs.DeleteKey("username");
-        PlayerPrefs.Save();
+        ClearLocalAuth();
 
         isBusy = false;
 
@@ -324,28 +306,43 @@ public class AuthenticationUIManager : MonoBehaviour
         caller.StartCoroutine(StaticLogoutCoroutine(logoutUrl, loginScene));
     }
 
+    public static void LogoutSilently(MonoBehaviour caller, string logoutUrl)
+    {
+        caller.StartCoroutine(LogoutRequestCoroutine(logoutUrl));
+    }
+
     private static IEnumerator StaticLogoutCoroutine(string logoutUrl, string loginScene)
     {
+        yield return LogoutRequestCoroutine(logoutUrl);
+        ClearLocalAuth();
+        SceneManager.LoadScene(loginScene);
+    }
+
+    private static IEnumerator LogoutRequestCoroutine(string logoutUrl)
+    {
         string jwt = PlayerPrefs.GetString("jwt", "");
+        if (string.IsNullOrEmpty(jwt)) yield break;
 
-        if (!string.IsNullOrEmpty(jwt))
+        using (UnityWebRequest req = new UnityWebRequest(logoutUrl, "POST"))
         {
-            using (UnityWebRequest req = new UnityWebRequest(logoutUrl, "POST"))
-            {
-                req.uploadHandler   = new UploadHandlerRaw(new byte[0]);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type",  "application/json");
-                req.SetRequestHeader("Authorization", "Bearer " + jwt);
-                yield return req.SendWebRequest();
-            }
-        }
+            req.uploadHandler   = new UploadHandlerRaw(new byte[0]);
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.timeout = 2;
+            req.SetRequestHeader("Content-Type",  "application/json");
+            req.SetRequestHeader("Authorization", "Bearer " + jwt);
+            yield return req.SendWebRequest();
 
+            if (req.result != UnityWebRequest.Result.Success)
+                Debug.LogWarning("[Auth] Logout server error (ignored): " + req.error);
+        }
+    }
+
+    public static void ClearLocalAuth()
+    {
         PlayerPrefs.DeleteKey("jwt");
         PlayerPrefs.DeleteKey("refreshToken");
         PlayerPrefs.DeleteKey("username");
         PlayerPrefs.Save();
-
-        SceneManager.LoadScene(loginScene);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

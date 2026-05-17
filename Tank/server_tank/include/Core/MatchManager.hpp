@@ -28,6 +28,10 @@ public:
     // Called from NetworkManager IOCP workers (multiple threads).
     void routeCommand(GameCommand cmd);
 
+    // Called from Kafka consumer path to force-kick duplicate login by auth userId.
+    bool forceLogoutByUserId(const std::string& userId, uint16_t code,
+                             const std::string& message, uint32_t disconnectAfterMs);
+
 private:
     void tickDispatcher();
     void onMatchEnd(MatchResult r);

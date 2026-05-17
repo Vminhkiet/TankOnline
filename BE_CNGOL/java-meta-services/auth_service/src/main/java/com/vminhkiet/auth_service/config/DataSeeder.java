@@ -20,26 +20,23 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        if (userRepository.count() == 0) {
+        if (!userRepository.existsByUsername("player1")) {
             User user1 = new User();
             user1.setUsername("player1");
             user1.setPassword(passwordEncoder.encode("123456"));
             user1.setEmail("player1@tank.com");
             user1.setRole(Role.ROLE_USER);
-
+            userRepository.save(user1);
+            System.out.println("====== TẠO THÀNH CÔNG TÀI KHOẢN MẪU: player1 ======");
+        }
+        if (!userRepository.existsByUsername("player2")) {
             User user2 = new User();
             user2.setUsername("player2");
             user2.setPassword(passwordEncoder.encode("123456"));
             user2.setEmail("player2@tank.com");
             user2.setRole(Role.ROLE_USER);
-
-            userRepository.save(user1);
             userRepository.save(user2);
-
-            System.out.println("====== TẠO THÀNH CÔNG 2 TÀI KHOẢN MẪU ======");
-            System.out.println("1. player1 / 123456");
-            System.out.println("2. player2 / 123456");
-            System.out.println("============================================");
+            System.out.println("====== TẠO THÀNH CÔNG TÀI KHOẢN MẪU: player2 ======");
         }
     }
 }

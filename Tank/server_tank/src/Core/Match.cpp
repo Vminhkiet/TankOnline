@@ -4,6 +4,7 @@
 #include "ReadStream.h"
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 
 // Raw S2C snapshot header — not bit-packed, Unity reads with BinaryReader
 #pragma pack(push, 1)
@@ -21,6 +22,10 @@ Match::Match(MatchConfig config, INetworkBackend& network,
     : _config(std::move(config)), _network(network), _onEnd(std::move(onEnd))
 {
     _world.disableRespawn();
+
+    for (const auto& [playerId, uid] : _config.userIds) {
+        _userToPlayer[uid] = playerId;
+    }
 
     std::string mapPath = "assests/map/" + _config.mapName + ".json";
     if (!_world.loadMap(mapPath))
@@ -224,6 +229,36 @@ void Match::broadcastMatchEnd(const MatchResult& r) {
 
     LOG_INFO("Match {}: S2C_MATCH_END broadcast ({} recipients)",
              r.matchId, _sessions.size());
+}
+
+bool Match::forceLogoutByUserId(const std::string& userId, uint16_t code,
+                                const std::string& message, uint32_t disconnectAfterMs) {
+    auto it = _userToPlayer.find(userId);
+    if (it == _userToPlayer.end()) return false;
+
+    const uint32_t playerId = it->second;
+    sockaddr_in addr{};
+    if (!_sessions.getAddress(playerId, addr)) return false;
+
+    const size_t msgLen = std::min<size_t>(message.size(), 512);
+    ForceLogoutPacket hdr;
+    hdr.matchId = _config.matchId;
+    hdr.opcode = static_cast<uint16_t>(Opcode::S2C_FORCE_LOGOUT);
+    hdr.code = code;
+    hdr.messageLen = static_cast<uint16_t>(msgLen);
+    hdr.disconnectAfterMs = disconnectAfterMs;
+
+    std::vector<uint8_t> pkt(sizeof(ForceLogoutPacket) + msgLen);
+    std::memcpy(pkt.data(), &hdr, sizeof(hdr));
+    if (msgLen > 0) {
+        std::memcpy(pkt.data() + sizeof(ForceLogoutPacket), message.data(), msgLen);
+    }
+
+    _network.send(addr, pkt.data(), pkt.size());
+
+    LOG_INFO("Match {}: sent S2C_FORCE_LOGOUT to playerId={} userId={} code={} delayMs={}",
+             _config.matchId, playerId, userId, code, disconnectAfterMs);
+    return true;
 }
 
 void Match::handleShoot(GameCommand& cmd) {

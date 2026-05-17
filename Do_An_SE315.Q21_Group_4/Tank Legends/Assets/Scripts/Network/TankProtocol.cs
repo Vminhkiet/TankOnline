@@ -7,8 +7,9 @@ namespace TankNet
     {
         C2S_LOGIN    = 1000,
         C2S_MOVE     = 1001,
-        C2S_SHOOT    = 1002,
-        S2C_SNAPSHOT = 2000,
+        C2S_SHOOT       = 1002,
+        S2C_SNAPSHOT    = 2000,
+        S2C_FORCE_LOGOUT = 2005,
     }
 
     // Must match server NetworkConstants.h exactly
@@ -64,6 +65,16 @@ namespace TankNet
         public ushort serverTick;
         public ushort tankCount;
         public ushort localPlayerId;   // which tank belongs to this client
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct ForceLogoutHeader
+    {
+        public uint matchId;
+        public ushort opcode;             // = 2005
+        public ushort code;               // e.g. 1003
+        public ushort messageLen;         // UTF-8 bytes appended after header
+        public uint disconnectAfterMs;    // e.g. 10000
     }
 
     // ── Packet builders ───────────────────────────────────────────────────────
