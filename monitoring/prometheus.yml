@@ -1,0 +1,61 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []   # add alertmanager here at scale
+
+scrape_configs:
+
+  # ── Java microservices ──────────────────────────────────────────────
+  - job_name: eureka
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["172.25.203.168:8761"]
+
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["172.25.203.168:8080"]
+
+  - job_name: auth
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["172.25.203.168:8081"]
+
+  - job_name: matchmaking
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["172.25.203.168:8085"]
+
+  - job_name: history
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["172.25.203.168:8086"]
+
+  - job_name: shop
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["172.25.203.168:8088"]
+
+  - job_name: monitoring
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["172.25.203.168:8090"]
+
+  # ── C++ Game Server (via Python agent) ─────────────────────────────
+  # At scale: replace with Kubernetes SD or Consul SD to auto-discover
+  # all game server instances without manual config
+  - job_name: tank-game-server
+    metrics_path: /metrics/prometheus
+    static_configs:
+      - targets: ["172.25.203.168:9100"]
+        labels:
+          service: tank-game-server
+          server_id: local-01
+          region: local

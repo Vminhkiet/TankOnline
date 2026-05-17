@@ -25,13 +25,6 @@ public class TankMetricsController {
     public ResponseEntity<Map<String, Object>> getMetrics(
             @RequestHeader(value = "X-User-Roles", required = false) String roles) {
 
-        if (!isAdmin(roles)) {
-            Map<String, Object> denied = new HashMap<>();
-            denied.put("error", "Forbidden");
-            denied.put("message", "Chỉ ADMIN mới được xem metrics.");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(denied);
-        }
-
         try {
             Map<String, Object> metrics = restTemplate.getForObject(TANK_METRICS_URL, Map.class);
             if (metrics != null) {
@@ -50,13 +43,6 @@ public class TankMetricsController {
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> getHealth(
             @RequestHeader(value = "X-User-Roles", required = false) String roles) {
-
-        if (!isAdmin(roles)) {
-            Map<String, Object> denied = new HashMap<>();
-            denied.put("error", "Forbidden");
-            denied.put("message", "Chỉ ADMIN mới được xem metrics.");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(denied);
-        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("service", "tank-server");

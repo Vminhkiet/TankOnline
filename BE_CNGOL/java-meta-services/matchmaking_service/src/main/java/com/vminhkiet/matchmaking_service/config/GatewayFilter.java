@@ -14,6 +14,12 @@ public class GatewayFilter implements Filter {
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
         HttpServletRequest req = (HttpServletRequest) request;
+        // Actuator endpoints must be reachable by Prometheus scraper (no gateway header)
+        if (req.getRequestURI().startsWith("/actuator")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String gatewayToken = req.getHeader("X-Gateway-Origin");
 
         if (gatewayToken == null || !gatewayToken.equals("MySecretKey123")) {

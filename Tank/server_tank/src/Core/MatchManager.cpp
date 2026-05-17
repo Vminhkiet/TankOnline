@@ -9,8 +9,14 @@
 
 using json = nlohmann::json;
 
+static size_t resolvePoolSize() {
+    const char* v = std::getenv("NUM_WORKERS");
+    if (v && std::atoi(v) > 0) return static_cast<size_t>(std::atoi(v));
+    return std::thread::hardware_concurrency();
+}
+
 MatchManager::MatchManager(INetworkBackend& network)
-    : _pool(std::thread::hardware_concurrency())
+    : _pool(resolvePoolSize())
     , _network(network)
 {}
 

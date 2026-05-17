@@ -1,0 +1,57 @@
+groups:
+  - name: tank_game_server
+    rules:
+      - alert: TickOverrunHigh
+        expr: tank_tick_overruns_total > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Game server {{ $labels.server_id }} có {{ $value }} tick overruns"
+          description: "Tick overrun vượt ngưỡng — game loop đang bị chậm (budget 16,667 µs)"
+
+      - alert: TickAvgHigh
+        expr: tank_tick_duration_us_avg > 5000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tick avg quá cao: {{ $value }} µs (budget 16,667 µs)"
+
+      - alert: GameServerDown
+        expr: up{job="tank-game-server"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Game server OFFLINE"
+
+  - name: java_services
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"auth-service|matchmaking-service|history-service|api-gateway"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.service }} bị DOWN"
+
+      - alert: JvmMemoryHigh
+        expr: >
+          jvm_memory_used_bytes{area="heap"}
+          / jvm_memory_max_bytes{area="heap"} > 0.85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} JVM heap > 85%"
+
+      - alert: HttpErrorRateHigh
+        expr: >
+          rate(http_server_requests_seconds_count{status=~"5.."}[5m])
+          / rate(http_server_requests_seconds_count[5m]) > 0.05
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} HTTP 5xx rate > 5%"
