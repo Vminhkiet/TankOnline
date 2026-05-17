@@ -50,6 +50,13 @@ spring:
           uri: lb://history-service
           predicates:
             - Path=/api/history/**
+
+        - id: profile_service_route
+          uri: lb://profile-service
+          predicates:
+            - Path=/api/profile/**
+          filters:
+            - AddRequestHeader=X-Gateway-Origin, MySecretKey123
     loadbalancer:
       ribbon:
         enabled: false

@@ -24,7 +24,8 @@ echo 5. Start Shop ONLY
 echo 6. Start Matchmaking ONLY
 echo 7. Start History ONLY
 echo 8. Start API Gateway ONLY
-echo 9. Stop ALL Services
+echo 9. Start Profile ONLY
+echo 10. Stop ALL Services
 echo 0. Exit
 echo ==================================================
 set /p choice="Select option: "
@@ -37,7 +38,8 @@ if "%choice%"=="5" goto START_SHOP
 if "%choice%"=="6" goto START_MATCHMAKING
 if "%choice%"=="7" goto START_HISTORY
 if "%choice%"=="8" goto START_GATEWAY
-if "%choice%"=="9" goto STOP_ALL
+if "%choice%"=="9" goto START_PROFILE
+if "%choice%"=="10" goto STOP_ALL
 if "%choice%"=="0" goto END
 
 goto MENU
@@ -58,30 +60,34 @@ goto MENU
 :: =========================
 :START_ALL
 
-echo [1/6] Starting Discovery Service...
+echo [1/7] Starting Discovery Service...
 call :START_SERVICE discovery_service "Discovery Service"
 timeout /t 15 /nobreak >nul
 
-echo [2/6] Starting Auth Service...
+echo [2/7] Starting Auth Service...
 call :START_SERVICE auth_service "Auth Service"
 timeout /t 5 /nobreak >nul
 
-echo [3/6] Starting Shop Service...
+echo [3/7] Starting Shop Service...
 call :START_SERVICE shop "Shop Service"
 timeout /t 5 /nobreak >nul
 
-echo [4/6] Starting Matchmaking Service...
+echo [4/7] Starting Matchmaking Service...
 call :START_SERVICE matchmaking_service "Matchmaking Service"
 timeout /t 5 /nobreak >nul
 
-echo [5/6] Starting History Service...
+echo [5/7] Starting History Service...
 call :START_SERVICE history_service "History Service"
+timeout /t 5 /nobreak >nul
+
+echo [6/7] Starting Profile Service...
+call :START_SERVICE profile_service "Profile Service"
 timeout /t 5 /nobreak >nul
 
 echo Waiting for services to register with Eureka...
 timeout /t 10 /nobreak >nul
 
-echo [6/6] Starting API Gateway (LAST)...
+echo [7/7] Starting API Gateway (LAST)...
 call :START_SERVICE api_gateway "API Gateway"
 
 echo.
@@ -95,13 +101,18 @@ goto MENU
 :START_SERVICE
 set "SERVICE_DIR=%~1"
 set "WINDOW_TITLE=%~2"
+set "SVC_PATH=%~dp0java-meta-services\%SERVICE_DIR%"
 
 if "%MODE%"=="DEV" (
-    start "%WINDOW_TITLE%" cmd /k "cd /d "%~dp0java-meta-services\%SERVICE_DIR%" && call mvnw.cmd spring-boot:run || pause"
+    pushd "%SVC_PATH%"
+    start "%WINDOW_TITLE%" cmd /k "mvn spring-boot:run & pause"
+    popd
 ) else (
-    for %%f in ("%~dp0java-meta-services\%SERVICE_DIR%\target\*.jar") do (
-        start "%WINDOW_TITLE%" cmd /k "cd /d "%~dp0java-meta-services\%SERVICE_DIR%" && java -jar "%%f""
+    pushd "%SVC_PATH%\target"
+    for %%f in (*.jar) do (
+        start "%WINDOW_TITLE%" cmd /k "java -jar %%f & pause"
     )
+    popd
 )
 
 goto :eof
@@ -132,6 +143,10 @@ goto MENU
 call :START_SERVICE api_gateway "API Gateway"
 goto MENU
 
+:START_PROFILE
+call :START_SERVICE profile_service "Profile Service"
+goto MENU
+
 :: =========================
 :: STOP ALL
 :: =========================
@@ -143,6 +158,7 @@ taskkill /F /FI "WINDOWTITLE eq Auth Service*" >nul 2>&1
 taskkill /F /FI "WINDOWTITLE eq Shop Service*" >nul 2>&1
 taskkill /F /FI "WINDOWTITLE eq Matchmaking Service*" >nul 2>&1
 taskkill /F /FI "WINDOWTITLE eq History Service*" >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq Profile Service*" >nul 2>&1
 taskkill /F /FI "WINDOWTITLE eq API Gateway*" >nul 2>&1
 
 echo All services stopped.

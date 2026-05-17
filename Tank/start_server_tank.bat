@@ -14,7 +14,7 @@ if not exist "%EXE%" (
     exit /b 1
 )
 
-cd /d "%~dp0Tank\out\build\x64-Release\server_tank\Release"
+cd /d "%~dp0out\build\x64-Release\server_tank\Release"
 echo Running server_tank.exe...
 set KAFKA_BROKERS=localhost:9092
 server_tank.exe

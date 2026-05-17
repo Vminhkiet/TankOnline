@@ -5,8 +5,9 @@ echo ==================================================
 
 set VCPKG_ROOT=C:\vcpkg
 set CMAKE_EXE=C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe
-set SOURCE_DIR=%~dp0Tank
-set BUILD_DIR=%~dp0Tank\out\build\x64-Release
+set "SOURCE_DIR=%~dp0"
+if "%SOURCE_DIR:~-1%"=="\" set "SOURCE_DIR=%SOURCE_DIR:~0,-1%"
+set "BUILD_DIR=%SOURCE_DIR%\out\build\x64-Release"
 
 :: ---- 1. Kiem tra / cai vcpkg ----
 if not exist "%VCPKG_ROOT%\vcpkg.exe" (

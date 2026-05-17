@@ -1,12 +1,16 @@
 package com.vminhkiet.auth_service.serviceImpl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 
 import com.vminhkiet.auth_service.config.JwtProvider;
 import com.vminhkiet.auth_service.dto.AuthResponse;
@@ -31,6 +35,11 @@ public class UserService implements com.vminhkiet.auth_service.service.UserServi
     private JwtProvider jwtProvider;
     @Autowired
     private SessionService sessionService;
+
+    @Autowired
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public AuthResponse loginAccount(LoginRequest request) {
@@ -75,7 +84,18 @@ public class UserService implements com.vminhkiet.auth_service.service.UserServi
         newUser.setAddress(request.getAddress());
         newUser.setRole(Role.ROLE_USER);
 
-        userRepository.save(newUser);
+        User savedUser = userRepository.save(newUser);
+
+        // Publish event user.created lên Kafka để profile_service tạo profile
+        try {
+            String payload = objectMapper.writeValueAsString(Map.of(
+                "userId",      String.valueOf(savedUser.getId()),
+                "displayName", savedUser.getUsername()
+            ));
+            kafkaTemplate.send("user.created", String.valueOf(savedUser.getId()), payload);
+        } catch (Exception e) {
+            // Kafka không khả dụng — không block signup
+        }
 
         // Tự động login sau khi đăng ký thành công
         Authentication auth = authenticate(request.getUsername(), request.getPassword());
