@@ -17,8 +17,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.*;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +34,10 @@ public class ShopServiceImpl implements GameService {
         private static final String STATUS_ON_SALE = "On Sale";
         private static final String STATUS_DISCONTINUED = "Discontinued";
         private final AtomicLong shopVersion = new AtomicLong(0);
+        private final RestTemplate restTemplate = new RestTemplate();
+
+        @Value("${profile.service.url:http://localhost:8087}")
+        private String profileServiceUrl;
 
         @Override
         public List<ItemDTO> getAllItems() {
@@ -84,7 +92,11 @@ public class ShopServiceImpl implements GameService {
                                         .multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
                         totalOrderPrice = totalOrderPrice.add(itemTotalPrice);
 
-                        // TODO: Gọi Auth Service hoặc User Service để trừ tiền người chơi ở đây
+                        // Trừ coin từ profile_service
+                        boolean deductOk = deductCoinsFromProfile(String.valueOf(playerId), itemTotalPrice.longValue());
+                        if (!deductOk) {
+                            throw new RuntimeException("Không đủ coin để mua: " + item.getName());
+                        }
 
                         // 4. Lưu vào kho đồ (Inventory) - Chỗ này dùng PlayerInfo theo code cũ của bạn
                         PlayerInfo playerItem = PlayerInfo.builder()
@@ -130,6 +142,24 @@ public class ShopServiceImpl implements GameService {
                                 .available(item.getAvailble())
                                 .status(getItemStatus(item))
                                 .build();
+        }
+
+        private boolean deductCoinsFromProfile(String userId, long amount) {
+            try {
+                String url = profileServiceUrl + "/internal/coins/deduct";
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                Map<String, Object> body = Map.of("userId", userId, "amount", amount);
+                HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+                ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+                if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                    return Boolean.TRUE.equals(response.getBody().get("success"));
+                }
+                return false;
+            } catch (Exception e) {
+                // Nếu profile_service không khả dụng, cho phép mua (graceful degradation)
+                return true;
+            }
         }
 
         private String getItemStatus(Item item) {

@@ -1,4 +1,4 @@
-package com.vminhkiet.shop_service.config;
+package com.vminhkiet.profile_service.config;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -22,7 +22,7 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
         String roles  = request.getHeader("X-User-Roles");
 
         String path = request.getRequestURI();
-        if (path.startsWith("/actuator")) {
+        if (path.startsWith("/actuator") || path.startsWith("/internal") || path.startsWith("/api/profile/admin")) {
             filterChain.doFilter(request, response);
             return;
         }

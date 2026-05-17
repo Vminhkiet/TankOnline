@@ -11,20 +11,34 @@ public class GatewayFilter implements Filter {
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
-        
-        HttpServletRequest req = (HttpServletRequest) request;
-        String gatewayToken = req.getHeader("X-Gateway-Origin");
 
-        // Kiểm tra token bí mật từ Gateway gửi sang
+        HttpServletRequest req = (HttpServletRequest) request;
+        HttpServletResponse res = (HttpServletResponse) response;
+
+        String path = req.getRequestURI();
+        if (req.getMethod().equalsIgnoreCase("OPTIONS") || path.startsWith("/actuator")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // Kiểm tra request phải đến từ API Gateway
+        String gatewayToken = req.getHeader("X-Gateway-Origin");
         if (gatewayToken == null || !gatewayToken.equals("MySecretKey123")) {
-            HttpServletResponse res = (HttpServletResponse) response;
-            res.setStatus(HttpServletResponse.SC_FORBIDDEN); // Lỗi 403
-            res.setCharacterEncoding("UTF-8");
+            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
             res.setContentType("text/plain; charset=UTF-8");
             res.getWriter().write("Bạn phải truy cập qua API Gateway!");
             return;
         }
-        
+
+        // Kiểm tra user đã đăng nhập (gateway thêm header này sau khi validate JWT)
+        String userId = req.getHeader("X-User-Id");
+        if (userId == null || userId.isBlank() || "null".equals(userId)) {
+            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            res.setContentType("application/json;charset=UTF-8");
+            res.getWriter().write("{\"error\":\"Unauthorized\"}");
+            return;
+        }
+
         chain.doFilter(request, response);
     }
 }

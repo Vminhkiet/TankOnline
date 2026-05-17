@@ -17,6 +17,10 @@ eureka:
   instance:
     prefer-ip-address: true
 
+profile:
+  service:
+    url: http://localhost:8087
+
 management:
   endpoints:
     web:
