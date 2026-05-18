@@ -25,9 +25,10 @@ public class TankSelectionManager : MonoBehaviour
         }
     }
 
+    private const string ShopItemsPath = "/api/shop/items";
+    private const string ShopVersionPath = "/api/shop/items/version";
+
     [Header("Available Tanks")]
-    [SerializeField] private string shopApiUrl = "http://localhost:8080/api/shop/items";
-    [SerializeField] private string shopVersionUrl = "http://localhost:8080/api/shop/items/version";
     [SerializeField] private TankDefinitionSO[] availableTanks;
     [SerializeField] private TankDefinitionSO defaultTank;
 
@@ -126,20 +127,16 @@ public class TankSelectionManager : MonoBehaviour
     {
         // Step 1: Ask the server for the current version number (very lightweight)
         long serverVersion = -1;
-        using (UnityWebRequest versionRequest = UnityWebRequest.Get(shopVersionUrl))
+        using (UnityWebRequest versionRequest = GameApiClient.CreateRequest(ShopVersionPath, UnityWebRequest.kHttpVerbGET))
         {
-            versionRequest.SetRequestHeader("Accept", "application/json");
-            string jwt = PlayerPrefs.GetString("jwt", "");
-            if (!string.IsNullOrEmpty(jwt))
-                versionRequest.SetRequestHeader("Authorization", "Bearer " + jwt);
+            GameApiClient.ApiCallResult versionResult = default;
+            yield return GameApiClient.Send(versionRequest, r => versionResult = r);
 
-            yield return versionRequest.SendWebRequest();
-
-            if (versionRequest.result == UnityWebRequest.Result.Success)
+            if (versionResult.Success)
             {
                 try
                 {
-                    ShopVersionResponse versionResponse = JsonUtility.FromJson<ShopVersionResponse>(versionRequest.downloadHandler.text);
+                    ShopVersionResponse versionResponse = JsonUtility.FromJson<ShopVersionResponse>(versionResult.Body);
                     serverVersion = versionResponse.version;
                 }
                 catch (Exception e)
@@ -149,7 +146,7 @@ public class TankSelectionManager : MonoBehaviour
             }
             else
             {
-                Debug.LogWarning($"Failed to check shop version: {versionRequest.error}. Will re-fetch items.");
+                Debug.LogWarning($"Failed to check shop version: {versionResult.Error}. Will re-fetch items.");
             }
         }
 
@@ -184,22 +181,14 @@ public class TankSelectionManager : MonoBehaviour
 
     private IEnumerator FetchAvailableTanksFromAPI(long newVersion)
     {
-        string jwt = PlayerPrefs.GetString("jwt", "");
-
-        using (UnityWebRequest request = UnityWebRequest.Get(shopApiUrl))
+        using (UnityWebRequest request = GameApiClient.CreateRequest(ShopItemsPath, UnityWebRequest.kHttpVerbGET))
         {
-            request.SetRequestHeader("Accept", "application/json");
+            GameApiClient.ApiCallResult fetchResult = default;
+            yield return GameApiClient.Send(request, r => fetchResult = r);
 
-            if (!string.IsNullOrEmpty(jwt))
+            if (fetchResult.Success)
             {
-                request.SetRequestHeader("Authorization", "Bearer " + jwt);
-            }
-
-            yield return request.SendWebRequest();
-
-            if (request.result == UnityWebRequest.Result.Success)
-            {
-                string json = request.downloadHandler.text;
+                string json = fetchResult.Body;
 
                 if (TryApplyShopItemsJson(json))
                 {
@@ -210,7 +199,6 @@ public class TankSelectionManager : MonoBehaviour
                     PlayerPrefs.SetString(ShopVersionCacheKey, newVersion.ToString());
                     PlayerPrefs.Save();
 
-                    // Re-select current tank if it became unavailable
                     if (CurrentTank != null && !System.Array.Exists(availableTanks, t => t == CurrentTank))
                     {
                         TankDefinitionSO fallback = GetFirstAvailableTank();
@@ -223,9 +211,7 @@ public class TankSelectionManager : MonoBehaviour
             }
             else
             {
-                Debug.LogError(
-                    $"Failed to fetch shop items from {shopApiUrl}: HTTP {request.responseCode} - {request.error}\n" +
-                    $"Response: {request.downloadHandler.text}");
+                Debug.LogError($"Failed to fetch shop items: {fetchResult.ErrorMessage}");
             }
         }
     }

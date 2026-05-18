@@ -1,12 +1,14 @@
 package com.vminhkiet.auth_service.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.vminhkiet.auth_service.dto.UserMeResponse;
 import com.vminhkiet.auth_service.service.UserService;
 import com.vminhkiet.auth_service.model.User;
 
@@ -17,6 +19,19 @@ import java.util.List;
 public class UserController {
     @Autowired
     private UserService userService;
+
+    /**
+     * Thông tin tài khoản đang đăng nhập (email, username). Cần header Authorization: Bearer JWT.
+     * GET /api/user/me
+     */
+    @GetMapping("/me")
+    public ResponseEntity<UserMeResponse> getMe(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        Long userId = Long.parseLong(authentication.getName());
+        return ResponseEntity.ok(userService.getUserMe(userId));
+    }
 
     // TODO: Re-enable when admin web sends JWT
     // @PreAuthorize("hasRole('ADMIN')")

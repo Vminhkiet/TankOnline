@@ -16,6 +16,7 @@ import com.vminhkiet.auth_service.config.JwtProvider;
 import com.vminhkiet.auth_service.dto.AuthResponse;
 import com.vminhkiet.auth_service.dto.LoginRequest;
 import com.vminhkiet.auth_service.dto.SignUpRequest;
+import com.vminhkiet.auth_service.dto.UserMeResponse;
 import com.vminhkiet.auth_service.model.Role;
 import com.vminhkiet.auth_service.model.User;
 import com.vminhkiet.auth_service.repository.UserRepository;
@@ -106,6 +107,17 @@ public class UserService implements com.vminhkiet.auth_service.service.UserServi
         AuthResponse response = new AuthResponse();
         response.setJwt(jwt);
         response.setRefreshToken(refreshToken);
+        return response;
+    }
+
+    @Override
+    public UserMeResponse getUserMe(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        UserMeResponse response = new UserMeResponse();
+        response.setUserId(String.valueOf(user.getId()));
+        response.setUsername(user.getUsername());
+        response.setEmail(user.getEmail());
         return response;
     }
 

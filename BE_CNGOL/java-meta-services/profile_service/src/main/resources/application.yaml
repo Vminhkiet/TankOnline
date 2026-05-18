@@ -7,6 +7,13 @@ server:
 spring:
   application:
     name: profile-service
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: profile-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   datasource:
     url: jdbc:postgresql://localhost:5432/profile_service_db
     username: auth_user

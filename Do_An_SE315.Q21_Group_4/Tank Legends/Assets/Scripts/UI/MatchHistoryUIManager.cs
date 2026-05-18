@@ -4,7 +4,6 @@ using TMPro;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Text;
 
 // DTOs
 [System.Serializable]
@@ -57,9 +56,6 @@ public class MatchHistoryUIManager : MonoBehaviour
     private const string HistoryPath = "/api/history/me";
     private const string StatsPath = "/api/history/me/stats";
 
-    [Header("API")]
-    [SerializeField] private string apiBaseUrl = "http://localhost:8080";
-
     [Header("Stats UI")]
     public TextMeshProUGUI totalMatchesText;
     public TextMeshProUGUI winRateText;
@@ -81,8 +77,7 @@ public class MatchHistoryUIManager : MonoBehaviour
 
     private void Start()
     {
-        string jwt = PlayerPrefs.GetString("jwt", "");
-        if (string.IsNullOrEmpty(jwt))
+        if (!GameApiClient.HasJwt())
         {
             Debug.LogWarning("[History] Start skipped load: jwt is empty.");
             return;
@@ -106,21 +101,19 @@ public class MatchHistoryUIManager : MonoBehaviour
 
     public IEnumerator SaveMatchCoroutine(long matchId, string opponentId, bool won, bool draw, int kills, int deaths, int durationSecs)
     {
-        string jwt = PlayerPrefs.GetString("jwt", "");
-        if (string.IsNullOrEmpty(jwt))
+        if (!GameApiClient.HasJwt())
         {
             Debug.LogWarning("[History] SaveMatch skipped: jwt is empty.");
             yield break;
         }
 
-        string url = BuildApiUrl(MatchPath);
-        string result = draw ? "DRAW" : (won ? "WIN" : "LOSE");
+        string resultStr = draw ? "DRAW" : (won ? "WIN" : "LOSE");
 
         var reqBody = new SaveMatchRequest
         {
             matchId = matchId,
             opponentId = opponentId,
-            result = result,
+            result = resultStr,
             kills = kills,
             deaths = deaths,
             durationSecs = durationSecs,
@@ -129,50 +122,50 @@ public class MatchHistoryUIManager : MonoBehaviour
 
         string json = JsonUtility.ToJson(reqBody);
 
-        using var req = CreateAuthorizedRequest(url, "POST", jwt, json);
-        Debug.Log($"[History] SaveMatch request | url={url}");
-        yield return req.SendWebRequest();
+        using var req = GameApiClient.CreateRequest(MatchPath, "POST", json);
+        Debug.Log($"[History] SaveMatch request | path={MatchPath}");
+        GameApiClient.ApiCallResult result = default;
+        yield return GameApiClient.Send(req, r => result = r);
 
-        if (req.result != UnityWebRequest.Result.Success)
+        if (!result.Success)
         {
-            Debug.LogError($"[History] SaveMatch failed | url={url} | status={(long)req.responseCode} | error={req.error} | body={req.downloadHandler?.text}");
+            Debug.LogError($"[History] SaveMatch failed | {result.ErrorMessage}");
             yield break;
         }
 
-        Debug.Log($"[History] SaveMatch success | status={(long)req.responseCode} | body={req.downloadHandler?.text}");
+        Debug.Log($"[History] SaveMatch success | status={result.StatusCode} | body={result.Body}");
     }
 
     private IEnumerator LoadStats()
     {
-        string jwt = PlayerPrefs.GetString("jwt", "");
-        if (string.IsNullOrEmpty(jwt))
+        if (!GameApiClient.HasJwt())
         {
             Debug.LogWarning("[History] LoadStats skipped: jwt is empty.");
             yield break;
         }
 
-        string url = BuildApiUrl(StatsPath);
-        using var req = CreateAuthorizedRequest(url, UnityWebRequest.kHttpVerbGET, jwt);
-        Debug.Log($"[History] LoadStats request | url={url}");
+        using var req = GameApiClient.CreateRequest(StatsPath, UnityWebRequest.kHttpVerbGET);
+        Debug.Log($"[History] LoadStats request | path={StatsPath}");
 
-        yield return req.SendWebRequest();
+        GameApiClient.ApiCallResult result = default;
+        yield return GameApiClient.Send(req, r => result = r);
 
-        if (req.result != UnityWebRequest.Result.Success)
+        if (!result.Success)
         {
-            Debug.LogError($"[History] LoadStats failed | url={url} | status={(long)req.responseCode} | error={req.error} | body={req.downloadHandler?.text}");
+            Debug.LogError($"[History] LoadStats failed | {result.ErrorMessage}");
             yield break;
         }
 
-        Debug.Log($"[History] LoadStats success | status={(long)req.responseCode} | body={req.downloadHandler?.text}");
+        Debug.Log($"[History] LoadStats success | status={result.StatusCode} | body={result.Body}");
 
         PlayerStats stats;
         try
         {
-            stats = JsonUtility.FromJson<PlayerStats>(req.downloadHandler.text);
+            stats = JsonUtility.FromJson<PlayerStats>(result.Body);
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[History] LoadStats parse failed | ex={ex.Message} | body={req.downloadHandler?.text}");
+            Debug.LogError($"[History] LoadStats parse failed | ex={ex.Message} | body={result.Body}");
             yield break;
         }
 
@@ -190,28 +183,27 @@ public class MatchHistoryUIManager : MonoBehaviour
 
     private IEnumerator LoadHistory()
     {
-        string jwt = PlayerPrefs.GetString("jwt", "");
-        if (string.IsNullOrEmpty(jwt))
+        if (!GameApiClient.HasJwt())
         {
             Debug.LogWarning("[History] LoadHistory skipped: jwt is empty.");
             yield break;
         }
 
-        string url = BuildApiUrl(HistoryPath);
-        using var req = CreateAuthorizedRequest(url, UnityWebRequest.kHttpVerbGET, jwt);
-        Debug.Log($"[History] LoadHistory request | url={url}");
+        using var req = GameApiClient.CreateRequest(HistoryPath, UnityWebRequest.kHttpVerbGET);
+        Debug.Log($"[History] LoadHistory request | path={HistoryPath}");
 
-        yield return req.SendWebRequest();
+        GameApiClient.ApiCallResult result = default;
+        yield return GameApiClient.Send(req, r => result = r);
 
-        if (req.result != UnityWebRequest.Result.Success)
+        if (!result.Success)
         {
-            Debug.LogError($"[History] LoadHistory failed | url={url} | status={(long)req.responseCode} | error={req.error} | body={req.downloadHandler?.text}");
+            Debug.LogError($"[History] LoadHistory failed | {result.ErrorMessage}");
             yield break;
         }
 
-        Debug.Log($"[History] LoadHistory success | status={(long)req.responseCode} | body={req.downloadHandler?.text}");
+        Debug.Log($"[History] LoadHistory success | status={result.StatusCode} | body={result.Body}");
 
-        string wrapped = "{\"items\":" + req.downloadHandler.text + "}";
+        string wrapped = "{\"items\":" + result.Body + "}";
         MatchHistoryList list;
         try
         {
@@ -219,7 +211,7 @@ public class MatchHistoryUIManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[History] LoadHistory parse failed | ex={ex.Message} | body={req.downloadHandler?.text}");
+            Debug.LogError($"[History] LoadHistory parse failed | ex={ex.Message} | body={result.Body}");
             yield break;
         }
 
@@ -303,36 +295,6 @@ public class MatchHistoryUIManager : MonoBehaviour
         {
             Debug.LogWarning("[History] No map sprites found in Resources/Sprites/Maps.");
         }
-    }
-
-    private string BuildApiUrl(string path)
-    {
-        string baseUrl = (apiBaseUrl ?? string.Empty).Trim().TrimEnd('/');
-        if (string.IsNullOrEmpty(baseUrl))
-            baseUrl = "http://localhost:8080";
-
-        string normalizedPath = path.StartsWith("/") ? path : "/" + path;
-        return baseUrl + normalizedPath;
-    }
-
-    private static UnityWebRequest CreateAuthorizedRequest(string url, string method, string jwt, string jsonBody = null)
-    {
-        UnityWebRequest req = new UnityWebRequest(url, method)
-        {
-            downloadHandler = new DownloadHandlerBuffer()
-        };
-
-        req.SetRequestHeader("Accept", "application/json");
-        if (!string.IsNullOrEmpty(jwt))
-            req.SetRequestHeader("Authorization", "Bearer " + jwt);
-
-        if (!string.IsNullOrEmpty(jsonBody))
-        {
-            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(jsonBody));
-            req.SetRequestHeader("Content-Type", "application/json");
-        }
-
-        return req;
     }
 
     public void RefreshHistory()

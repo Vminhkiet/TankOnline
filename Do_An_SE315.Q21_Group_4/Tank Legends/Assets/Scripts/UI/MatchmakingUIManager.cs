@@ -23,7 +23,8 @@ public class MatchmakingUIManager : MonoBehaviour
     public TextMeshProUGUI timerText;
 
     [Header("API Settings")]
-    public string matchmakingApiUrl = "http://localhost:8080/api/matchmaking/find";
+    [Tooltip("Path or full URL. Default: /api/matchmaking/find")]
+    public string matchmakingPath = "/api/matchmaking/find";
     
     [Header("Scene Settings")]
     public string gameSceneName = "_Complete-Game";
@@ -75,9 +76,7 @@ public class MatchmakingUIManager : MonoBehaviour
         
         if (statusText != null) statusText.text = "Finding match...";
 
-        // Retrieve JWT token
-        string jwt = PlayerPrefs.GetString("jwt", "");
-        if (string.IsNullOrEmpty(jwt))
+        if (!GameApiClient.HasJwt())
         {
             if (statusText != null) statusText.text = "Error: Not logged in.";
             isSearching = false;
@@ -85,25 +84,21 @@ public class MatchmakingUIManager : MonoBehaviour
             yield break;
         }
 
-        using (UnityWebRequest request = new UnityWebRequest(matchmakingApiUrl, "POST"))
+        using (UnityWebRequest request = GameApiClient.CreateRequest(matchmakingPath, "POST"))
         {
-            request.downloadHandler = new DownloadHandlerBuffer();
-            request.SetRequestHeader("Content-Type", "application/json");
-            request.SetRequestHeader("Authorization", "Bearer " + jwt);
-
-            yield return request.SendWebRequest();
+            GameApiClient.ApiCallResult result = default;
+            yield return GameApiClient.Send(request, r => result = r);
 
             if (!isSearching) yield break; // was cancelled
 
-            if (request.result == UnityWebRequest.Result.Success)
+            if (result.Success)
             {
                 if (statusText != null) statusText.text = "Match found!";
                 
                 try 
                 {
-                    MatchmakingResponseData response = JsonUtility.FromJson<MatchmakingResponseData>(request.downloadHandler.text);
+                    MatchmakingResponseData response = JsonUtility.FromJson<MatchmakingResponseData>(result.Body);
                     
-                    // Save to global state
                     GlobalMatchState.SetMatchInfo(response.matchId, response.serverHost, response.serverPort);
                     
                     Debug.Log($"Match Found! ID: {response.matchId}, Host: {response.serverHost}:{response.serverPort}");
@@ -122,7 +117,7 @@ public class MatchmakingUIManager : MonoBehaviour
             }
             else
             {
-                string errorMsg = "Matchmaking failed: " + request.error;
+                string errorMsg = "Matchmaking failed: " + result.Error;
                 Debug.LogError(errorMsg);
                 if (statusText != null) statusText.text = errorMsg;
                 isSearching = false;
