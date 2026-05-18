@@ -93,8 +93,15 @@ void NetworkManager::workerThread() {
 void NetworkManager::handleReader(IoContext* ctx, DWORD lengthBuf) {
     if (lengthBuf == 0) { postReceive(ctx); return; }
 
+    // ── Parse timing: IOCP already delivered bytes — measure decode cost ──────
+    using Clock  = std::chrono::high_resolution_clock;
+    using Micros = std::chrono::microseconds;
+    auto t_parse_start = Clock::now();
+
+#ifdef DEBUG_NETWORK
     LOG_INFO("NetworkManager: recv {} bytes from {}:{}", lengthBuf,
              ntohl(ctx->clientAddr.sin_addr.s_addr), ntohs(ctx->clientAddr.sin_port));
+#endif
 
     ReadStream rs(reinterpret_cast<const uint32_t*>(ctx->buffer),
                   static_cast<int>(lengthBuf));
@@ -106,8 +113,10 @@ void NetworkManager::handleReader(IoContext* ctx, DWORD lengthBuf) {
         postReceive(ctx); return;
     }
 
+#ifdef DEBUG_NETWORK
     LOG_INFO("NetworkManager: parsed header → matchId={} opcode={}",
              hdr.matchId, static_cast<uint16_t>(hdr.opcode));
+#endif
 
     GameCommand cmd;
     cmd.sender   = ctx->clientAddr;
@@ -115,10 +124,19 @@ void NetworkManager::handleReader(IoContext* ctx, DWORD lengthBuf) {
     cmd.op       = hdr.opcode;
     cmd.rawBuffer.assign(ctx->buffer, ctx->buffer + lengthBuf);
 
-    // Recycle IoContext immediately — cmd owns a copy of the bytes
     postReceive(ctx);
 
+    auto parseUs = std::chrono::duration_cast<Micros>(Clock::now() - t_parse_start).count();
+    _accumRecvParseUs.fetch_add(static_cast<uint64_t>(parseUs), std::memory_order_relaxed);
+    _recvCount.fetch_add(1, std::memory_order_relaxed);
+    // ─────────────────────────────────────────────────────────────────────────
+
     if (_routeCb) _routeCb(std::move(cmd));
+}
+
+void NetworkManager::drainRecvStats(uint64_t& sumUs, uint32_t& count) {
+    sumUs = _accumRecvParseUs.exchange(0, std::memory_order_relaxed);
+    count = _recvCount.exchange(0, std::memory_order_relaxed);
 }
 
 void NetworkManager::send(const sockaddr_in& target, const uint8_t* data, size_t len) {
