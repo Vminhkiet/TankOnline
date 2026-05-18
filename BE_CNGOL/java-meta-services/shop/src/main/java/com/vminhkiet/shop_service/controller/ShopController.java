@@ -64,12 +64,11 @@ public class ShopController {
 
     @PostMapping("/purchase")
     public ResponseEntity<?> purchaseItem(
-            @RequestHeader(value = "X-Player-Id", required = false) Long playerId,
-            @Valid @RequestBody PurchaseRequest request) { // 1. Đổi Map thành PurchaseRequest và thêm @Valid
+            @RequestHeader(value = "X-User-Id", required = false) Long playerId,
+            @Valid @RequestBody PurchaseRequest request) {
 
-        // 2. Kiểm tra Header Player ID
         if (playerId == null) {
-            return ResponseEntity.badRequest().body("Lỗi: Header X-Player-Id bị thiếu hoặc sai tên!");
+            return ResponseEntity.badRequest().body("Lỗi: Header X-User-Id bị thiếu hoặc sai tên!");
         }
 
         // 3. Gọi Service đã sửa để xử lý mua danh sách item
@@ -84,9 +83,9 @@ public class ShopController {
 
     @GetMapping("/my-items")
     public ResponseEntity<?> getMyPurchasedItems(
-            @RequestHeader(value = "X-Player-Id", required = false) Long playerId) {
+            @RequestHeader(value = "X-User-Id", required = false) Long playerId) {
         if (playerId == null) {
-            return ResponseEntity.badRequest().body("Lỗi: Header X-Player-Id bị thiếu hoặc sai tên!");
+            return ResponseEntity.badRequest().body("Lỗi: Header X-User-Id bị thiếu hoặc sai tên!");
         }
 
         return ResponseEntity.ok(shopService.getPurchasedItemIds(playerId));

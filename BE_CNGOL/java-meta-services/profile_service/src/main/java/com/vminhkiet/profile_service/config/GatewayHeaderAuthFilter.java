@@ -22,7 +22,9 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
         String roles  = request.getHeader("X-User-Roles");
 
         String path = request.getRequestURI();
-        if (path.startsWith("/actuator") || path.startsWith("/internal") || path.startsWith("/api/profile/admin")) {
+        if (path.startsWith("/actuator") || path.startsWith("/internal")
+                || path.startsWith("/api/profile/admin")
+                || isPublicProfileView(path)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -42,5 +44,14 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(auth);
 
         filterChain.doFilter(request, response);
+    }
+
+    // /api/profile/{userId} is public; /api/profile/me, /me/coins, /giftcode, /admin require auth
+    private boolean isPublicProfileView(String path) {
+        if (!path.startsWith("/api/profile/")) return false;
+        String suffix = path.substring("/api/profile/".length());
+        if (suffix.isEmpty()) return false;
+        if (suffix.startsWith("me") || suffix.startsWith("admin") || suffix.startsWith("giftcode")) return false;
+        return !suffix.contains("/");
     }
 }

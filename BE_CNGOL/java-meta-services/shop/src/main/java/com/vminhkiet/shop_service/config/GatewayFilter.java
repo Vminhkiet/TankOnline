@@ -30,6 +30,12 @@ public class GatewayFilter implements Filter {
             return;
         }
 
+        // Public GET endpoints do not require a logged-in user
+        if (isPublicShopPath(req.getMethod(), path)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         // Kiểm tra user đã đăng nhập (gateway thêm header này sau khi validate JWT)
         String userId = req.getHeader("X-User-Id");
         if (userId == null || userId.isBlank() || "null".equals(userId)) {
@@ -40,5 +46,11 @@ public class GatewayFilter implements Filter {
         }
 
         chain.doFilter(request, response);
+    }
+
+    private boolean isPublicShopPath(String method, String path) {
+        if (!"GET".equalsIgnoreCase(method)) return false;
+        return path.equals("/api/shop/items")
+                || path.startsWith("/api/shop/items/");
     }
 }

@@ -36,7 +36,7 @@ public class GiftCodeController {
             RedeemCodeResponse response = giftCodeService.redeemCode(userId, req.getCode());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.ok(RedeemCodeResponse.builder()
+            return ResponseEntity.badRequest().body(RedeemCodeResponse.builder()
                     .success(false)
                     .message(e.getMessage())
                     .build());

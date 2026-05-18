@@ -6,6 +6,7 @@ import com.vminhkiet.history_service.model.MatchHistory.MatchResult;
 import com.vminhkiet.history_service.repository.MatchHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -17,8 +18,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class MatchResultKafkaListener {
 
+    public static final String LEADERBOARD_KEY = "leaderboard:kills";
+
     private final MatchHistoryRepository repo;
     private final ObjectMapper objectMapper;
+    private final StringRedisTemplate redisTemplate;
 
     @KafkaListener(topics = "match.result", groupId = "history-service")
     public void onMatchResult(String message) {
@@ -68,7 +72,14 @@ public class MatchResultKafkaListener {
                     .build();
 
             repo.save(h);
-            log.info("Saved match history: matchId={} userId={} result={}", event.getMatchId(), userId, result);
+            // Update leaderboard ZSET — O(log N), no DB query needed on read
+            if (killCount > 0) {
+                redisTemplate.opsForZSet().incrementScore(LEADERBOARD_KEY, userId, killCount);
+            } else {
+                // Ensure player exists in ZSET even with 0 kills (adds if absent)
+                redisTemplate.opsForZSet().addIfAbsent(LEADERBOARD_KEY, userId, 0);
+            }
+            log.info("Saved match history: matchId={} userId={} result={} kills={}", event.getMatchId(), userId, result, killCount);
         }
     }
 
