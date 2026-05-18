@@ -6,13 +6,32 @@ public class MainScreenButtonManager : MonoBehaviour
     [Header("Panels")]
     [SerializeField] private GameObject mainPanel;
 
+    [Header("Managed Buttons")]
+    [SerializeField] private MainScreenToggleButton[] managedButtons;
+
     private readonly List<MainScreenToggleButton> registeredButtons = new List<MainScreenToggleButton>();
 
     public MainScreenToggleButton CurrentButton { get; private set; }
 
     private void Start()
     {
+        RegisterManagedButtons();
         ShowMainPanel();
+    }
+
+    private void RegisterManagedButtons()
+    {
+        if (managedButtons == null || managedButtons.Length == 0)
+            return;
+
+        for (int i = 0; i < managedButtons.Length; i++)
+        {
+            MainScreenToggleButton button = managedButtons[i];
+            if (button != null)
+            {
+                RegisterButton(button);
+            }
+        }
     }
 
     public void RegisterButton(MainScreenToggleButton button)
@@ -40,6 +59,12 @@ public class MainScreenButtonManager : MonoBehaviour
         if (button == null)
             return;
 
+        // Deselect previous button
+        if (CurrentButton != null && CurrentButton != button)
+        {
+            CurrentButton.SetSelected(false);
+        }
+
         RegisterButton(button);
 
         if (CurrentButton == button)
@@ -53,6 +78,11 @@ public class MainScreenButtonManager : MonoBehaviour
 
     public void ShowMainPanel()
     {
+        if (CurrentButton != null)
+        {
+            CurrentButton.SetSelected(false);
+        }
+
         CurrentButton = null;
 
         if (mainPanel != null)
@@ -65,7 +95,9 @@ public class MainScreenButtonManager : MonoBehaviour
     private void ShowButtonPanel(MainScreenToggleButton button)
     {
         CurrentButton = button;
-        bool keepMainPanelActive = !button.HideMainAndOtherButtons || ShouldKeepMainPanelActive(button);
+        button.SetSelected(true);
+
+        bool keepMainPanelActive = !button.HideMainButtons || ShouldKeepMainPanelActive(button);
 
         SetAllTargetPanelsActiveState(button);
 

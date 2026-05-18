@@ -7,13 +7,18 @@ public class MainScreenToggleButton : MonoBehaviour
     [SerializeField] private MainScreenButtonManager manager;
     [SerializeField] private GameObject targetPanel;
     [SerializeField] private GameObject buttonRoot;
-    [SerializeField] private bool hideMainAndOtherButtons = true;
+    [SerializeField] private bool hideMainButtons = true;
+    [SerializeField] private bool hideOtherButtons = true;
+    [SerializeField] private GameObject selectedVisual;
 
     private Button cachedButton;
+    private bool isSelected;
 
     public GameObject TargetPanel => targetPanel;
     public GameObject ButtonRoot => buttonRoot;
-    public bool HideMainAndOtherButtons => hideMainAndOtherButtons;
+    public bool HideMainButtons => hideMainButtons;
+    public bool HideOtherButtons => hideOtherButtons;
+    public bool IsSelected => isSelected;
 
     private void Awake()
     {
@@ -25,8 +30,8 @@ public class MainScreenToggleButton : MonoBehaviour
         cachedButton = GetComponent<Button>();
         cachedButton.onClick.AddListener(HandleClick);
 
-        if (manager != null)
-            manager.RegisterButton(this);
+        if (selectedVisual != null)
+            selectedVisual.SetActive(false);
     }
 
     private void OnDestroy()
@@ -41,10 +46,26 @@ public class MainScreenToggleButton : MonoBehaviour
     public void RefreshState(MainScreenToggleButton selectedButton)
     {
         bool isSelected = selectedButton == this;
-        bool shouldBeVisible = selectedButton == null || isSelected || !selectedButton.HideMainAndOtherButtons;
+        this.isSelected = isSelected;
+
+        bool shouldBeVisible = selectedButton == null || isSelected || !selectedButton.HideOtherButtons;
 
         if (buttonRoot != null)
             buttonRoot.SetActive(shouldBeVisible);
+
+        UpdateSelectedVisual();
+    }
+
+    public void SetSelected(bool selected)
+    {
+        isSelected = selected;
+        UpdateSelectedVisual();
+    }
+
+    private void UpdateSelectedVisual()
+    {
+        if (selectedVisual != null)
+            selectedVisual.SetActive(isSelected);
     }
 
     private void HandleClick()

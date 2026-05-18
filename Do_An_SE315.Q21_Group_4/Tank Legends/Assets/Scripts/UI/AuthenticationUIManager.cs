@@ -3,7 +3,6 @@ using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using TMPro;
 using System.Collections;
-using System.Text;
 
 // ── DTOs khớp với Auth Service ────────────────────────────────────────────────
 
@@ -50,9 +49,9 @@ public class AuthenticationUIManager : MonoBehaviour
     public TextMeshProUGUI signupErrorText;
 
     [Header("API Settings")]
-    public string loginApiUrl  = "http://localhost:8080/api/auth/login";
-    public string signupApiUrl = "http://localhost:8080/api/auth/signup";
-    public string logoutApiUrl = "http://localhost:8080/api/auth/logout";
+    public string loginPath  = "/api/auth/login";
+    public string signupPath = "/api/auth/signup";
+    public string logoutPath = "/api/auth/logout";
 
     [Header("Scene Settings")]
     public string lobbySceneName = "Lobby";
@@ -119,27 +118,23 @@ public class AuthenticationUIManager : MonoBehaviour
 
         string json = JsonUtility.ToJson(new LoginRequestData { username = username, password = password });
 
-        using (UnityWebRequest req = new UnityWebRequest(loginApiUrl, "POST"))
+        using (UnityWebRequest req = GameApiClient.CreateRequest(loginPath, "POST", json, jwtOverride: ""))
         {
-            req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-
-            // yield KHÔNG được nằm trong try/catch — đặt ngoài
-            yield return req.SendWebRequest();
+            GameApiClient.ApiCallResult apiResult = default;
+            yield return GameApiClient.Send(req, r => apiResult = r);
 
             bool loginOk = false;
 
-            if (req.result == UnityWebRequest.Result.Success)
+            if (apiResult.Success)
             {
                 try
                 {
-                    AuthResponseData res = JsonUtility.FromJson<AuthResponseData>(req.downloadHandler.text);
+                    AuthResponseData res = JsonUtility.FromJson<AuthResponseData>(apiResult.Body);
                     if (!string.IsNullOrEmpty(res.jwt))
                     {
-                        PlayerPrefs.SetString("jwt",          res.jwt);
-                        PlayerPrefs.SetString("refreshToken", res.refreshToken);
-                        PlayerPrefs.SetString("username",     username);
+                        PlayerPrefs.SetString(GameApiClient.JwtKey, res.jwt);
+                        PlayerPrefs.SetString(GameApiClient.RefreshTokenKey, res.refreshToken);
+                        PlayerPrefs.SetString(GameApiClient.UsernameKey, username);
                         PlayerPrefs.Save();
                         loginOk = true;
                     }
@@ -153,10 +148,10 @@ public class AuthenticationUIManager : MonoBehaviour
             }
             else
             {
-                if (req.responseCode == 400 || req.responseCode == 401 || req.responseCode == 403)
+                if (apiResult.StatusCode == 400 || apiResult.StatusCode == 401 || apiResult.StatusCode == 403)
                     ShowLoginError("Sai tài khoản hoặc mật khẩu.");
                 else
-                    ShowLoginError("Lỗi kết nối: " + req.error);
+                    ShowLoginError("Lỗi kết nối: " + apiResult.Error);
                 isBusy = false;
             }
 
@@ -212,27 +207,25 @@ public class AuthenticationUIManager : MonoBehaviour
             password = password
         });
 
-        using (UnityWebRequest req = new UnityWebRequest(signupApiUrl, "POST"))
+        using (UnityWebRequest req = GameApiClient.CreateRequest(signupPath, "POST", json, jwtOverride: ""))
         {
-            req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-
-            yield return req.SendWebRequest();
+            GameApiClient.ApiCallResult apiResult = default;
+            yield return GameApiClient.Send(req, r => apiResult = r);
 
             bool goLobby    = false;
             bool goLogin    = false;
 
-            if (req.result == UnityWebRequest.Result.Success)
+            if (apiResult.Success)
             {
                 try
                 {
-                    AuthResponseData res = JsonUtility.FromJson<AuthResponseData>(req.downloadHandler.text);
+                    AuthResponseData res = JsonUtility.FromJson<AuthResponseData>(apiResult.Body);
                     if (!string.IsNullOrEmpty(res.jwt))
                     {
-                        PlayerPrefs.SetString("jwt",          res.jwt);
-                        PlayerPrefs.SetString("refreshToken", res.refreshToken);
-                        PlayerPrefs.SetString("username",     username);
+                        PlayerPrefs.SetString(GameApiClient.JwtKey, res.jwt);
+                        PlayerPrefs.SetString(GameApiClient.RefreshTokenKey, res.refreshToken);
+                        PlayerPrefs.SetString(GameApiClient.UsernameKey, username);
+                        PlayerPrefs.SetString(GameApiClient.EmailKey, email);
                         PlayerPrefs.Save();
                         ShowSignupError("Đăng ký thành công!");
                         goLobby = true;
@@ -251,12 +244,12 @@ public class AuthenticationUIManager : MonoBehaviour
             }
             else
             {
-                if (req.responseCode == 409)
+                if (apiResult.StatusCode == 409)
                     ShowSignupError("Tên đăng nhập hoặc email đã tồn tại.");
-                else if (req.responseCode == 400)
+                else if (apiResult.StatusCode == 400)
                     ShowSignupError("Thông tin đăng ký không hợp lệ.");
                 else
-                    ShowSignupError("Lỗi kết nối: " + req.error);
+                    ShowSignupError("Lỗi kết nối: " + apiResult.Error);
                 isBusy = false;
             }
 
@@ -287,7 +280,7 @@ public class AuthenticationUIManager : MonoBehaviour
     {
         isBusy = true;
 
-        yield return LogoutRequestCoroutine(logoutApiUrl);
+        yield return LogoutRequestCoroutine(logoutPath);
 
         ClearLocalAuth();
 
@@ -318,30 +311,27 @@ public class AuthenticationUIManager : MonoBehaviour
         SceneManager.LoadScene(loginScene);
     }
 
-    private static IEnumerator LogoutRequestCoroutine(string logoutUrl)
+    private static IEnumerator LogoutRequestCoroutine(string logoutPathOrUrl)
     {
-        string jwt = PlayerPrefs.GetString("jwt", "");
-        if (string.IsNullOrEmpty(jwt)) yield break;
+        if (!GameApiClient.HasJwt()) yield break;
 
-        using (UnityWebRequest req = new UnityWebRequest(logoutUrl, "POST"))
+        using (UnityWebRequest req = GameApiClient.CreateRequest(logoutPathOrUrl, "POST", jsonBody: "{}"))
         {
-            req.uploadHandler   = new UploadHandlerRaw(new byte[0]);
-            req.downloadHandler = new DownloadHandlerBuffer();
             req.timeout = 2;
-            req.SetRequestHeader("Content-Type",  "application/json");
-            req.SetRequestHeader("Authorization", "Bearer " + jwt);
-            yield return req.SendWebRequest();
+            GameApiClient.ApiCallResult result = default;
+            yield return GameApiClient.Send(req, r => result = r);
 
-            if (req.result != UnityWebRequest.Result.Success)
-                Debug.LogWarning("[Auth] Logout server error (ignored): " + req.error);
+            if (!result.Success)
+                Debug.LogWarning("[Auth] Logout server error (ignored): " + result.Error);
         }
     }
 
     public static void ClearLocalAuth()
     {
-        PlayerPrefs.DeleteKey("jwt");
-        PlayerPrefs.DeleteKey("refreshToken");
-        PlayerPrefs.DeleteKey("username");
+        PlayerPrefs.DeleteKey(GameApiClient.JwtKey);
+        PlayerPrefs.DeleteKey(GameApiClient.RefreshTokenKey);
+        PlayerPrefs.DeleteKey(GameApiClient.UsernameKey);
+        PlayerPrefs.DeleteKey(GameApiClient.EmailKey);
         PlayerPrefs.Save();
     }
 

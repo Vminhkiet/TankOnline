@@ -16,15 +16,14 @@ public class ProfileController {
     private final ProfileService profileService;
 
     /**
-     * Lấy profile của player đang đăng nhập (tự tạo nếu chưa có).
+     * Lấy profile của player đang đăng nhập (tự tạo bản ghi nếu chưa có — ví dụ Kafka user.created bị bỏ lỡ).
      * GET /api/profile/me
      */
     @GetMapping("/me")
     public ResponseEntity<ProfileResponse> getMyProfile(
             @RequestHeader("X-User-Id") String userId) {
-        ProfileResponse profile = profileService.findProfile(userId);
-        if (profile == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(profile);
+        // Luôn có bản ghi: Kafka user.created có thể bỏ lỡ (service tắt / topic chưa có).
+        return ResponseEntity.ok(profileService.getOrCreateProfile(userId));
     }
 
     /**
@@ -55,8 +54,7 @@ public class ProfileController {
      */
     @GetMapping("/me/coins")
     public ResponseEntity<?> getMyCoins(@RequestHeader("X-User-Id") String userId) {
-        ProfileResponse profile = profileService.findProfile(userId);
-        if (profile == null) return ResponseEntity.notFound().build();
+        ProfileResponse profile = profileService.getOrCreateProfile(userId);
         return ResponseEntity.ok(java.util.Map.of("coins", profile.getCoins()));
     }
 }
