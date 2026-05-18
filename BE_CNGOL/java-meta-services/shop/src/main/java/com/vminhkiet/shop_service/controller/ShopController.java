@@ -82,6 +82,16 @@ public class ShopController {
         }
     }
 
+    @GetMapping("/my-items")
+    public ResponseEntity<?> getMyPurchasedItems(
+            @RequestHeader(value = "X-Player-Id", required = false) Long playerId) {
+        if (playerId == null) {
+            return ResponseEntity.badRequest().body("Lỗi: Header X-Player-Id bị thiếu hoặc sai tên!");
+        }
+
+        return ResponseEntity.ok(shopService.getPurchasedItemIds(playerId));
+    }
+
     @PostMapping("/admin/items")
     public ResponseEntity<ItemDTO> createItem(@RequestBody ItemDTO itemDTO) {
 

@@ -224,4 +224,13 @@ public class ShopServiceImpl implements GameService {
         public long getShopVersion() {
                 return shopVersion.get();
         }
+
+        @Override
+        public List<Long> getPurchasedItemIds(Long playerId) {
+                return playerItemRepository.findByPlayerId(playerId).stream()
+                                .map(playerInfo -> playerInfo.getItem() != null ? playerInfo.getItem().getId() : null)
+                                .filter(java.util.Objects::nonNull)
+                                .distinct()
+                                .collect(Collectors.toList());
+        }
 }

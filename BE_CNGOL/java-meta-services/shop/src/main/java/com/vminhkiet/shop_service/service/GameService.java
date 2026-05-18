@@ -22,4 +22,6 @@ public interface GameService {
     void deleteItem(Long id);
 
     long getShopVersion();
+
+    List<Long> getPurchasedItemIds(Long playerId);
 }

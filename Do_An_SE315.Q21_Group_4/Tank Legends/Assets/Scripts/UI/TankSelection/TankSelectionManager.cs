@@ -71,6 +71,24 @@ public class TankSelectionManager : MonoBehaviour
     private long cachedShopVersion = -1;
     private bool shopDataLoaded = false;
 
+    public bool TryGetSelectedShopItem(out int itemId, out int price, out bool available)
+    {
+        itemId = -1;
+        price = 0;
+        available = false;
+
+        if (CurrentTank == null)
+            return false;
+
+        if (!shopItemsByName.TryGetValue(CurrentTank.TankName, out ShopItemDTO shopItem) || shopItem == null)
+            return false;
+
+        itemId = shopItem.id;
+        price = Mathf.Max(0, Mathf.RoundToInt(shopItem.price));
+        available = shopItem.available;
+        return true;
+    }
+
     private IEnumerator Start()
     {
         // Load cached data for immediate display
