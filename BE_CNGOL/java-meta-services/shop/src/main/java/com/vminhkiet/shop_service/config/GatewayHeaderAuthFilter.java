@@ -22,7 +22,7 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
         String roles  = request.getHeader("X-User-Roles");
 
         String path = request.getRequestURI();
-        if (path.startsWith("/actuator")) {
+        if (path.startsWith("/actuator") || isPublicShopPath(request.getMethod(), path)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -42,5 +42,12 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(auth);
 
         filterChain.doFilter(request, response);
+    }
+
+    // GET /api/shop/items, /api/shop/items/version, /api/shop/items/category/*, /api/shop/items/{id}
+    private boolean isPublicShopPath(String method, String path) {
+        if (!"GET".equalsIgnoreCase(method)) return false;
+        return path.equals("/api/shop/items")
+                || path.startsWith("/api/shop/items/");
     }
 }

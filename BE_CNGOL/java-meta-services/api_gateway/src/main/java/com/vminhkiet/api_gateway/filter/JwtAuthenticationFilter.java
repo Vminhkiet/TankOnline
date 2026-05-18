@@ -29,17 +29,29 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/history/leaderboard"
     );
 
+    // Endpoints accessible without JWT but still forward X-User-Id when JWT is present
+    private static final List<String> OPTIONAL_AUTH_ENDPOINTS = List.of(
+            "/api/shop/items",
+            "/api/shop/items/"
+    );
+
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
 
-        if (exchange.getRequest().getMethod() == HttpMethod.OPTIONS || isPublicEndpoint(path)) {
+        if (exchange.getRequest().getMethod() == HttpMethod.OPTIONS) {
             return chain.filter(exchange);
         }
+
+        boolean isPublic = isPublicEndpoint(path);
+        boolean isOptionalAuth = isOptionalAuthEndpoint(path) || isPublicProfileView(path);
 
         String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            if (isPublic || isOptionalAuth) {
+                return chain.filter(exchange);
+            }
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
@@ -65,6 +77,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange.mutate().request(mutatedRequest).build());
 
         } catch (Exception e) {
+            if (isPublic || isOptionalAuth) {
+                return chain.filter(exchange);
+            }
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
@@ -72,6 +87,20 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private boolean isPublicEndpoint(String path) {
         return PUBLIC_ENDPOINTS.stream().anyMatch(path::startsWith);
+    }
+
+    private boolean isOptionalAuthEndpoint(String path) {
+        return OPTIONAL_AUTH_ENDPOINTS.stream().anyMatch(path::startsWith);
+    }
+
+    // GET /api/profile/{userId} is public (view other player's profile)
+    // but /api/profile/me, /api/profile/me/coins, /api/profile/giftcode, /api/profile/admin require auth
+    private boolean isPublicProfileView(String path) {
+        if (!path.startsWith("/api/profile/")) return false;
+        String suffix = path.substring("/api/profile/".length());
+        if (suffix.isEmpty()) return false;
+        if (suffix.startsWith("me") || suffix.startsWith("admin") || suffix.startsWith("giftcode")) return false;
+        return !suffix.contains("/");
     }
 
     @Override
