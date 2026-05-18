@@ -8,6 +8,8 @@ cd /d "%~dp0"
 :: MODE CONFIG
 :: =========================
 set MODE=DEV
+set LAN_MODE=OFF
+set LAN_IP=
 
 :MENU
 cls
@@ -15,31 +17,38 @@ echo ==================================================
 echo        TANK LEGENDS MICROSERVICES MANAGER
 echo ==================================================
 echo Current Mode: %MODE%
+if "%LAN_MODE%"=="ON" (
+    echo LAN Mode:     ON  [IP: %LAN_IP%]
+) else (
+    echo LAN Mode:     OFF [localhost only]
+)
 echo --------------------------------------------------
-echo 1. Toggle DEV / PROD mode
-echo 2. Start ALL Services
-echo 3. Start Discovery ONLY
-echo 4. Start Auth ONLY
-echo 5. Start Shop ONLY
-echo 6. Start Matchmaking ONLY
-echo 7. Start History ONLY
-echo 8. Start API Gateway ONLY
-echo 9. Start Profile ONLY
-echo 10. Stop ALL Services
-echo 0. Exit
+echo  1. Toggle DEV / PROD mode
+echo  2. Toggle LAN mode (auto-detect IP)
+echo  3. Start ALL Services
+echo  4. Start Discovery ONLY
+echo  5. Start Auth ONLY
+echo  6. Start Shop ONLY
+echo  7. Start Matchmaking ONLY
+echo  8. Start History ONLY
+echo  9. Start API Gateway ONLY
+echo 10. Start Profile ONLY
+echo 11. Stop ALL Services
+echo  0. Exit
 echo ==================================================
 set /p choice="Select option: "
 
 if "%choice%"=="1" goto TOGGLE_MODE
-if "%choice%"=="2" goto START_ALL
-if "%choice%"=="3" goto START_DISCOVERY
-if "%choice%"=="4" goto START_AUTH
-if "%choice%"=="5" goto START_SHOP
-if "%choice%"=="6" goto START_MATCHMAKING
-if "%choice%"=="7" goto START_HISTORY
-if "%choice%"=="8" goto START_GATEWAY
-if "%choice%"=="9" goto START_PROFILE
-if "%choice%"=="10" goto STOP_ALL
+if "%choice%"=="2" goto TOGGLE_LAN
+if "%choice%"=="3" goto START_ALL
+if "%choice%"=="4" goto START_DISCOVERY
+if "%choice%"=="5" goto START_AUTH
+if "%choice%"=="6" goto START_SHOP
+if "%choice%"=="7" goto START_MATCHMAKING
+if "%choice%"=="8" goto START_HISTORY
+if "%choice%"=="9" goto START_GATEWAY
+if "%choice%"=="10" goto START_PROFILE
+if "%choice%"=="11" goto STOP_ALL
 if "%choice%"=="0" goto END
 
 goto MENU
@@ -53,6 +62,37 @@ if "%MODE%"=="DEV" (
 ) else (
     set MODE=DEV
 )
+goto MENU
+
+:: =========================
+:: LAN TOGGLE (auto-detect IP)
+:: =========================
+:TOGGLE_LAN
+if "%LAN_MODE%"=="ON" (
+    set LAN_MODE=OFF
+    set LAN_IP=
+    echo.
+    echo LAN mode disabled. Services will use localhost.
+) else (
+    set LAN_MODE=ON
+    set LAN_IP=
+    for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /i "IPv4" ^| findstr /v "127.0"') do (
+        if "!LAN_IP!"=="" (
+            for /f "tokens=*" %%b in ("%%a") do set LAN_IP=%%b
+        )
+    )
+    if "!LAN_IP!"=="" (
+        echo [ERROR] Could not detect LAN IP.
+        set LAN_MODE=OFF
+    ) else (
+        echo.
+        echo LAN mode enabled. Detected IP: !LAN_IP!
+        echo   - API Gateway will bind 0.0.0.0:8080
+        echo   - Matchmaking will return server host: !LAN_IP!
+    )
+)
+echo.
+pause
 goto MENU
 
 :: =========================
@@ -91,7 +131,12 @@ echo [7/7] Starting API Gateway (LAST)...
 call :START_SERVICE api_gateway "API Gateway"
 
 echo.
-echo All services started successfully.
+if "%LAN_MODE%"=="ON" (
+    echo All services started in LAN mode.
+    echo Phone can connect to: http://%LAN_IP%:8080
+) else (
+    echo All services started successfully.
+)
 pause
 goto MENU
 
@@ -101,21 +146,28 @@ goto MENU
 :START_SERVICE
 set "SERVICE_DIR=%~1"
 set "WINDOW_TITLE=%~2"
-set "SVC_PATH=%~dp0java-meta-services\%SERVICE_DIR%"
 
-if "%MODE%"=="DEV" (
-    pushd "%SVC_PATH%"
-    start "%WINDOW_TITLE%" cmd /k "mvn spring-boot:run & pause"
-    popd
-) else (
-    pushd "%SVC_PATH%\target"
-    for %%f in (*.jar) do (
-        start "%WINDOW_TITLE%" cmd /k "java -jar %%f & pause"
+:: Write a temp launcher script for this service
+set "LAUNCHER=%TEMP%\tank_launch_%SERVICE_DIR%.cmd"
+(
+    echo @echo off
+    echo cd /d "%~dp0java-meta-services\%SERVICE_DIR%"
+    if "%LAN_MODE%"=="ON" (
+        echo set GAME_SERVER_HOST=%LAN_IP%
+        echo set SERVER_ADDRESS=0.0.0.0
     )
-    popd
-)
+    if "%MODE%"=="DEV" (
+        echo mvn spring-boot:run
+    ) else (
+        echo for %%%%f in ^(target\*.jar^) do java -jar %%%%f
+    )
+    echo pause
+) > "%LAUNCHER%"
+
+start "%WINDOW_TITLE%" cmd /k "call "%LAUNCHER%""
 
 goto :eof
+
 :: =========================
 :: INDIVIDUAL STARTS
 :: =========================

@@ -10,28 +10,20 @@ using UnityEngine.Networking;
 /// </summary>
 public static class GameApiClient
 {
+    // Đổi IP này thành IP LAN của máy PC khi test trên điện thoại
+    // Build cho điện thoại: dùng #else bên dưới
+#if UNITY_EDITOR
     public const string DefaultBaseUrl = "http://localhost:8080";
-    public const string JwtKey = "jwt";
+#else
+    public const string DefaultBaseUrl = "http://192.168.137.86:8080";
+#endif
+    public const string JwtKey          = "jwt";
     public const string RefreshTokenKey = "refreshToken";
-    public const string UsernameKey = "username";
-    public const string EmailKey = "email";
-    public const string BaseUrlKey = "api_base_url";
+    public const string UsernameKey     = "username";
+    public const string EmailKey        = "email";
 
-    public static string BaseUrl
-    {
-        get
-        {
-            string saved = PlayerPrefs.GetString(BaseUrlKey, DefaultBaseUrl);
-            return string.IsNullOrWhiteSpace(saved) ? DefaultBaseUrl : saved.Trim().TrimEnd('/');
-        }
-        set
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                PlayerPrefs.DeleteKey(BaseUrlKey);
-            else
-                PlayerPrefs.SetString(BaseUrlKey, value.Trim().TrimEnd('/'));
-        }
-    }
+    // BaseUrl luôn dùng DefaultBaseUrl — không lưu PlayerPrefs để tránh localhost bị cache từ Editor
+    public static string BaseUrl => DefaultBaseUrl;
 
     public static string GetJwt() => PlayerPrefs.GetString(JwtKey, "");
 

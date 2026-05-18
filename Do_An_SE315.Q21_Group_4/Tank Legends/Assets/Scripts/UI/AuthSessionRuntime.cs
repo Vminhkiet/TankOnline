@@ -12,7 +12,7 @@ public class AuthSessionRuntime : MonoBehaviour
     public TextMeshProUGUI warningText;
 
     [Header("Auth Settings")]
-    public string logoutApiUrl = "http://localhost:8080/api/auth/logout";
+    public string logoutApiPath = "/api/auth/logout";
     public string loginSceneName = "Authentication";
     public int defaultCountdownSeconds = 10;
 
@@ -32,7 +32,7 @@ public class AuthSessionRuntime : MonoBehaviour
 
     private void OnApplicationQuit()
     {
-        AuthenticationUIManager.LogoutSilently(this, logoutApiUrl);
+        AuthenticationUIManager.LogoutSilently(this, GameApiClient.BuildUrl(logoutApiPath));
         AuthenticationUIManager.ClearLocalAuth();
     }
 
@@ -62,7 +62,7 @@ public class AuthSessionRuntime : MonoBehaviour
             yield return new WaitForSeconds(1f);
         }
 
-        AuthenticationUIManager.LogoutSilently(this, logoutApiUrl);
+        AuthenticationUIManager.LogoutSilently(this, GameApiClient.BuildUrl(logoutApiPath));
         AuthenticationUIManager.ClearLocalAuth();
 
         yield return new WaitForSeconds(0.2f);
