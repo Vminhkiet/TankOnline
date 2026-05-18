@@ -27,6 +27,7 @@ public:
                      const uint8_t* data, size_t len)             override;
     void        setRouteCallback(std::function<void(GameCommand)> cb) override { _routeCb = std::move(cb); }
     const char* backendName() const                               override { return "IOCP"; }
+    void        drainRecvStats(uint64_t& sumUs, uint32_t& count)  override;
 
 private:
     void workerThread();
@@ -39,4 +40,7 @@ private:
     std::atomic<bool>        _running{false};
     BufferPool               _pool;
     std::function<void(GameCommand)> _routeCb;
+
+    std::atomic<uint64_t> _accumRecvParseUs{0};
+    std::atomic<uint32_t> _recvCount{0};
 };

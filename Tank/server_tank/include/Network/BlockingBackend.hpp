@@ -29,6 +29,7 @@ public:
                      const uint8_t* data, size_t len)             override;
     void        setRouteCallback(std::function<void(GameCommand)>) override;
     const char* backendName() const                               override { return "Blocking-recvfrom"; }
+    void        drainRecvStats(uint64_t& sumUs, uint32_t& count)  override;
 
 private:
     void recvLoop();
@@ -37,6 +38,10 @@ private:
     std::atomic<bool>                _running     {false};
     int                              _numReceivers;
     std::vector<std::thread>         _recvThreads;
-    BufferPool                       _pool;                // shared: 10 000 IoContext
+    BufferPool                       _pool;
     std::function<void(GameCommand)> _routeCb;
+
+    // Recv-parse profiling — accumulated by recvLoop threads, drained by MatchManager [Perf]
+    std::atomic<uint64_t> _accumRecvParseUs{0};
+    std::atomic<uint32_t> _recvCount{0};
 };

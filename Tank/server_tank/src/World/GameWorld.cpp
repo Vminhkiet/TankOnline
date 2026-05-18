@@ -69,19 +69,13 @@ void GameWorld::processInput(uint32_t playerId, const ClientInput& input)
 // World update – called once per server tick
 // ════════════════════════════════════════════════════════════════════════════
 
-void GameWorld::update(float deltaTime)
+void GameWorld::updateBullets(float deltaTime)
 {
-    // 0. Apply last received input for every tank (runs every tick, not just on packet arrival)
-    for (auto& [id, tank] : _tanks)
-        if (tank.isAlive) tank.update(deltaTime);
-
-    constexpr float GRAVITY        = 20.f;   // tank gravity
-    constexpr float BULLET_GRAVITY = 3.0f;   // reduced so 20-30 m/s bullets reach 20-30m
-
-    // 1. Move bullets — XZ-only tank hit (Y ignored on flat map), swept CCD for walls
+    constexpr float BULLET_GRAVITY = 3.0f;
     const GameMap::TankConfig& tankCfg = _map.getTankConfig();
     float bulletHitX = tankCfg.extentX + _map.getBulletConfig().hitRadius;
     float bulletHitZ = tankCfg.extentZ + _map.getBulletConfig().hitRadius;
+
     for (auto& b : _bullets) {
         if (!b.isActive) continue;
 
@@ -100,10 +94,6 @@ void GameWorld::update(float deltaTime)
         float   hitFrac = 1.f;
         Vector3 hitNorm;
 
-        // Ground check is deferred to after physics tick so BULLET_VS_TANK
-        // manifolds are processed first (prevents bullets being killed by the
-        // ground before the physics overlap with the tank is detected).
-
         if (_physics.sweptSphereVsStatic(b.position, Bullet::RADIUS, delta, hitFrac, hitNorm)) {
             Vector3 hitPos = b.position + delta * hitFrac;
             LOG_INFO("[Bullet] HIT_WALL id={} owner={} hitPos=({:.2f},{:.2f},{:.2f}) norm=({:.2f},{:.2f},{:.2f})",
@@ -116,7 +106,6 @@ void GameWorld::update(float deltaTime)
             b.position = b.position + delta;
             _physics.updateSphere(b.id, b.position);
 
-            // XZ-only hit: project bullet onto each tank's local axes, ignore Y
             for (auto& [tid, tank] : _tanks) {
                 if (!tank.isAlive || tid == b.ownerTankId) continue;
                 float dx = b.position.x - tank.position.x;
@@ -142,14 +131,34 @@ void GameWorld::update(float deltaTime)
         }
     }
 
-    // 2. Apply gravity and snap to terrain (heightmap + elevated box surfaces)
+    // Ground check — deferred from bullet move (after physics manifolds processed)
+    for (auto& b : _bullets) {
+        if (!b.isActive) continue;
+        float groundY = surfaceHeight(b.position.x, b.position.z);
+        if (b.position.y <= groundY + Bullet::RADIUS) {
+            LOG_INFO("[Bullet] LAND id={} owner={} pos=({:.2f},{:.2f},{:.2f})",
+                     b.id, b.ownerTankId, b.position.x, b.position.y, b.position.z);
+            b.isActive = false;
+            _physics.removeSphere(b.id);
+        }
+    }
+}
+
+void GameWorld::runPhysics(float deltaTime)
+{
+    constexpr float GRAVITY = 20.f;
+
+    // Tank input integration
+    for (auto& [id, tank] : _tanks)
+        if (tank.isAlive) tank.update(deltaTime);
+
+    // Apply gravity and snap to terrain
     for (auto& [id, tank] : _tanks) {
         if (!tank.isAlive) continue;
         uint32_t boxId  = 0;
         float groundY   = surfaceHeight(tank.position.x, tank.position.z, &boxId);
         uint32_t prevBox = _tankOnBox.count(id) ? _tankOnBox.at(id) : 0;
 
-        // Log surface enter / leave
         if (boxId != prevBox) {
             if (boxId != 0)
                 LOG_INFO("[Surface] tank {} entered walkable box {} (top={:.3f}) pos=({:.2f},{:.2f},{:.2f})",
@@ -174,28 +183,16 @@ void GameWorld::update(float deltaTime)
         }
     }
 
-    // 3. Push current tank positions into physics capsules
+    // Push tank positions into physics broadphase
     syncColliders();
 
-    // 4. Physics tick (broad-phase grid → narrow-phase → corrections)
+    // Broad-phase → narrow-phase → generate manifolds + corrections
     _physics.Tick();
 
-    // 5. Apply corrections + handle collision events
+    // Apply position corrections and spawn bullets from wantsShoot flags
     applyPhysicsResults(deltaTime);
 
-    // 6. Ground check — bullet lands, deactivate (matches client trajectory)
-    for (auto& b : _bullets) {
-        if (!b.isActive) continue;
-        float groundY = surfaceHeight(b.position.x, b.position.z);
-        if (b.position.y <= groundY + Bullet::RADIUS) {
-            LOG_INFO("[Bullet] LAND id={} owner={} pos=({:.2f},{:.2f},{:.2f})",
-                     b.id, b.ownerTankId, b.position.x, b.position.y, b.position.z);
-            b.isActive = false;
-            _physics.removeSphere(b.id);
-        }
-    }
-
-    // 7. Respawn dead tanks (only when respawn is enabled, i.e. non-match mode)
+    // Respawn (non-match/training mode only)
     if (_respawnOnDeath) {
         const GameMap::TankConfig& cfg = _map.getTankConfig();
         for (auto& [id, tank] : _tanks) {
@@ -204,7 +201,6 @@ void GameWorld::update(float deltaTime)
                 tank.health   = Tank::MAX_HEALTH;
                 tank.isAlive  = true;
                 tank.velocity = {};
-                // Re-add the OBB (was removed when tank died)
                 OBBCollider obb;
                 obb.entityId = id;
                 obb.isActive = true;
@@ -219,6 +215,12 @@ void GameWorld::update(float deltaTime)
             }
         }
     }
+}
+
+void GameWorld::update(float deltaTime)
+{
+    updateBullets(deltaTime);
+    runPhysics(deltaTime);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -371,13 +373,13 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Default spawn positions – 8 slots spread around a circle (r=20)
+// Default spawn positions – 10 slots spread around a circle (r=22)
 // ════════════════════════════════════════════════════════════════════════════
 
 Vector3 GameWorld::defaultSpawn(uint32_t playerId)
 {
-    constexpr float R     = 20.f;
-    constexpr int   SLOTS = 8;
+    constexpr float R     = 22.f;
+    constexpr int   SLOTS = 10;
     float angle = static_cast<float>(playerId % SLOTS) / SLOTS * 6.2831853f;
     return { R * std::cos(angle), 1.f, R * std::sin(angle) };
 }

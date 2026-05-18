@@ -12,7 +12,11 @@ using json = nlohmann::json;
 static size_t resolvePoolSize() {
     const char* v = std::getenv("NUM_WORKERS");
     if (v && std::atoi(v) > 0) return static_cast<size_t>(std::atoi(v));
+#ifdef PROFILING_SINGLE_CORE
+    return 1;   // PROFILING: pin to 1 worker → isolate GPC limit per core
+#else
     return std::thread::hardware_concurrency();
+#endif
 }
 
 MatchManager::MatchManager(INetworkBackend& network)
@@ -111,14 +115,21 @@ void MatchManager::tickDispatcher() {
     if (++_statTicks >= STATS_INTERVAL_TICKS) {
         double avgUs      = static_cast<double>(_statSumUs) / _statTicks;
         double overrunPct = 100.0 * _statOverruns / _statTicks;
+
+        uint64_t recvSumUs = 0; uint32_t recvCount = 0;
+        _network.drainRecvStats(recvSumUs, recvCount);
+        double recvAvgUs = recvCount > 0 ? static_cast<double>(recvSumUs) / recvCount : 0.0;
+
         LOG_INFO(
             "[Perf] ticks={} matches={} pool_pending={} | "
-            "tick avg={:.0f}µs min={}µs max={}µs | overruns={} ({:.1f}%)",
+            "tick avg={:.0f}µs min={}µs max={}µs | overruns={} ({:.1f}%) | "
+            "recv_parse avg={:.1f}µs pkts={}",
             _statTicks,
             active.size(),
             _pool.pendingCount(),
             avgUs, _statMinUs, _statMaxUs,
-            _statOverruns, overrunPct
+            _statOverruns, overrunPct,
+            recvAvgUs, recvCount
         );
 
         for (Match* m : active) {
