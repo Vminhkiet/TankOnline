@@ -1,5 +1,6 @@
 package com.vminhkiet.history_service.controller;
 
+import com.vminhkiet.history_service.dto.LeaderboardEntryResponse;
 import com.vminhkiet.history_service.dto.MatchHistoryResponse;
 import com.vminhkiet.history_service.dto.PlayerStatsResponse;
 import com.vminhkiet.history_service.dto.SaveMatchRequest;
@@ -60,7 +61,7 @@ public class HistoryController {
      * GET /api/history/leaderboard
      */
     @GetMapping("/leaderboard")
-    public ResponseEntity<List<Map<String, Object>>> getLeaderboard() {
+    public ResponseEntity<List<LeaderboardEntryResponse>> getLeaderboard() {
         return ResponseEntity.ok(historyService.getLeaderboard());
     }
 
