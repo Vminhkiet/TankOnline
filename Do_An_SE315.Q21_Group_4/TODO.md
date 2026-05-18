@@ -1,13 +1,7 @@
-# TODO - Unity client force logout flow
+# TODO - Shop Ownership Sync (Backend + Client)
 
-- [x] Add a client-side force logout manager to show warning countdown (10s) and then leave game.
-- [x] Hook automatic logout call on app quit (best-effort, short timeout).
-- [x] Add simple API in AuthenticationUIManager to clear local auth and return to login scene.
-- [x] Integrate with existing network flow (manual trigger method now; wire realtime packet later from gateway message handler).
-- [ ] Critical-path test:
-  - [ ] Trigger force logout manually in play mode and verify warning + countdown + return to login.
-  - [ ] Verify OnApplicationQuit calls logout endpoint best-effort and clears local token.
-
-## Progress
-- [x] Plan approved by user
-- [x] Refactored to singleton persistent runtime (AuthSessionRuntime)
+- [ ] Backend: Add `GET /api/shop/my-items` endpoint (read purchased item ids by player).
+- [ ] Backend: Extend `GameService` + `ShopServiceImpl` with purchased-item query method.
+- [ ] Client: Update `TankPurchaseManager` to load ownership from `/api/shop/my-items` (server source of truth).
+- [ ] Client: Keep Buy/Owned UI in sync after purchase + refresh ownership data.
+- [ ] Run API + critical-path verification and report status.
