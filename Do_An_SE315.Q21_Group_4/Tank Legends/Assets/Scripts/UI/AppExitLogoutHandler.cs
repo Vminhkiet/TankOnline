@@ -11,7 +11,7 @@ public class AppExitLogoutHandler : MonoBehaviour
         }
 
         // Delegated to singleton runtime
-        AuthenticationUIManager.LogoutSilently(AuthSessionRuntime.Instance, AuthSessionRuntime.Instance.logoutApiUrl);
+        AuthenticationUIManager.LogoutSilently(AuthSessionRuntime.Instance, GameApiClient.BuildUrl(AuthSessionRuntime.Instance.logoutApiPath));
         AuthenticationUIManager.ClearLocalAuth();
     }
 }

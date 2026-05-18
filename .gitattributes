@@ -1,0 +1,15 @@
+# Unity generated binary assets — luôn giữ phiên bản hiện tại khi merge
+*.asset merge=ours
+*.unity merge=ours
+*.prefab merge=ours
+*.mat merge=ours
+*.physicMaterial merge=ours
+*.controller merge=ours
+*.overrideController merge=ours
+*.anim merge=ours
+*.lighting merge=ours
+*.meta merge=ours
+
+# LFS (nếu dùng sau này)
+# *.png filter=lfs diff=lfs merge=lfs -text
+# *.fbx filter=lfs diff=lfs merge=lfs -text

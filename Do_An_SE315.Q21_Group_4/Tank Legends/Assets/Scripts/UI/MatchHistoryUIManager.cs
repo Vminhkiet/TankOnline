@@ -122,18 +122,20 @@ public class MatchHistoryUIManager : MonoBehaviour
 
         string json = JsonUtility.ToJson(reqBody);
 
-        using var req = GameApiClient.CreateRequest(MatchPath, "POST", json);
-        Debug.Log($"[History] SaveMatch request | path={MatchPath}");
-        GameApiClient.ApiCallResult result = default;
-        yield return GameApiClient.Send(req, r => result = r);
-
-        if (!result.Success)
+        using (UnityWebRequest req = GameApiClient.CreateRequest(MatchPath, "POST", json))
         {
-            Debug.LogError($"[History] SaveMatch failed | {result.ErrorMessage}");
-            yield break;
-        }
+            Debug.Log($"[History] SaveMatch request | path={MatchPath}");
+            GameApiClient.ApiCallResult result = default;
+            yield return GameApiClient.Send(req, r => result = r);
 
-        Debug.Log($"[History] SaveMatch success | status={result.StatusCode} | body={result.Body}");
+            if (!result.Success)
+            {
+                Debug.LogError($"[History] SaveMatch failed | {result.ErrorMessage}");
+                yield break;
+            }
+
+            Debug.Log($"[History] SaveMatch success | status={result.StatusCode} | body={result.Body}");
+        }
     }
 
     private IEnumerator LoadStats()
@@ -144,41 +146,43 @@ public class MatchHistoryUIManager : MonoBehaviour
             yield break;
         }
 
-        using var req = GameApiClient.CreateRequest(StatsPath, UnityWebRequest.kHttpVerbGET);
-        Debug.Log($"[History] LoadStats request | path={StatsPath}");
-
-        GameApiClient.ApiCallResult result = default;
-        yield return GameApiClient.Send(req, r => result = r);
-
-        if (!result.Success)
+        using (UnityWebRequest req = GameApiClient.CreateRequest(StatsPath, UnityWebRequest.kHttpVerbGET))
         {
-            Debug.LogError($"[History] LoadStats failed | {result.ErrorMessage}");
-            yield break;
-        }
+            Debug.Log($"[History] LoadStats request | path={StatsPath}");
 
-        Debug.Log($"[History] LoadStats success | status={result.StatusCode} | body={result.Body}");
+            GameApiClient.ApiCallResult result = default;
+            yield return GameApiClient.Send(req, r => result = r);
 
-        PlayerStats stats;
-        try
-        {
-            stats = JsonUtility.FromJson<PlayerStats>(result.Body);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[History] LoadStats parse failed | ex={ex.Message} | body={result.Body}");
-            yield break;
-        }
+            if (!result.Success)
+            {
+                Debug.LogError($"[History] LoadStats failed | {result.ErrorMessage}");
+                yield break;
+            }
 
-        if (stats == null)
-        {
-            Debug.LogWarning("[History] LoadStats parsed null stats.");
-            yield break;
-        }
+            Debug.Log($"[History] LoadStats success | status={result.StatusCode} | body={result.Body}");
 
-        if (totalMatchesText) totalMatchesText.text = stats.totalMatches.ToString();
-        if (winRateText) winRateText.text = $"{(stats.winRate * 100):F0}%";
-        if (totalKillsText) totalKillsText.text = stats.totalKills.ToString();
-        if (bestStreakText) bestStreakText.text = stats.bestKillStreak.ToString();
+            PlayerStats stats;
+            try
+            {
+                stats = JsonUtility.FromJson<PlayerStats>(result.Body);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[History] LoadStats parse failed | ex={ex.Message} | body={result.Body}");
+                yield break;
+            }
+
+            if (stats == null)
+            {
+                Debug.LogWarning("[History] LoadStats parsed null stats.");
+                yield break;
+            }
+
+            if (totalMatchesText) totalMatchesText.text = stats.totalMatches.ToString();
+            if (winRateText) winRateText.text = $"{(stats.winRate * 100):F0}%";
+            if (totalKillsText) totalKillsText.text = stats.totalKills.ToString();
+            if (bestStreakText) bestStreakText.text = stats.bestKillStreak.ToString();
+        }
     }
 
     private IEnumerator LoadHistory()
@@ -189,56 +193,58 @@ public class MatchHistoryUIManager : MonoBehaviour
             yield break;
         }
 
-        using var req = GameApiClient.CreateRequest(HistoryPath, UnityWebRequest.kHttpVerbGET);
-        Debug.Log($"[History] LoadHistory request | path={HistoryPath}");
-
-        GameApiClient.ApiCallResult result = default;
-        yield return GameApiClient.Send(req, r => result = r);
-
-        if (!result.Success)
+        using (UnityWebRequest req = GameApiClient.CreateRequest(HistoryPath, UnityWebRequest.kHttpVerbGET))
         {
-            Debug.LogError($"[History] LoadHistory failed | {result.ErrorMessage}");
-            yield break;
+            Debug.Log($"[History] LoadHistory request | path={HistoryPath}");
+
+            GameApiClient.ApiCallResult result = default;
+            yield return GameApiClient.Send(req, r => result = r);
+
+            if (!result.Success)
+            {
+                Debug.LogError($"[History] LoadHistory failed | {result.ErrorMessage}");
+                yield break;
+            }
+
+            Debug.Log($"[History] LoadHistory success | status={result.StatusCode} | body={result.Body}");
+
+            string wrapped = "{\"items\":" + result.Body + "}";
+            MatchHistoryList list;
+            try
+            {
+                list = JsonUtility.FromJson<MatchHistoryList>(wrapped);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[History] LoadHistory parse failed | ex={ex.Message} | body={result.Body}");
+                yield break;
+            }
+
+            if (list == null || list.items == null)
+            {
+                Debug.LogWarning("[History] LoadHistory parsed null/empty list.");
+                yield break;
+            }
+
+            if (historyContainer == null || historyItemPrefab == null)
+            {
+                Debug.LogWarning("[History] Missing historyContainer or historyItemPrefab.");
+                yield break;
+            }
+
+            foreach (Transform child in historyContainer)
+                Destroy(child.gameObject);
+
+            int instantiatedCount = 0;
+            foreach (var item in list.items)
+            {
+                GameObject go = Instantiate(historyItemPrefab, historyContainer);
+                PopulateHistoryItem(go, item);
+                instantiatedCount++;
+            }
+
+            Debug.Log($"[History] Instantiated {instantiatedCount} history cards into container '{historyContainer.name}'.");
         }
-
-        Debug.Log($"[History] LoadHistory success | status={result.StatusCode} | body={result.Body}");
-
-        string wrapped = "{\"items\":" + result.Body + "}";
-        MatchHistoryList list;
-        try
-        {
-            list = JsonUtility.FromJson<MatchHistoryList>(wrapped);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[History] LoadHistory parse failed | ex={ex.Message} | body={result.Body}");
-            yield break;
-        }
-
-        if (list == null || list.items == null)
-        {
-            Debug.LogWarning("[History] LoadHistory parsed null/empty list.");
-            yield break;
-        }
-
-        if (historyContainer == null || historyItemPrefab == null)
-        {
-            Debug.LogWarning("[History] Missing historyContainer or historyItemPrefab.");
-            yield break;
-        }
-
-        foreach (Transform child in historyContainer)
-            Destroy(child.gameObject);
-
-        int instantiatedCount = 0;
-        foreach (var item in list.items)
-        {
-            GameObject go = Instantiate(historyItemPrefab, historyContainer);
-            PopulateHistoryItem(go, item);
-            instantiatedCount++;
-        }
-
-        Debug.Log($"[History] Instantiated {instantiatedCount} history cards into container '{historyContainer.name}'.");
     }
 
     private void PopulateHistoryItem(GameObject go, MatchHistoryItem item)
