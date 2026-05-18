@@ -19,7 +19,9 @@ public:
     void removePlayer(uint32_t playerId);
 
     void processInput(uint32_t playerId, const ClientInput& input);
-    void update(float deltaTime);
+    void update(float deltaTime);           // calls updateBullets + runPhysics in order
+    void updateBullets(float deltaTime);    // bullet move + CCD wall hit + tank hit
+    void runPhysics(float deltaTime);       // tank movement, gravity, PhysicsWorld::Tick, corrections
 
     // Check win/timeout condition. Returns Running while game is still active.
     MatchOutcome checkOutcome(float elapsed, float maxDuration,

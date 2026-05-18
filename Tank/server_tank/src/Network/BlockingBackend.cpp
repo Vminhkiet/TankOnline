@@ -96,6 +96,9 @@ void BlockingBackend::setRouteCallback(std::function<void(GameCommand)> cb) {
 // ────────────────────────────────────────────────────────────────────────────
 
 void BlockingBackend::recvLoop() {
+    using Clock  = std::chrono::high_resolution_clock;
+    using Micros = std::chrono::microseconds;
+
     while (_running) {
         IoContext* ctx = _pool.acquire(IoOperation::READ);
 
@@ -110,12 +113,13 @@ void BlockingBackend::recvLoop() {
 
         if (n <= 0) {
             _pool.release(ctx);
-            // WSAENOTSOCK / error means stop() closed the socket — exit cleanly.
             if (!_running) break;
             continue;
         }
 
-        // Decode header — identical to NetworkManager::handleReader
+        // ── Parse timing starts here (after blocking recvfrom returns) ────────
+        auto t_parse_start = Clock::now();
+
         ReadStream rs(reinterpret_cast<const uint32_t*>(ctx->buffer), n);
         PacketHeader hdr;
         if (!hdr.Serialize(rs)) {
@@ -130,9 +134,18 @@ void BlockingBackend::recvLoop() {
         cmd.op        = hdr.opcode;
         cmd.rawBuffer.assign(ctx->buffer, ctx->buffer + n);
 
-        // Release IoContext before routing — same as IOCP path
         _pool.release(ctx);
+
+        auto parseUs = std::chrono::duration_cast<Micros>(Clock::now() - t_parse_start).count();
+        _accumRecvParseUs.fetch_add(static_cast<uint64_t>(parseUs), std::memory_order_relaxed);
+        _recvCount.fetch_add(1, std::memory_order_relaxed);
+        // ─────────────────────────────────────────────────────────────────────
 
         if (_routeCb) _routeCb(std::move(cmd));
     }
+}
+
+void BlockingBackend::drainRecvStats(uint64_t& sumUs, uint32_t& count) {
+    sumUs = _accumRecvParseUs.exchange(0, std::memory_order_relaxed);
+    count = _recvCount.exchange(0, std::memory_order_relaxed);
 }

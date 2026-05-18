@@ -4,7 +4,6 @@
 #include "ReadStream.h"
 #include <cmath>
 #include <cstring>
-#include <algorithm>
 
 // Raw S2C snapshot header — not bit-packed, Unity reads with BinaryReader
 #pragma pack(push, 1)
@@ -22,10 +21,6 @@ Match::Match(MatchConfig config, INetworkBackend& network,
     : _config(std::move(config)), _network(network), _onEnd(std::move(onEnd))
 {
     _world.disableRespawn();
-
-    for (const auto& [playerId, uid] : _config.userIds) {
-        _userToPlayer[uid] = playerId;
-    }
 
     std::string mapPath = "assests/map/" + _config.mapName + ".json";
     if (!_world.loadMap(mapPath))
@@ -61,6 +56,9 @@ void Match::pushCommand(GameCommand cmd) {
 void Match::tick(float dt) {
     if (!_running.load()) return;
 
+    using Clock = std::chrono::high_resolution_clock;
+    using Us    = std::chrono::microseconds;
+
     // 1. Drain command queue
     std::deque<GameCommand> local;
     {
@@ -68,19 +66,57 @@ void Match::tick(float dt) {
         local.swap(_cmdQueue);
     }
 
-    // 2. Dispatch
+    // 2. Dispatch — timed to capture handler overhead (handleMove / handleShoot)
+    auto t_dispatch_start = Clock::now();
     for (auto& cmd : local) {
         cmd.dt = dt;
         _dispatcher.dispatch(cmd);
     }
+    auto t_dispatch_end = Clock::now();
 
-    // 3. Physics + game logic
-    _world.update(dt);
+    // 3. Physics — timed separately only when match is PLAYING (has live sessions)
+    const bool playing = (_sessions.size() > 0);
 
-    // 4. Broadcast snapshot at 20 Hz (every 3 ticks)
+    if (playing) {
+        _accumDispatchUs += std::chrono::duration_cast<Us>(t_dispatch_end - t_dispatch_start).count();
+        _accumCmdQDepth  += static_cast<uint64_t>(local.size());
+    }
+
+    auto t_bullet = Clock::now();
+    _world.updateBullets(dt);
+    auto t_collision = Clock::now();
+    _world.runPhysics(dt);
+    auto t_phys_end = Clock::now();
+
+    if (playing) {
+        _accumBulletUs    += std::chrono::duration_cast<Us>(t_collision  - t_bullet).count();
+        _accumCollisionUs += std::chrono::duration_cast<Us>(t_phys_end   - t_collision).count();
+    }
+
+    // 4. Broadcast snapshot (SNAPSHOT_EVERY = 1 → every tick = 60 Hz)
     if (++_tickCount >= SNAPSHOT_EVERY) {
         _tickCount = 0;
+        auto t_snap_start = Clock::now();
         broadcastSnapshot();
+        if (playing)
+            _accumSnapUs += std::chrono::duration_cast<Us>(Clock::now() - t_snap_start).count();
+    }
+
+    // 5. [Task] log — emit once per TASK_LOG_TICKS PLAYING ticks (no per-tick disk I/O)
+    if (playing && ++_taskTickCount >= TASK_LOG_TICKS) {
+        uint64_t avgBullet    = _accumBulletUs    / _taskTickCount;
+        uint64_t avgCollision = _accumCollisionUs / _taskTickCount;
+        uint64_t avgSnap      = _accumSnapUs      / _taskTickCount;
+        uint64_t avgDispatch  = _accumDispatchUs  / _taskTickCount;
+        uint64_t avgCmdQ      = _accumCmdQDepth   / _taskTickCount;
+        LOG_INFO("[Task] match={} bullet={}us physics={}us snap={}us dispatch={}us cmdQ={}",
+                 _config.matchId, avgBullet, avgCollision, avgSnap, avgDispatch, avgCmdQ);
+        _accumBulletUs    = 0;
+        _accumCollisionUs = 0;
+        _accumSnapUs      = 0;
+        _accumDispatchUs  = 0;
+        _accumCmdQDepth   = 0;
+        _taskTickCount    = 0;
     }
 
     // 5. Disconnect timeout — 5s không nhận packet thì coi là out
@@ -88,7 +124,12 @@ void Match::tick(float dt) {
         int cur = static_cast<int>(_sessions.size());
         if (cur > _peakConnected) _peakConnected = cur;
 
-        for (uint32_t pid : _sessions.collectTimeouts(5)) {
+#ifdef PROFILING_SINGLE_CORE
+        constexpr int SESSION_TIMEOUT_SECS = 60;  // PROFILING: keep bots alive longer
+#else
+        constexpr int SESSION_TIMEOUT_SECS = 5;
+#endif
+        for (uint32_t pid : _sessions.collectTimeouts(SESSION_TIMEOUT_SECS)) {
             LOG_INFO("Match {}: player {} timed out (disconnected)", _config.matchId, pid);
             _sessions.removeSession(pid);
             _world.killPlayer(pid);
@@ -231,34 +272,16 @@ void Match::broadcastMatchEnd(const MatchResult& r) {
              r.matchId, _sessions.size());
 }
 
-bool Match::forceLogoutByUserId(const std::string& userId, uint16_t code,
-                                const std::string& message, uint32_t disconnectAfterMs) {
-    auto it = _userToPlayer.find(userId);
-    if (it == _userToPlayer.end()) return false;
-
-    const uint32_t playerId = it->second;
-    sockaddr_in addr{};
-    if (!_sessions.getAddress(playerId, addr)) return false;
-
-    const size_t msgLen = std::min<size_t>(message.size(), 512);
-    ForceLogoutPacket hdr;
-    hdr.matchId = _config.matchId;
-    hdr.opcode = static_cast<uint16_t>(Opcode::S2C_FORCE_LOGOUT);
-    hdr.code = code;
-    hdr.messageLen = static_cast<uint16_t>(msgLen);
-    hdr.disconnectAfterMs = disconnectAfterMs;
-
-    std::vector<uint8_t> pkt(sizeof(ForceLogoutPacket) + msgLen);
-    std::memcpy(pkt.data(), &hdr, sizeof(hdr));
-    if (msgLen > 0) {
-        std::memcpy(pkt.data() + sizeof(ForceLogoutPacket), message.data(), msgLen);
+bool Match::forceLogoutByUserId(const std::string& userId, uint16_t /*code*/,
+                                const std::string& /*message*/, uint32_t /*disconnectAfterMs*/) {
+    for (auto& [pid, uid] : _config.userIds) {
+        if (uid != userId) continue;
+        _sessions.removeSession(pid);
+        _world.killPlayer(pid);
+        LOG_INFO("Match {}: force-logout player {} (userId={})", _config.matchId, pid, userId);
+        return true;
     }
-
-    _network.send(addr, pkt.data(), pkt.size());
-
-    LOG_INFO("Match {}: sent S2C_FORCE_LOGOUT to playerId={} userId={} code={} delayMs={}",
-             _config.matchId, playerId, userId, code, disconnectAfterMs);
-    return true;
+    return false;
 }
 
 void Match::handleShoot(GameCommand& cmd) {

@@ -1,34 +1,29 @@
 #!/usr/bin/env python3
 """
-Tank C++ Server — Active Match Stress Test
-==========================================
+Tank C++ Server — 10-Player Staircase Stress Test
+==================================================
 Inject match.create → Kafka → C++ server creates matches
 Per-player UDP socket → server registers each player session separately
-Ramp: 1 → 5 → 10 → 20 → 32 matches (mỗi match 10 players)
+All matches run with PPM=10 (max capacity, 10 spawn points).
 
-Key fix: mỗi player có 1 socket riêng (unique src port)
-→ resolvePlayer() assigns slot theo source addr
+Staircase pattern: add --step matches every --duration seconds.
+Stops automatically when tick_max > 16,667µs (budget exceeded).
+
+Usage:
+  python3 tank_stress_match.py [--step 5] [--duration 120] [--max 50] [--base-id 30000]
 """
 
-import json, math, socket, threading, time, subprocess, sys
+import argparse, json, math, socket, threading, time, subprocess, sys
 from datetime import datetime
 
 # ── Config ────────────────────────────────────────────────────────────────────
 KAFKA_BROKER     = "172.25.203.168:9092"
 SERVER_HOST      = "172.25.192.1"   # Windows host IP
 SERVER_PORT      = 8080
-BASE_MATCH_ID    = 8000
-KEEPALIVE_HZ     = 15              # UDP/s per player
+KEEPALIVE_HZ     = 15              # move packets/s per player
+SHOOT_EVERY      = 10              # shoot every Nth move cycle → 15/10 = 1.5 shots/s
 BUDGET_US        = 16_667
-
-RAMP = [
-    {"matches":  1, "ppm": 2,  "secs": 25, "label": "Warm-up"},
-    {"matches":  5, "ppm": 4,  "secs": 30, "label": "Light  "},
-    {"matches": 10, "ppm": 6,  "secs": 35, "label": "Medium "},
-    {"matches": 20, "ppm": 8,  "secs": 40, "label": "Heavy  "},
-    {"matches": 32, "ppm": 10, "secs": 40, "label": "Peak   "},
-    {"matches": 10, "ppm":  4, "secs": 20, "label": "Cooldown"},
-]
+PPM              = 10              # players per match (fixed — 10 spawn points in world.json)
 
 # ── Bit-packed UDP packet ──────────────────────────────────────────────────────
 def _bits(lo, hi):
@@ -57,6 +52,18 @@ def move_pkt(match_id, player_id, seq, dx, dz):
     bw.w(dx,         0, 2)
     bw.w(dz,         0, 2)
     bw.w(0,          0, 255)
+    return bw.end()
+
+def shoot_pkt(match_id, player_id, seq, force=22):
+    """C2S_SHOOT = 1002, ~11 bytes bit-packed. force in [15..30]."""
+    bw = _BW()
+    bw.w(11,        8,  1400)    # packetSize
+    bw.w(1002,      0, 65535)    # opcode C2S_SHOOT
+    bw.w(match_id,  0, 1000000)
+    bw.w(player_id, 0, 255)
+    bw.w(seq % 256, 0, 255)
+    bw.w(0,         0, 65535)    # unk
+    bw.w(force,    15, 30)       # bullet force
     return bw.end()
 
 # ── Kafka inject ──────────────────────────────────────────────────────────────
@@ -133,18 +140,26 @@ class KeepAlive:
         cycle = 0
         while self._running:
             t0 = time.monotonic()
-            dx, dz = _DIR[cycle % len(_DIR)]; cycle += 1
+            dx, dz = _DIR[cycle % len(_DIR)]
+            # Fire every SHOOT_EVERY cycles → 15/10 = 1.5 shots/s per bot
+            do_shoot = (cycle % SHOOT_EVERY == 0)
+            cycle += 1
             with self._lock:
                 snap = list(self._socks.items())
             for key, sock in snap:
                 mid, pid = self._players.get(key, (0, 0))
                 seq      = self._seq.get(key, 0)
                 try:
-                    pkt = move_pkt(mid, pid, seq, dx, dz)
-                    sock.sendto(pkt, (SERVER_HOST, SERVER_PORT))
+                    sock.sendto(move_pkt(mid, pid, seq, dx, dz),
+                                (SERVER_HOST, SERVER_PORT))
                     self._sent += 1
-                except: self._err += 1
-                self._seq[key] = (seq + 1) % 256
+                    if do_shoot:
+                        sock.sendto(shoot_pkt(mid, pid, seq + 1),
+                                    (SERVER_HOST, SERVER_PORT))
+                        self._sent += 1
+                except:
+                    self._err += 1
+                self._seq[key] = (seq + 2 if do_shoot else seq + 1) % 256
             dt = time.monotonic() - t0
             if dt < interval: time.sleep(interval - dt)
 
@@ -160,15 +175,23 @@ PERF_RE    = __import__('re').compile(
     r'\[Perf\]\s+ticks=\d+\s+matches=(\d+).*?tick avg=(\d+).*?max=(\d+).*?overruns=(\d+)')
 
 def last_perf():
+    """Search backward from EOF in 256KB chunks until a [Perf] line is found."""
     try:
-        with open(SERVER_LOG, "r", encoding="utf-8", errors="replace") as f:
-            f.seek(0, 2); size = f.tell()
-            f.seek(max(0, size - 65536))
-            chunk = f.read()
-        matches = PERF_RE.findall(chunk)
-        if matches:
-            m = matches[-1]
-            return int(m[0]), int(m[1]), int(m[2]), int(m[3])
+        with open(SERVER_LOG, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            chunk_size = 262144   # 256KB per pass
+            offset = size
+            while offset > 0:
+                offset = max(0, offset - chunk_size)
+                f.seek(offset)
+                chunk = f.read(chunk_size + 512).decode("utf-8", errors="replace")
+                matches = PERF_RE.findall(chunk)
+                if matches:
+                    m = matches[-1]
+                    return int(m[0]), int(m[1]), int(m[2]), int(m[3])
+                if offset == 0:
+                    break
     except: pass
     return None, None, None, None
 
@@ -184,116 +207,144 @@ def wait_log_updated(prev_matches, timeout=8):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    parser = argparse.ArgumentParser(
+        description="Tank C++ Server — 10-player staircase GPC benchmark")
+    parser.add_argument("--step",     type=int, default=5,     metavar="N",
+                        help="Matches to add per step (default 5 → 50 bots/step)")
+    parser.add_argument("--duration", type=int, default=120,   metavar="SECS",
+                        help="Observation window per step in seconds (default 120)")
+    parser.add_argument("--max",      type=int, default=50,    metavar="N",
+                        help="Hard limit on total matches (default 50)")
+    parser.add_argument("--base-id",  type=int, default=30000, metavar="ID",
+                        help="Starting match ID (default 30000)")
+    args = parser.parse_args()
+
+    STEP_SIZE = args.step
+    STEP_SECS = args.duration
+    MAX_MATCHES = args.max
+    match_ctr = args.base_id
+
     print()
-    print("═" * 66)
-    print("  Tank C++ Server — Match Capacity Stress Test")
+    print("═" * 68)
+    print("  Tank C++ Server — 10-Player Staircase GPC Benchmark")
     print(f"  {datetime.now():%Y-%m-%d %H:%M:%S}  |  server={SERVER_HOST}:{SERVER_PORT}")
-    print("═" * 66)
+    print(f"  step={STEP_SIZE} matches ({STEP_SIZE*PPM} bots)  "
+          f"duration={STEP_SECS}s  max={MAX_MATCHES} matches")
+    print(f"  Stop condition: tick_max > {BUDGET_US:,}µs")
+    print("═" * 68)
 
     ka = KeepAlive()
     ka.start()
 
-    match_ctr   = BASE_MATCH_ID
-    active      = []   # [(mid, [pids])]
-    results     = []
+    active  = []   # [(mid, [pids])]
+    results = []
 
     try:
-        for lvl in RAMP:
-            target = lvl["matches"]
-            ppm    = lvl["ppm"]
-            secs   = lvl["secs"]
-            label  = lvl["label"]
+        step_num = 0
+        while len(active) < MAX_MATCHES:
+            step_num += 1
+            to_add = min(STEP_SIZE, MAX_MATCHES - len(active))
+            total  = len(active) + to_add
 
-            print(f"\n  {'─'*62}")
-            print(f"  {label}  →  {target} matches × {ppm} players  "
-                  f"({target*ppm} total players)")
-            print(f"  {'─'*62}")
+            print(f"\n  {'─'*64}")
+            print(f"  Step {step_num}  +{to_add} matches → {total} total  "
+                  f"({total * PPM} bots,  {total * PPM * KEEPALIVE_HZ} move/s  "
+                  f"+ {total * PPM * KEEPALIVE_HZ // SHOOT_EVERY} shoot/s)")
+            print(f"  {'─'*64}")
 
-            cur = len(active)
+            # Inject new matches to Kafka
+            batch = []
+            for _ in range(to_add):
+                mid  = match_ctr; match_ctr += 1
+                pids = list(range(1, PPM + 1))
+                batch.append((mid, pids))
+                active.append((mid, pids))
 
-            if cur < target:
-                batch = []
-                for _ in range(target - cur):
-                    mid  = match_ctr; match_ctr += 1
-                    pids = list(range(1, ppm + 1))
-                    batch.append((mid, pids))
-                    active.append((mid, pids))
+            print(f"  Kafka inject {to_add} matches...", end="", flush=True)
+            ok = kafka_inject(batch)
+            print(" OK" if ok else " FAILED")
 
-                print(f"  Kafka inject {len(batch)} matches...", end="", flush=True)
-                ok = kafka_inject(batch)
-                print(" OK" if ok else " FAILED")
+            for mid_b, pids_b in batch:
+                ka.add(mid_b, pids_b)
+            time.sleep(6)   # let server consume Kafka events and spawn sessions
 
-                # Pre-register UDP sockets BEFORE server processes Kafka
-                for mid_b, pids_b in batch:
-                    ka.add(mid_b, pids_b)
-                time.sleep(6)          # let server consume Kafka events
+            # ── Observation window ────────────────────────────────────────────
+            # Skip first 20s to let connection storm settle before measuring
+            time.sleep(20)
 
-            elif cur > target:
-                remove_ids = [m for m,_ in active[target:]]
-                active = active[:target]
-                ka.remove(remove_ids)
-
-            nm, np, sent, err = ka.stats()
-            print(f"  KeepAlive: {nm} matches, {np} sockets, "
-                  f"~{np * KEEPALIVE_HZ} pkt/s")
-
-            # ── Sampling ──────────────────────────────────────────────────────
-            print(f"  Sampling {secs}s", end="", flush=True)
-            samples = []
-            t_end   = time.time() + secs
+            samples       = []
+            overload      = False
+            overload_runs = 0   # consecutive overload samples
+            t_end         = time.time() + STEP_SECS
             while time.time() < t_end:
-                am, avg, p99, ov = last_perf()
+                am, avg, tick_max, ov = last_perf()
                 if am is not None:
-                    samples.append((am, avg, p99, ov))
-                    bp = p99 / BUDGET_US * 100
-                    print(f"\r  [{label}] matches={am:>3} avg={avg:>6}µs "
-                          f"p99={p99:>6}µs budget={bp:>5.1f}%  "
-                          f"({max(0, t_end-time.time()):.0f}s)", end="", flush=True)
+                    samples.append((am, avg, tick_max, ov))
+                    bp = tick_max / BUDGET_US * 100
+                    remain = max(0, t_end - time.time())
+                    flag = " !!OVER!!" if tick_max > BUDGET_US else ""
+                    print(f"\r  matches={am:>3}  avg={avg:>6}µs  "
+                          f"max={tick_max:>6}µs  budget={bp:>5.1f}%  "
+                          f"{remain:.0f}s{flag}     ", end="", flush=True)
+                    overload_runs = (overload_runs + 1) if tick_max > BUDGET_US else 0
+                    if overload_runs >= 3:
+                        overload = True
+                        print(f"\n  !! SUSTAINED OVERLOAD — GPC limit: {total} matches "
+                              f"/ {total * PPM} players !!")
+                        break
                 time.sleep(4)
             print()
 
-            # Aggregate
+            # Aggregate this step
             if samples:
                 avg_am  = sum(s[0] for s in samples) / len(samples)
                 avg_avg = sum(s[1] for s in samples) / len(samples)
-                avg_p99 = sum(s[2] for s in samples) / len(samples)  # using tick_max as worst-case
+                avg_max = sum(s[2] for s in samples) / len(samples)
                 avg_ov  = sum(s[3] for s in samples) / len(samples)
-                bp      = avg_p99 / BUDGET_US * 100
-                status  = ("EXCELLENT" if bp<30 else "GOOD" if bp<60
-                           else "OK" if bp<85 else "WARNING" if bp<100 else "OVERLOAD")
+                bp = avg_max / BUDGET_US * 100
+                status = ("GOOD" if bp < 60 else "OK" if bp < 85
+                          else "WARNING" if bp < 100 else "OVERLOAD")
             else:
-                avg_am=avg_avg=avg_p99=avg_ov=bp=0; status="NO DATA"
+                avg_am = avg_avg = avg_max = avg_ov = bp = 0
+                status = "NO DATA"
 
             results.append(dict(
-                label=label.strip(), target=target, ppm=ppm,
-                total_players=target*ppm,
-                active_matches=round(avg_am,1),
-                tick_avg=round(avg_avg,1), tick_p99=round(avg_p99,1),
-                overruns=round(avg_ov,1), budget_pct=round(bp,1),
-                status=status
+                step=step_num, matches=total, players=total * PPM,
+                active=round(avg_am, 1),
+                tick_avg=round(avg_avg),
+                tick_max=round(avg_max),
+                budget_pct=round(bp, 1),
+                status=status,
             ))
-            print(f"  → avg={avg_avg:.0f}µs  p99={avg_p99:.0f}µs  "
+            print(f"  → avg={avg_avg:.0f}µs  max={avg_max:.0f}µs  "
                   f"budget={bp:.1f}%  {status}")
+
+            if overload:
+                break
 
     finally:
         print("\n  Stopping keepalive...")
         ka.stop()
 
-    # ── Report ────────────────────────────────────────────────────────────────
+    # ── Final report ──────────────────────────────────────────────────────────
+    W = 76
     print()
-    print("╔" + "═"*74 + "╗")
-    print("║  C++ Server Capacity — Final Report" + " "*38 + "║")
-    print("╠" + "═"*74 + "╣")
-    hdr = f"║  {'Phase':<10}{'Matches':>8}{'Players':>8}{'Active':>8}{'tick_avg':>10}{'tick_p99':>10}{'Budget%':>9}  {'Status':<10}║"
-    print(hdr)
-    print("╠" + "═"*74 + "╣")
+    print("╔" + "═"*(W-2) + "╗")
+    print("║  C++ Server GPC Benchmark — 10 Players/Match" + " "*(W-48) + "║")
+    print("╠" + "═"*(W-2) + "╣")
+    print(f"║  {'Step':>4}  {'Matches':>7}  {'Bots':>5}  {'Active':>6}  "
+          f"{'tick_avg':>9}  {'tick_max':>9}  {'Budget%':>8}  {'Status':<10}║")
+    print("╠" + "═"*(W-2) + "╣")
     for r in results:
-        print(f"║  {r['label']:<10}{r['target']:>8}{r['total_players']:>8}"
-              f"{r['active_matches']:>8.0f}{r['tick_avg']:>9.0f}µs"
-              f"{r['tick_p99']:>9.0f}µs{r['budget_pct']:>8.1f}%  {r['status']:<10}║")
-    print("╠" + "═"*74 + "╣")
-    print(f"║  Budget = {BUDGET_US:,}µs (60 Hz) · Server MAX_CONCURRENT_MATCHES = 64" + " "*13 + "║")
-    print("╚" + "═"*74 + "╝")
+        flag = " ←" if r["status"] in ("OVERLOAD", "WARNING") else ""
+        print(f"║  {r['step']:>4}  {r['matches']:>7}  {r['players']:>5}  "
+              f"{r['active']:>6.0f}  {r['tick_avg']:>8}µs  {r['tick_max']:>8}µs  "
+              f"{r['budget_pct']:>7.1f}%  {r['status']:<10}{flag}║")
+    print("╠" + "═"*(W-2) + "╣")
+    print(f"║  Budget = {BUDGET_US:,}µs (60 Hz)  ·  PPM = {PPM}  ·  "
+          f"shots = {KEEPALIVE_HZ//SHOOT_EVERY*PPM}/match/s"
+          + " "*(W - 59) + "║")
+    print("╚" + "═"*(W-2) + "╝")
     print()
 
 if __name__ == "__main__":

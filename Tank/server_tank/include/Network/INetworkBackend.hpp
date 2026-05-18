@@ -24,4 +24,9 @@ public:
     virtual void setRouteCallback(std::function<void(GameCommand)> cb) = 0;
 
     virtual const char* backendName() const = 0;
+
+    // Atomically drain accumulated recv-parse stats since last call.
+    // sumUs = total microseconds spent parsing packets, count = number of packets.
+    // Default no-op so other backends don't need to implement it.
+    virtual void drainRecvStats(uint64_t& sumUs, uint32_t& count) { sumUs = 0; count = 0; }
 };

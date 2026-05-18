@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: monitoring-service
+  kafka:
+    bootstrap-servers: 172.25.203.168:9092
+    consumer:
+      group-id: monitoring-game-perf
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   boot:
     admin:
       ui:

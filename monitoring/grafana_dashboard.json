@@ -1,248 +1,358 @@
 {
-  "title": "Tank Online — System Monitoring",
-  "uid": "tank-online-monitor",
-  "tags": ["tank-online", "game-server"],
-  "timezone": "browser",
-  "schemaVersion": 39,
-  "refresh": "10s",
-  "time": { "from": "now-30m", "to": "now" },
   "panels": [
     {
-      "id": 1,
-      "title": "Active Matches",
-      "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "steps": [
-              { "color": "green", "value": 0 },
-              { "color": "yellow", "value": 40 },
-              { "color": "red", "value": 60 }
-            ]
+          "custom": {
+            "lineWidth": 2
           },
-          "unit": "none"
-        }
-      },
-      "targets": [{ "expr": "tank_active_matches", "legendFormat": "matches" }]
-    },
-    {
-      "id": 2,
-      "title": "Tick Avg (µs)",
-      "type": "stat",
-      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "steps": [
-              { "color": "green",  "value": 0 },
-              { "color": "yellow", "value": 5000 },
-              { "color": "red",    "value": 12000 }
-            ]
-          },
-          "unit": "µs",
-          "max": 16667
-        }
-      },
-      "targets": [{ "expr": "tank_tick_duration_us_avg", "legendFormat": "avg" }]
-    },
-    {
-      "id": 3,
-      "title": "Tick P99 (µs)",
-      "type": "stat",
-      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "steps": [
-              { "color": "green",  "value": 0 },
-              { "color": "yellow", "value": 8000 },
-              { "color": "red",    "value": 14000 }
-            ]
-          },
-          "unit": "µs",
-          "max": 16667
-        }
-      },
-      "targets": [{ "expr": "tank_tick_duration_us_p99", "legendFormat": "p99" }]
-    },
-    {
-      "id": 4,
-      "title": "Tick Overruns (total)",
-      "type": "stat",
-      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "steps": [
-              { "color": "green",  "value": 0 },
-              { "color": "yellow", "value": 1 },
-              { "color": "red",    "value": 10 }
-            ]
-          }
-        }
-      },
-      "targets": [{ "expr": "tank_tick_overruns_total", "legendFormat": "overruns" }]
-    },
-    {
-      "id": 5,
-      "title": "Java Services UP/DOWN",
-      "type": "stat",
-      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
-          ],
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }]
-          }
-        }
-      },
-      "targets": [{ "expr": "tank_java_service_up", "legendFormat": "{{service}}" }]
-    },
-    {
-      "id": 10,
-      "title": "Tick Duration over Time (avg / p95 / p99)",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 4, "w": 16, "h": 9 },
-      "fieldConfig": {
-        "defaults": { "unit": "µs", "min": 0 },
+          "unit": "\u00b5s"
+        },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "Budget 16,667µs" },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Budget"
+            },
             "properties": [
-              { "id": "custom.lineStyle", "value": { "dash": [6, 3], "fill": "dash" } },
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    5
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
             ]
           }
         ]
       },
-      "targets": [
-        { "expr": "tank_tick_duration_us_avg", "legendFormat": "avg" },
-        { "expr": "tank_tick_duration_us_p95", "legendFormat": "p95" },
-        { "expr": "tank_tick_duration_us_p99", "legendFormat": "p99" },
-        { "expr": "tank_tick_duration_us_max", "legendFormat": "max (spike)" },
-        { "expr": "16667",                     "legendFormat": "Budget 16,667µs" }
-      ]
-    },
-    {
-      "id": 11,
-      "title": "Tick Budget Usage %",
-      "type": "gauge",
-      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 9 },
-      "fieldConfig": {
-        "defaults": {
-          "min": 0, "max": 100, "unit": "percent",
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "steps": [
-              { "color": "green",  "value": 0 },
-              { "color": "yellow", "value": 50 },
-              { "color": "red",    "value": 85 }
-            ]
-          }
-        }
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
       },
-      "targets": [
-        { "expr": "tank_tick_duration_us_avg / 16667 * 100", "legendFormat": "avg % budget" },
-        { "expr": "tank_tick_duration_us_p99 / 16667 * 100", "legendFormat": "p99 % budget" }
-      ]
-    },
-    {
-      "id": 20,
-      "title": "JVM Heap Usage — Java Services",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 13, "w": 12, "h": 8 },
-      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "id": 1,
       "targets": [
         {
-          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
-          "legendFormat": "{{service}} heap used"
+          "expr": "tank_tick_duration_us_avg{job=\"tank-game-server\"}",
+          "legendFormat": "avg",
+          "refId": "A"
         },
         {
-          "expr": "jvm_memory_max_bytes{area=\"heap\"}",
-          "legendFormat": "{{service}} heap max"
-        }
-      ]
-    },
-    {
-      "id": 21,
-      "title": "HTTP Request Rate — Java Services",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 13, "w": 12, "h": 8 },
-      "fieldConfig": { "defaults": { "unit": "reqps" } },
-      "targets": [
+          "expr": "tank_tick_duration_us_max{job=\"tank-game-server\"}",
+          "legendFormat": "max (worst tick)",
+          "refId": "B"
+        },
         {
-          "expr": "rate(http_server_requests_seconds_count[1m])",
-          "legendFormat": "{{service}} {{uri}} {{status}}"
+          "expr": "vector(16667)",
+          "legendFormat": "Budget 16667\u00b5s",
+          "refId": "C"
         }
-      ]
+      ],
+      "title": "Budget Line (tick avg / max / 16.6ms)",
+      "type": "timeseries"
     },
     {
-      "id": 30,
-      "title": "Active Matches over Time",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 21, "w": 8, "h": 7 },
-      "fieldConfig": { "defaults": { "unit": "none", "min": 0 } },
-      "targets": [{ "expr": "tank_active_matches", "legendFormat": "active matches" }]
-    },
-    {
-      "id": 31,
-      "title": "Game Server Memory (RSS)",
-      "type": "timeseries",
-      "gridPos": { "x": 8, "y": 21, "w": 8, "h": 7 },
-      "fieldConfig": { "defaults": { "unit": "decmbytes" } },
-      "targets": [{ "expr": "tank_process_memory_mb", "legendFormat": "server_tank.exe RSS" }]
-    },
-    {
-      "id": 32,
-      "title": "Kafka Events",
-      "type": "timeseries",
-      "gridPos": { "x": 16, "y": 21, "w": 8, "h": 7 },
-      "fieldConfig": { "defaults": { "unit": "none" } },
-      "targets": [
-        { "expr": "tank_kafka_events_consumed_total", "legendFormat": "match.create consumed" },
-        { "expr": "tank_kafka_events_produced_total", "legendFormat": "match.result produced" }
-      ]
-    },
-    {
-      "id": 40,
-      "title": "Architecture Comparison — Baseline vs IOCP (from benchmark)",
-      "type": "table",
-      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 7 },
-      "options": { "footer": { "show": false } },
       "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          { "matcher": { "id": "byName", "options": "avg_us" },
-            "properties": [{ "id": "displayName", "value": "Tick Avg (µs)" }] },
-          { "matcher": { "id": "byName", "options": "p99_us" },
-            "properties": [{ "id": "displayName", "value": "Tick P99 (µs)" }] },
-          { "matcher": { "id": "byName", "options": "max_us" },
-            "properties": [{ "id": "displayName", "value": "Tick Max (µs)" }] },
-          { "matcher": { "id": "byName", "options": "overrun_rate" },
-            "properties": [{ "id": "displayName", "value": "Overrun Rate" }] }
-        ]
-      },
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {}
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "unit": "short"
         }
-      ],
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "id": 2,
       "targets": [
         {
-          "expr": "tank_tick_duration_us_avg",
-          "legendFormat": "IOCP (current)",
-          "instant": true
+          "expr": "tank_active_matches{job=\"tank-game-server\"}",
+          "refId": "A"
         }
       ],
-      "description": "Baseline A (single-thread): avg=990µs p99=14500µs max=109563µs overrun=0.1%\nIOCP (16 workers):         avg=228µs p99=700µs   max=32120µs overrun=0.08%\nCurrent live measurement shown above — compare với baseline trong performance_benchmark.md"
+      "title": "Active Matches",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "max": 120,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 85
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 8
+      },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "tank_tick_duration_us_p99{job=\"tank-game-server\"} / 16667 * 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Budget Usage %",
+      "type": "gauge"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 8000
+              },
+              {
+                "color": "red",
+                "value": 14000
+              }
+            ]
+          },
+          "unit": "\u00b5s"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "tank_tick_duration_us_avg{job=\"tank-game-server\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "Tick Avg \u00b5s",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 8
+      },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "increase(tank_tick_overruns_total{job=\"tank-game-server\"}[$__rate_interval])",
+          "refId": "A"
+        }
+      ],
+      "title": "Overruns",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1
+          },
+          "unit": "\u00b5s"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "max by(match_id)(game_task_physics_us{job=\"tank-game-server\"})",
+          "legendFormat": "physics {{match_id}}",
+          "refId": "A"
+        },
+        {
+          "expr": "max by(match_id)(game_task_snap_us{job=\"tank-game-server\"})",
+          "legendFormat": "snap {{match_id}}",
+          "refId": "B"
+        },
+        {
+          "expr": "max by(match_id)(game_task_bullet_us{job=\"tank-game-server\"})",
+          "legendFormat": "bullet {{match_id}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Frame Time Breakdown per Match \u2014 bullet / physics / snap (\u00b5s/tick)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "max": 16667,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 8000
+              },
+              {
+                "color": "red",
+                "value": 14000
+              }
+            ]
+          },
+          "unit": "\u00b5s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "id": 7,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by(match_id)(game_task_bullet_us{job=\"tank-game-server\",match_id=~\"3[0-9]+\"}) + max by(match_id)(game_task_physics_us{job=\"tank-game-server\",match_id=~\"3[0-9]+\"}) + max by(match_id)(game_task_snap_us{job=\"tank-game-server\",match_id=~\"3[0-9]+\"})",
+          "legendFormat": "match {{match_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Staircase GPC \u2014 Total Cost per Match (bullet+physics+snap \u00b5s)",
+      "type": "bargauge"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "unit": "\u00b5s"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "game_task_bullet_us_avg{job=\"tank-game-server\"}",
+          "legendFormat": "bullet",
+          "refId": "A"
+        },
+        {
+          "expr": "game_task_physics_us_avg{job=\"tank-game-server\"}",
+          "legendFormat": "physics",
+          "refId": "B"
+        },
+        {
+          "expr": "game_task_snap_us_avg{job=\"tank-game-server\"}",
+          "legendFormat": "snap",
+          "refId": "C"
+        }
+      ],
+      "title": "Avg Frame Time Breakdown (all matches) \u2014 bullet / physics / snap",
+      "type": "barchart"
     }
-  ]
+  ],
+  "refresh": "15s",
+  "tags": [
+    "tank",
+    "cpp",
+    "benchmark"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "Dashboard 1 \u2014 C++ Game Server",
+  "uid": "cpp-game-server"
 }
