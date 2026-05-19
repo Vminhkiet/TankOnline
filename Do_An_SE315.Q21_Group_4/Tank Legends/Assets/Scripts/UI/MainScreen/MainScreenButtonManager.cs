@@ -69,7 +69,10 @@ public class MainScreenButtonManager : MonoBehaviour
 
         if (CurrentButton == button)
         {
-            ShowMainPanel();
+            if (button.AllowDeselect)
+            {
+                ShowMainPanel();
+            }
             return;
         }
 

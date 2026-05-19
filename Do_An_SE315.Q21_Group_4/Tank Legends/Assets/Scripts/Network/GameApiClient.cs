@@ -10,10 +10,9 @@ using UnityEngine.Networking;
 /// </summary>
 public static class GameApiClient
 {
-    // Đổi IP này thành IP LAN của máy PC khi test trên điện thoại
-    // Build cho điện thoại: dùng #else bên dưới
-#if UNITY_EDITOR
-    public const string DefaultBaseUrl = "http://localhost:8080";
+    // Tự động cấu hình: Build di động (Android/iOS) dùng IP LAN, chạy Editor/PC dùng localhost
+#if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
+    public const string DefaultBaseUrl = "http://10.140.89.219:8080";
 #else
     public const string DefaultBaseUrl = "http://localhost:8080";
 #endif
