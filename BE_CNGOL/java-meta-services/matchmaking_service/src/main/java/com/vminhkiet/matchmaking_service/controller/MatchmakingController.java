@@ -38,7 +38,7 @@ public class MatchmakingController {
         CompletableFuture<ResponseEntity<Map<String, Object>>> future
     ) {}
 
-    private static final int MATCH_SIZE = 10;
+    private static final int MATCH_SIZE = 2;
 
     private final List<WaitingEntry>  lobby         = new ArrayList<>();
     private final AtomicInteger       matchCounter  = new AtomicInteger(1000);

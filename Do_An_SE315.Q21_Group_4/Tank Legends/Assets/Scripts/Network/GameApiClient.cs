@@ -15,7 +15,7 @@ public static class GameApiClient
 #if UNITY_EDITOR
     public const string DefaultBaseUrl = "http://localhost:8080";
 #else
-    public const string DefaultBaseUrl = "http://192.168.137.86:8080";
+    public const string DefaultBaseUrl = "http://localhost:8080";
 #endif
     public const string JwtKey          = "jwt";
     public const string RefreshTokenKey = "refreshToken";

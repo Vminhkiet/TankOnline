@@ -4,6 +4,7 @@
 #include "ReadStream.h"
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 // Raw S2C snapshot header — not bit-packed, Unity reads with BinaryReader
 #pragma pack(push, 1)
@@ -272,10 +273,24 @@ void Match::broadcastMatchEnd(const MatchResult& r) {
              r.matchId, _sessions.size());
 }
 
-bool Match::forceLogoutByUserId(const std::string& userId, uint16_t /*code*/,
-                                const std::string& /*message*/, uint32_t /*disconnectAfterMs*/) {
+bool Match::forceLogoutByUserId(const std::string& userId, uint16_t code,
+                                const std::string& message, uint32_t disconnectAfterMs) {
     for (auto& [pid, uid] : _config.userIds) {
         if (uid != userId) continue;
+
+        sockaddr_in addr{};
+        if (_sessions.getAddress(pid, addr)) {
+            std::vector<uint8_t> buf(sizeof(ForceLogoutPacket) + message.size());
+            auto* pkt                = reinterpret_cast<ForceLogoutPacket*>(buf.data());
+            pkt->matchId             = _config.matchId;
+            pkt->opcode              = static_cast<uint16_t>(Opcode::S2C_FORCE_LOGOUT);
+            pkt->code                = code;
+            pkt->messageLen          = static_cast<uint16_t>(message.size());
+            pkt->disconnectAfterMs   = disconnectAfterMs;
+            std::memcpy(buf.data() + sizeof(ForceLogoutPacket), message.data(), message.size());
+            _network.send(addr, buf.data(), buf.size());
+        }
+
         _sessions.removeSession(pid);
         _world.killPlayer(pid);
         LOG_INFO("Match {}: force-logout player {} (userId={})", _config.matchId, pid, userId);

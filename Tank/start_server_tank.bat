@@ -14,9 +14,19 @@ if not exist "%EXE%" (
     exit /b 1
 )
 
+echo Detecting WSL2 IP...
+for /f %%i in ('wsl ip -4 addr show eth0 ^| wsl grep -oP "(?<=inet )[\d.]+"') do set WSL2_IP=%%i
+
+if "%WSL2_IP%"=="" (
+    echo [WARN] Could not detect WSL2 IP, using fallback 172.23.79.122
+    set WSL2_IP=172.23.79.122
+)
+
+echo Using Kafka broker: %WSL2_IP%:9092
+set KAFKA_BROKERS=%WSL2_IP%:9092
+
 cd /d "%~dp0out\build\x64-Release\server_tank\Release"
 echo Running server_tank.exe...
-set KAFKA_BROKERS=localhost:9092
 server_tank.exe
 
 echo.

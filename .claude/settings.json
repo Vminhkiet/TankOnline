@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wsl -e bash -c \"ip addr show eth0 | grep 'inet ' | awk '{print \\\\$2}' | cut -d/ -f1\")",
+      "PowerShell(wsl ip addr show eth0 2>&1)",
+      "PowerShell(wsl sh -c \"docker inspect kafka 2>&1 | grep ADVERTISED\")",
+      "PowerShell(wsl sh -c \"docker ps --format 'table {{.Names}}\\\\t{{.Status}}' 2>&1\")",
+      "PowerShell(docker exec zookeeper zookeeper-shell localhost:2181 rmr /brokers/ids/1 2>&1; echo \"Exit: $LASTEXITCODE\")",
+      "PowerShell(docker exec zookeeper zookeeper-shell localhost:2181 deleteall /brokers/ids/1 2>&1)",
+      "PowerShell(docker rm kafka 2>&1)",
+      "PowerShell($WSL2_IP = \"172.23.79.122\")",
+      "PowerShell(Test-NetConnection -ComputerName localhost -Port 9092)",
+      "PowerShell(\\(Test-NetConnection -ComputerName localhost -Port 9092\\).TcpTestSucceeded)",
+      "Bash(cd /c/Users/ADMIN/Desktop/'New folder \\(5\\)'/SE315.Q21 && find . -type f -name \"*.java\" -o -name \"*.cs\" | head -30)",
+      "Read(//c/c/Users/ADMIN/Desktop/New folder \\(5\\)/**)",
+      "Bash(xargs grep -l \"FORCE_LOGOUT\\\\|ForceLogout\\\\|kick\")",
+      "Bash(xargs grep -l \"user\\\\.session\\\\.invalidated\\\\|SessionInvalidated\\\\|Kafka.*Listener\\\\|KafkaConsumer\")",
+      "Bash(xargs grep -l \"ForceLogoutHeader\\\\|S2C_FORCE_LOGOUT\")",
+      "Bash(xargs grep -l \"send.*Force\\\\|Force.*send\\\\|Opcode::S2C_FORCE\")"
+    ]
+  }
+}
