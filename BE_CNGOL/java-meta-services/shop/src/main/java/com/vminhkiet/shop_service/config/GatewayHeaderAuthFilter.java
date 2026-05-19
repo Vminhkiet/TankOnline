@@ -22,7 +22,10 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
         String roles  = request.getHeader("X-User-Roles");
 
         String path = request.getRequestURI();
-        if (path.startsWith("/actuator") || isPublicShopPath(request.getMethod(), path)) {
+        String gatewayOrigin = request.getHeader("X-Gateway-Origin");
+
+        if (path.startsWith("/actuator") || isPublicShopPath(request.getMethod(), path)
+                || isAdminViaGateway(path, gatewayOrigin)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -49,5 +52,11 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
         if (!"GET".equalsIgnoreCase(method)) return false;
         return path.equals("/api/shop/items")
                 || path.startsWith("/api/shop/items/");
+    }
+
+    // Admin endpoints cho phép nếu request đến từ gateway (có header X-Gateway-Origin)
+    private boolean isAdminViaGateway(String path, String gatewayOrigin) {
+        return path.startsWith("/api/shop/admin/")
+                && "MySecretKey123".equals(gatewayOrigin);
     }
 }

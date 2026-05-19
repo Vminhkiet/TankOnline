@@ -32,7 +32,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     // Endpoints accessible without JWT but still forward X-User-Id when JWT is present
     private static final List<String> OPTIONAL_AUTH_ENDPOINTS = List.of(
             "/api/shop/items",
-            "/api/shop/items/"
+            "/api/shop/items/",
+            "/api/shop/admin/"
     );
 
     @Override

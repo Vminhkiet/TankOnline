@@ -52,22 +52,35 @@ public class TankPurchaseManager : MonoBehaviour
     [SerializeField] private TMP_Text buyButtonText;
     [SerializeField] private string buyingLabel = "Purchasing...";
     [SerializeField] private string ownedLabel = "Owned";
+    [SerializeField] private string noCoinsLabel = "Insufficient Coins";
     [SerializeField] private TMP_Text statusText;
 
     private bool isPurchasing;
     private readonly System.Collections.Generic.HashSet<int> ownedItemIds = new System.Collections.Generic.HashSet<int>();
     private bool ownershipLoadedFromServer;
+    private string defaultBuyLabel = "Buy";
 
     private void Awake()
     {
         if (buyButton != null)
             buyButton.onClick.AddListener(OnBuyButtonClicked);
+
+        if (buyButtonText != null)
+            defaultBuyLabel = buyButtonText.text;
     }
 
     private void OnEnable()
     {
         if (tankSelectionManager != null)
             tankSelectionManager.SelectionChanged += HandleSelectionChanged;
+
+        if (profileUIManager != null)
+            profileUIManager.ProfileLoaded += HandleProfileLoaded;
+        else if (ProfileUIManager.Instance != null)
+        {
+            profileUIManager = ProfileUIManager.Instance;
+            profileUIManager.ProfileLoaded += HandleProfileLoaded;
+        }
 
         StartCoroutine(LoadOwnedItemsCoroutine());
         RefreshBuyState();
@@ -78,6 +91,9 @@ public class TankPurchaseManager : MonoBehaviour
     {
         if (tankSelectionManager != null)
             tankSelectionManager.SelectionChanged -= HandleSelectionChanged;
+
+        if (profileUIManager != null)
+            profileUIManager.ProfileLoaded -= HandleProfileLoaded;
     }
 
     private void OnDestroy()
@@ -90,6 +106,11 @@ public class TankPurchaseManager : MonoBehaviour
     {
         RefreshBuyState();
         ClearStatus();
+    }
+
+    private void HandleProfileLoaded(ProfileResponseData _)
+    {
+        RefreshBuyState();
     }
 
     public void OnBuyButtonClicked()
@@ -200,12 +221,20 @@ public class TankPurchaseManager : MonoBehaviour
     {
         bool canBuy = false;
         bool isOwned = false;
+        bool hasEnoughCoins = true;
+        int price = 0;
 
         if (tankSelectionManager != null &&
-            tankSelectionManager.TryGetSelectedShopItem(out int itemId, out _, out bool available))
+            tankSelectionManager.TryGetSelectedShopItem(out int itemId, out price, out bool available))
         {
             isOwned = ownershipLoadedFromServer && ownedItemIds.Contains(itemId);
-            canBuy = ownershipLoadedFromServer && available && !isOwned;
+
+            if (profileUIManager != null && profileUIManager.CurrentProfile != null)
+            {
+                hasEnoughCoins = profileUIManager.CurrentProfile.coins >= price;
+            }
+
+            canBuy = ownershipLoadedFromServer && available && !isOwned && hasEnoughCoins;
         }
 
         if (buyButton != null)
@@ -217,6 +246,10 @@ public class TankPurchaseManager : MonoBehaviour
                 buyButtonText.text = buyingLabel;
             else if (isOwned)
                 buyButtonText.text = ownedLabel;
+            else if (!hasEnoughCoins)
+                buyButtonText.text = noCoinsLabel;
+            else
+                buyButtonText.text = defaultBuyLabel;
         }
 
         if (!ownershipLoadedFromServer)

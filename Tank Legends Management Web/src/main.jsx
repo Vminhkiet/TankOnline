@@ -8,6 +8,7 @@ import {
   Cpu,
   Gauge,
   Gamepad2,
+  Gift,
   Globe2,
   LineChart,
   Map,
@@ -305,6 +306,7 @@ function App() {
           {[
             ['Players', Users],
             ['Store', Store],
+            ['Gift Codes', Gift],
             ['Leaderboard', Trophy],
             ['History', History],
             ['Servers', Server],
@@ -315,7 +317,7 @@ function App() {
             ['Economy', Wallet],
             ['Roles', Shield]
           ].map(([label, Icon]) => (
-            <a href={`#${label.toLowerCase()}`} key={label}>
+            <a href={`#${label.toLowerCase().replace(' ', '-')}`} key={label}>
               <Icon size={18} />
               <span>{label}</span>
             </a>
@@ -405,6 +407,10 @@ function App() {
 
           <section className="panel span-2" id="store">
             <StoreManagementPanel pushCommand={pushCommand} />
+          </section>
+
+          <section className="panel span-2" id="gift-codes">
+            <GiftCodeManagementPanel pushCommand={pushCommand} session={session} />
           </section>
 
           <section className="panel span-2" id="leaderboard">
@@ -941,7 +947,7 @@ function StoreManagementPanel({ pushCommand }) {
           <div className="form-grid">
             <label>Name <input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} /></label>
             <label>Category <input value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} /></label>
-            <label>Price <input type="number" value={editForm.price} onChange={e => setEditForm({...editForm, price: parseFloat(e.target.value)})} /></label>
+            <label>Price <input type="number" value={isNaN(editForm.price) ? '' : editForm.price} onChange={e => setEditForm({...editForm, price: parseFloat(e.target.value) || 0})} /></label>
             <label>Image URL <input value={editForm.imageUrl} onChange={e => setEditForm({...editForm, imageUrl: e.target.value})} /></label>
             <label className="span-2">Description <input value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} /></label>
             <label className="checkbox-label" style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1001,6 +1007,232 @@ function StoreManagementPanel({ pushCommand }) {
               ))}
               {items.length === 0 && (
                 <tr><td colSpan="6" style={{textAlign:'center', padding:'1rem'}}>No items found.</td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
+
+function GiftCodeManagementPanel({ pushCommand, session }) {
+  const [codes, setCodes] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [jwt, setJwt] = useState('');
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+
+  const handleAdminLogin = async () => {
+    try {
+      setLoginError('');
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginForm)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.jwt) {
+          setJwt(data.jwt);
+          pushCommand('Admin JWT acquired for Gift Code management');
+          return data.jwt;
+        }
+      }
+      setLoginError('Login failed. Check credentials.');
+    } catch (err) {
+      setLoginError('Connection error: ' + err.message);
+    }
+    return null;
+  };
+
+  const authHeaders = (token) => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token || jwt}`
+  });
+
+  const fetchCodes = async (token) => {
+    const t = token || jwt;
+    if (!t) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/api/profile/admin/giftcode`, {
+        headers: authHeaders(t)
+      });
+      if (res.ok) {
+        setCodes(await res.json());
+      } else if (res.status === 403) {
+        pushCommand('Permission denied. Account may not have ROLE_ADMIN.');
+      }
+    } catch (err) {
+      pushCommand('Failed to fetch gift codes: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    try {
+      const body = {
+        code: editForm.code,
+        coinReward: parseInt(editForm.coinReward) || 0,
+        itemReward: editForm.itemReward || null,
+        maxUses: parseInt(editForm.maxUses) || 1,
+        expiresAt: editForm.expiresAt || null
+      };
+      const res = await fetch(`${API_BASE}/api/profile/admin/giftcode`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(body)
+      });
+      if (res.ok || res.status === 201) {
+        fetchCodes();
+        setIsEditing(null);
+        pushCommand(`Created gift code: ${body.code}`);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        pushCommand(`Failed to create code: ${err.error || res.statusText}`);
+      }
+    } catch (err) {
+      pushCommand('Error creating gift code: ' + err.message);
+    }
+  };
+
+  const handleDeactivate = async (id, code) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/profile/admin/giftcode/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      if (res.ok) {
+        fetchCodes();
+        pushCommand(`Deactivated gift code: ${code}`);
+      }
+    } catch (err) {
+      pushCommand('Failed to deactivate code');
+    }
+  };
+
+  const handleDeletePermanent = async (id, code) => {
+    if (!confirm(`Permanently delete code "${code}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/profile/admin/giftcode/${id}/permanent`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      if (res.ok) {
+        fetchCodes();
+        pushCommand(`Permanently deleted gift code: ${code}`);
+      }
+    } catch (err) {
+      pushCommand('Failed to delete code');
+    }
+  };
+
+  const formatDate = (iso) => {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString(); }
+    catch { return iso; }
+  };
+
+  // Not yet logged in for admin API
+  if (!jwt) {
+    return (
+      <>
+        <PanelHeader icon={Gift} title="Gift Code Management" action="Admin login required" />
+        <div className="store-edit-form" style={{ margin: '1rem 0' }}>
+          <p style={{ marginBottom: '0.75rem', color: 'var(--text-dim)' }}>
+            Authenticate with an admin account to manage gift codes.
+          </p>
+          <div className="form-grid">
+            <label>Username <input value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} placeholder="admin" /></label>
+            <label>Password <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} placeholder="password" /></label>
+          </div>
+          {loginError && <p style={{ color: '#f87171', marginTop: '0.5rem' }}>{loginError}</p>}
+          <div className="form-actions" style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+            <button className="primary" onClick={async () => { const t = await handleAdminLogin(); if (t) fetchCodes(t); }}>Login & Load Codes</button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PanelHeader icon={Gift} title="Gift Code Management" action="Create / Deactivate / Delete" />
+      <div className="toolbar">
+        <button className="primary" onClick={() => { setEditForm({ code: '', coinReward: 100, itemReward: '', maxUses: 100, expiresAt: '' }); setIsEditing('new'); }}>
+          <Gift size={16} /> Create New Code
+        </button>
+        <button onClick={() => fetchCodes()}><RefreshCcw size={16} /> Refresh</button>
+      </div>
+
+      {isEditing && (
+        <div className="store-edit-form">
+          <div className="form-grid">
+            <label>Code <input value={editForm.code} onChange={e => setEditForm({...editForm, code: e.target.value.toUpperCase()})} placeholder="TANKLEGENDS2026" /></label>
+            <label>Coin Reward <input type="number" value={editForm.coinReward} onChange={e => setEditForm({...editForm, coinReward: e.target.value})} /></label>
+            <label>Item Reward <input value={editForm.itemReward} onChange={e => setEditForm({...editForm, itemReward: e.target.value})} placeholder="tank_model_name (optional)" /></label>
+            <label>Max Uses <input type="number" value={editForm.maxUses} onChange={e => setEditForm({...editForm, maxUses: e.target.value})} /></label>
+            <label className="span-2">Expires At <input type="datetime-local" value={editForm.expiresAt ? editForm.expiresAt.slice(0, 16) : ''} onChange={e => setEditForm({...editForm, expiresAt: e.target.value ? new Date(e.target.value).toISOString() : null})} /></label>
+          </div>
+          <div className="form-actions" style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+            <button className="primary" onClick={handleCreate}>Create</button>
+            <button onClick={() => setIsEditing(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="table-wrap">
+        {loading ? (
+          <p style={{ padding: '1rem' }}>Loading gift codes...</p>
+        ) : (
+          <table className="player-admin-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Code</th>
+                <th>Coin Reward</th>
+                <th>Item</th>
+                <th>Uses</th>
+                <th>Expires</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {codes.map(c => (
+                <tr key={c.id} style={{ opacity: c.isActive ? 1 : 0.5 }}>
+                  <td><strong>{c.id}</strong></td>
+                  <td><strong style={{ fontFamily: 'monospace', letterSpacing: '0.05em' }}>{c.code}</strong></td>
+                  <td><strong>{c.coinReward}</strong></td>
+                  <td>{c.itemReward || '—'}</td>
+                  <td>{c.currentUses} / {c.maxUses}</td>
+                  <td>{formatDate(c.expiresAt)}</td>
+                  <td>
+                    <StatusBadge
+                      status={!c.isActive ? 'banned' : c.currentUses >= c.maxUses ? 'offline' : 'online'}
+                      label={!c.isActive ? 'Disabled' : c.currentUses >= c.maxUses ? 'Used up' : 'Active'}
+                    />
+                  </td>
+                  <td>
+                    <div className="action-row">
+                      {c.isActive && (
+                        <button onClick={() => handleDeactivate(c.id, c.code)}>
+                          <Ban size={14} /> Disable
+                        </button>
+                      )}
+                      <button className="danger" onClick={() => handleDeletePermanent(c.id, c.code)}>
+                        <XCircle size={14} /> Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {codes.length === 0 && (
+                <tr><td colSpan="8" style={{textAlign:'center', padding:'1rem'}}>No gift codes found.</td></tr>
               )}
             </tbody>
           </table>
