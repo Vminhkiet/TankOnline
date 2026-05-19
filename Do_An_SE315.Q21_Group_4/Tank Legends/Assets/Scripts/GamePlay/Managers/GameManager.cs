@@ -121,7 +121,8 @@ namespace Complete
                     _remoteTanks.Clear();
                     _remoteSnaps.Clear();
 
-                    TankNetClient.Instance.OnSnapshot += HandleSnapshot;
+                    TankNetClient.Instance.OnSnapshot    += HandleSnapshot;
+                    TankNetClient.Instance.OnForceLogout += HandleForceLogout;
                     TankNetClient.Instance.Connect(m_ServerHost, m_ServerPort, m_MatchId);
                 }
             }
@@ -176,7 +177,10 @@ namespace Complete
         private void OnDestroy()
         {
             if (m_OnlineMode && TankNetClient.Instance != null)
-                TankNetClient.Instance.OnSnapshot -= HandleSnapshot;
+            {
+                TankNetClient.Instance.OnSnapshot    -= HandleSnapshot;
+                TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
+            }
 
             // Xóa hết tank khi scene kết thúc
             foreach (var t in GameObject.FindGameObjectsWithTag("Tank"))
@@ -551,6 +555,13 @@ namespace Complete
                     _remoteBullets.Remove(id);
                 }
             }
+        }
+
+        private void HandleForceLogout(ushort code, string message, uint disconnectAfterMs)
+        {
+            int seconds = disconnectAfterMs > 0 ? (int)(disconnectAfterMs / 1000) : 10;
+            if (AuthSessionRuntime.Instance != null)
+                AuthSessionRuntime.Instance.HandleForceLogout(code, message, seconds);
         }
 
         // Plays explosion effect then destroys the bullet GO.

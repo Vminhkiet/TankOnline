@@ -76,7 +76,7 @@ if "%LAN_MODE%"=="ON" (
 ) else (
     set LAN_MODE=ON
     set LAN_IP=
-    for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /i "IPv4" ^| findstr /v "127.0"') do (
+    for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /i "IPv4" ^| findstr /v "127.0" ^| findstr /v "169.254"') do (
         if "!LAN_IP!"=="" (
             for /f "tokens=*" %%b in ("%%a") do set LAN_IP=%%b
         )
