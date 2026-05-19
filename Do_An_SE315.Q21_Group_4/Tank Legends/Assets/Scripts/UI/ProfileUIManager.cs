@@ -12,6 +12,8 @@ using UnityEngine.UI;
 /// </summary>
 public class ProfileUIManager : MonoBehaviour
 {
+    // ── Singleton accessor ──────────────────────────────────────────────────
+    public static ProfileUIManager Instance { get; private set; }
     private const string ProfileMePath = "/api/profile/me";
     private const string UserMePath = "/api/user/me";
 
@@ -42,8 +44,15 @@ public class ProfileUIManager : MonoBehaviour
 
     private void OnEnable()
     {
+        Instance = this;
         if (loadOnEnable)
             Refresh();
+    }
+
+    private void OnDisable()
+    {
+        if (Instance == this)
+            Instance = null;
     }
 
     public void Refresh()
@@ -215,5 +224,31 @@ public class ProfileUIManager : MonoBehaviour
     {
         if (errorText != null)
             errorText.text = string.Empty;
+    }
+
+    // ── Public: cập nhật coins ngay trên UI (optimistic) ────────────────────
+
+    /// <summary>
+    /// Cập nhật số coins trên UI ngay lập tức mà không cần gọi lại server.
+    /// Dùng khi biết chính xác tổng coins mới (ví dụ sau redeem code).
+    /// </summary>
+    public void UpdateCoinsImmediate(long newTotalCoins)
+    {
+        if (CurrentProfile != null)
+            CurrentProfile.coins = newTotalCoins;
+
+        if (coinsText != null)
+            coinsText.text = newTotalCoins.ToString("N0");
+
+        Debug.Log($"[Profile] Coins updated immediately: {newTotalCoins}");
+    }
+
+    /// <summary>
+    /// Cộng thêm coins vào số hiện tại (optimistic).
+    /// </summary>
+    public void AddCoinsImmediate(long coinsToAdd)
+    {
+        long current = CurrentProfile != null ? CurrentProfile.coins : 0;
+        UpdateCoinsImmediate(current + coinsToAdd);
     }
 }
