@@ -1,6 +1,9 @@
 package com.vminhkiet.matchmaking_service.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vminhkiet.matchmaking_service.model.WaitingEntry;
+import com.vminhkiet.matchmaking_service.service.LobbyManager;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -10,18 +13,22 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/matchmaking")
 public class MatchmakingController {
 
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
+
+    @Autowired
+    private LobbyManager lobbyManager;
 
     @Value("${game.server.host:127.0.0.1}")
     private String serverHost;
@@ -32,18 +39,11 @@ public class MatchmakingController {
     @Value("${game.kafka.match-topic:match.create}")
     private String matchTopic;
 
-    private record WaitingEntry(
-        long userId,
-        int playerId,
-        CompletableFuture<ResponseEntity<Map<String, Object>>> future
-    ) {}
-
     private static final int MATCH_SIZE = 2;
 
-    private final List<WaitingEntry>  lobby         = new ArrayList<>();
-    private final AtomicInteger       matchCounter  = new AtomicInteger(1000);
-    private final AtomicInteger       playerCounter = new AtomicInteger(1);
-    private final ObjectMapper        objectMapper  = new ObjectMapper();
+    private final AtomicInteger matchCounter  = new AtomicInteger(1000);
+    private final AtomicInteger playerCounter = new AtomicInteger(1);
+    private final ObjectMapper  objectMapper  = new ObjectMapper();
 
     @PostMapping("/find")
     public CompletableFuture<ResponseEntity<Map<String, Object>>> findMatch() {
@@ -54,24 +54,17 @@ public class MatchmakingController {
         int myPlayerId = playerCounter.getAndIncrement();
         WaitingEntry myEntry = new WaitingEntry(userId, myPlayerId, myFuture);
 
-        List<WaitingEntry> batch = null;
-        synchronized (lobby) {
-            lobby.add(myEntry);
-            if (lobby.size() >= MATCH_SIZE) {
-                batch = new ArrayList<>(lobby.subList(0, MATCH_SIZE));
-                lobby.subList(0, MATCH_SIZE).clear();
-            }
-        }
+        List<WaitingEntry> batch = lobbyManager.addAndTryForm(myEntry, MATCH_SIZE);
 
         if (batch != null) {
             int matchId = matchCounter.getAndIncrement();
             publishMatch(matchId, batch);
             for (WaitingEntry e : batch) {
                 e.future().complete(ResponseEntity.ok(Map.of(
-                    "matchId",    matchId,
-                    "serverHost", serverHost,
-                    "serverPort", serverPort,
-                    "playerId",   e.playerId()
+                        "matchId",    matchId,
+                        "serverHost", serverHost,
+                        "serverPort", serverPort,
+                        "playerId",   e.playerId()
                 )));
             }
         }
@@ -82,11 +75,11 @@ public class MatchmakingController {
     private void publishMatch(int matchId, List<WaitingEntry> players) {
         try {
             List<Integer> playerIds = players.stream().map(WaitingEntry::playerId).toList();
-            java.util.LinkedHashMap<String, String> userIdMap = new java.util.LinkedHashMap<>();
+            LinkedHashMap<String, String> userIdMap = new LinkedHashMap<>();
             for (WaitingEntry e : players)
                 userIdMap.put(String.valueOf(e.playerId()), String.valueOf(e.userId()));
 
-            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            LinkedHashMap<String, Object> body = new LinkedHashMap<>();
             body.put("matchId",     matchId);
             body.put("mapName",     "world");
             body.put("maxDuration", 300);
@@ -95,8 +88,7 @@ public class MatchmakingController {
             String payload = objectMapper.writeValueAsString(body);
             kafkaTemplate.send(matchTopic, String.valueOf(matchId), payload);
         } catch (Exception e) {
-            System.err.println("[MatchmakingController] Kafka publish failed for match "
-                + matchId + ": " + e.getMessage());
+            log.error("[MatchmakingController] Kafka publish failed for matchId={}: {}", matchId, e.getMessage());
         }
     }
 

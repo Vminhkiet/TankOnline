@@ -16,7 +16,16 @@
       "Bash(xargs grep -l \"FORCE_LOGOUT\\\\|ForceLogout\\\\|kick\")",
       "Bash(xargs grep -l \"user\\\\.session\\\\.invalidated\\\\|SessionInvalidated\\\\|Kafka.*Listener\\\\|KafkaConsumer\")",
       "Bash(xargs grep -l \"ForceLogoutHeader\\\\|S2C_FORCE_LOGOUT\")",
-      "Bash(xargs grep -l \"send.*Force\\\\|Force.*send\\\\|Opcode::S2C_FORCE\")"
+      "Bash(xargs grep -l \"send.*Force\\\\|Force.*send\\\\|Opcode::S2C_FORCE\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\ADMIN\\\\Desktop\\\\New folder \\(5\\)\\\\SE315.Q21\\\\BE_CNGOL\\\\java-meta-services\" -Directory)",
+      "Bash(for svc in \"auth_service\" \"shop\" \"matchmaking_service\" \"profile_service\" \"history_service\" \"monitoring_service\" \"discovery_service\" \"api_gateway\"; do *)",
+      "Read(//c/Users/ADMIN/Desktop/New folder \\(5\\)/SE315.Q21/BE_CNGOL/**)",
+      "Bash(ls -la \"/mnt/c/Users/ADMIN/Desktop/New folder \\(5\\)/SE315.Q21/BE_CNGOL/java-meta-services/auth_service\" 2>/dev/null || ls -la \"c:/Users/ADMIN/Desktop/New folder \\(5\\)/SE315.Q21/BE_CNGOL/java-meta-services/auth_service\")",
+      "Read(//mnt/c/Users/ADMIN/Desktop/New folder \\(5\\)/SE315.Q21/BE_CNGOL/java-meta-services/**)",
+      "Bash(find \"c:\\\\\\\\Users\\\\\\\\ADMIN\\\\\\\\Desktop\\\\\\\\New folder \\(5\\)\\\\\\\\SE315.Q21\\\\\\\\BE_CNGOL\\\\\\\\java-meta-services\" -maxdepth 2 -type d)",
+      "Bash(mvn --version)",
+      "Bash(java --version)",
+      "Bash(mvn test *)"
     ]
   }
 }

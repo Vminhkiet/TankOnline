@@ -1,6 +1,7 @@
 package com.vminhkiet.shop_service.serviceImpl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
 import org.springframework.beans.factory.annotation.Value;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ShopServiceImpl implements GameService {
@@ -63,7 +65,6 @@ public class ShopServiceImpl implements GameService {
         @Override
         @Transactional
         public PurchaseResponse purchaseItem(Long playerId, PurchaseRequest request) {
-                // 1. Kiểm tra danh sách request có trống không
                 if (request.getItems() == null || request.getItems().isEmpty()) {
                         return PurchaseResponse.builder()
                                         .success(false)
@@ -73,55 +74,59 @@ public class ShopServiceImpl implements GameService {
 
                 BigDecimal totalOrderPrice = BigDecimal.ZERO;
                 List<String> messages = new ArrayList<>();
+                // Saga-2: track số coin đã trừ thành công để compensation nếu DB save lỗi
+                long totalDeducted = 0L;
 
-                // 2. Lặp qua danh sách các DTO mới (ItemPurchaseDTO)
-                for (ItemPurchaseDTO itemRequest : request.getItems()) {
+                try {
+                        for (ItemPurchaseDTO itemRequest : request.getItems()) {
+                                Item item = itemRepository.findById(itemRequest.getItemId())
+                                                .orElseThrow(() -> new RuntimeException(
+                                                                "Item not found: " + itemRequest.getItemId()));
 
-                        // Tìm vật phẩm
-                        Item item = itemRepository.findById(itemRequest.getItemId())
-                                        .orElseThrow(() -> new RuntimeException(
-                                                        "Item not found: " + itemRequest.getItemId()));
+                                if (item.getAvailble() == null || !item.getAvailble()) {
+                                        throw new RuntimeException("Item " + item.getName() + " is not available");
+                                }
 
-                        // Kiểm tra tính khả dụng
-                        if (item.getAvailble() == null || !item.getAvailble()) {
-                                throw new RuntimeException("Item " + item.getName() + " is not available");
+                                BigDecimal itemTotalPrice = item.getPrice()
+                                                .multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
+                                totalOrderPrice = totalOrderPrice.add(itemTotalPrice);
+
+                                // Bước 1 Saga: trừ coin tại profile_service (ngoài TX database)
+                                boolean deductOk = deductCoinsFromProfile(String.valueOf(playerId), itemTotalPrice.longValue());
+                                if (!deductOk) {
+                                        throw new RuntimeException("Không đủ coin để mua: " + item.getName());
+                                }
+                                totalDeducted += itemTotalPrice.longValue();
+
+                                // Bước 2 Saga: lưu inventory + lịch sử (trong TX database)
+                                PlayerInfo playerItem = PlayerInfo.builder()
+                                                .playerId(playerId)
+                                                .item(item)
+                                                .quantity(itemRequest.getQuantity())
+                                                .purchasedAt(LocalDateTime.now())
+                                                .build();
+                                playerItemRepository.save(playerItem);
+
+                                Purchase purchase = Purchase.builder()
+                                                .playerId(playerId)
+                                                .itemId(item.getId())
+                                                .quantity(itemRequest.getQuantity())
+                                                .totalPrice(itemTotalPrice)
+                                                .status("SUCCESS")
+                                                .purchaseDate(LocalDateTime.now())
+                                                .build();
+                                purchaseRepository.save(purchase);
+
+                                messages.add(item.getName() + " (x" + itemRequest.getQuantity() + ")");
                         }
-
-                        // 3. Tính tiền cho từng loại item và cộng dồn
-                        BigDecimal itemTotalPrice = item.getPrice()
-                                        .multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
-                        totalOrderPrice = totalOrderPrice.add(itemTotalPrice);
-
-                        // Trừ coin từ profile_service
-                        boolean deductOk = deductCoinsFromProfile(String.valueOf(playerId), itemTotalPrice.longValue());
-                        if (!deductOk) {
-                            throw new RuntimeException("Không đủ coin để mua: " + item.getName());
+                } catch (Exception e) {
+                        // Saga-2 Compensation: hoàn trả toàn bộ coin đã trừ trước khi lỗi xảy ra
+                        if (totalDeducted > 0) {
+                                refundCoinsToProfile(String.valueOf(playerId), totalDeducted);
                         }
-
-                        // 4. Lưu vào kho đồ (Inventory) - Chỗ này dùng PlayerInfo theo code cũ của bạn
-                        PlayerInfo playerItem = PlayerInfo.builder()
-                                        .playerId(playerId)
-                                        .item(item)
-                                        .quantity(itemRequest.getQuantity())
-                                        .purchasedAt(LocalDateTime.now())
-                                        .build();
-                        playerItemRepository.save(playerItem);
-
-                        // 5. Lưu vào lịch sử giao dịch (Purchases) cho từng item
-                        Purchase purchase = Purchase.builder()
-                                        .playerId(playerId)
-                                        .itemId(item.getId())
-                                        .quantity(itemRequest.getQuantity())
-                                        .totalPrice(itemTotalPrice)
-                                        .status("SUCCESS")
-                                        .purchaseDate(LocalDateTime.now())
-                                        .build();
-                        purchaseRepository.save(purchase);
-
-                        messages.add(item.getName() + " (x" + itemRequest.getQuantity() + ")");
+                        throw e; // để @Transactional rollback các DB write
                 }
 
-                // 6. Trả về kết quả tổng hợp
                 return PurchaseResponse.builder()
                                 .success(true)
                                 .message("Purchased successfully: " + String.join(", ", messages))
@@ -145,21 +150,39 @@ public class ShopServiceImpl implements GameService {
         }
 
         private boolean deductCoinsFromProfile(String userId, long amount) {
-            try {
-                String url = profileServiceUrl + "/internal/coins/deduct";
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                Map<String, Object> body = Map.of("userId", userId, "amount", amount);
-                HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-                ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
-                if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                    return Boolean.TRUE.equals(response.getBody().get("success"));
+                try {
+                        String url = profileServiceUrl + "/internal/coins/deduct";
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.setContentType(MediaType.APPLICATION_JSON);
+                        Map<String, Object> body = Map.of("userId", userId, "amount", amount);
+                        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+                        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                                        url, HttpMethod.POST, entity,
+                                        new org.springframework.core.ParameterizedTypeReference<>() {});
+                        if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                                return Boolean.TRUE.equals(response.getBody().get("success"));
+                        }
+                        return false;
+                } catch (Exception e) {
+                        // Nếu profile_service không khả dụng, cho phép mua (graceful degradation)
+                        return true;
                 }
-                return false;
-            } catch (Exception e) {
-                // Nếu profile_service không khả dụng, cho phép mua (graceful degradation)
-                return true;
-            }
+        }
+
+        // Saga-2 Compensation: hoàn trả coin khi DB save thất bại sau khi đã trừ coin
+        private void refundCoinsToProfile(String userId, long amount) {
+                try {
+                        String url = profileServiceUrl + "/internal/coins/add";
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.setContentType(MediaType.APPLICATION_JSON);
+                        Map<String, Object> body = Map.of("userId", userId, "amount", amount);
+                        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+                        restTemplate.exchange(url, HttpMethod.POST, entity,
+                                        new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
+                        log.info("[Saga-2 Compensation] Refunded {} coins to userId={}", amount, userId);
+                } catch (Exception e) {
+                        log.error("[Saga-2 Compensation] Failed to refund {} coins to userId={}: {}", amount, userId, e.getMessage());
+                }
         }
 
         private String getItemStatus(Item item) {
