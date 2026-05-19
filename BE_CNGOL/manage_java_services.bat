@@ -76,10 +76,8 @@ if "%LAN_MODE%"=="ON" (
 ) else (
     set LAN_MODE=ON
     set LAN_IP=
-    for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /i "IPv4" ^| findstr /v "127.0" ^| findstr /v "169.254"') do (
-        if "!LAN_IP!"=="" (
-            for /f "tokens=*" %%b in ("%%a") do set LAN_IP=%%b
-        )
+    for /f "usebackq tokens=*" %%a in (`powershell -NoProfile -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike '*Loopback*' -and $_.InterfaceAlias -notlike '*vEthernet*' -and $_.InterfaceAlias -notlike '*VirtualBox*' -and $_.InterfaceAlias -notlike '*VMware*' -and $_.IPAddress -notlike '169.254.*' } | Select-Object -First 1).IPAddress"`) do (
+        set LAN_IP=%%a
     )
     if "!LAN_IP!"=="" (
         echo [ERROR] Could not detect LAN IP.

@@ -52,7 +52,6 @@ public class TankPurchaseManager : MonoBehaviour
     [SerializeField] private TMP_Text buyButtonText;
     [SerializeField] private string buyingLabel = "Purchasing...";
     [SerializeField] private string ownedLabel = "Owned";
-    [SerializeField] private string noCoinsLabel = "Insufficient Coins";
     [SerializeField] private TMP_Text statusText;
 
     private bool isPurchasing;
@@ -243,13 +242,22 @@ public class TankPurchaseManager : MonoBehaviour
         if (buyButtonText != null)
         {
             if (isPurchasing)
+            {
                 buyButtonText.text = buyingLabel;
+            }
             else if (isOwned)
+            {
                 buyButtonText.text = ownedLabel;
-            else if (!hasEnoughCoins)
-                buyButtonText.text = noCoinsLabel;
-            else
-                buyButtonText.text = defaultBuyLabel;
+            }
+            // CRITICAL: DO NOT overwrite the button text with "Insufficient Coins" or default labels here!
+            // The buy button text displays the DYNAMIC tank price updated by TankSelectionManager.
+            // When the player has insufficient coins, we ONLY disable the button (interactable = false)
+            // so they can still see the tank's price on the button.
+            //
+            // CHÚ Ý QUAN TRỌNG: Không được ghi đè text của nút mua ở đây bằng "Không đủ tiền" hoặc label khác!
+            // Text của nút mua đang hiển thị GIÁ xe tăng được cập nhật động từ TankSelectionManager.
+            // Khi người chơi không đủ tiền, chúng ta CHỈ disable nút bấm (interactable = false)
+            // để người chơi vẫn nhìn thấy giá của xe tăng trên nút.
         }
 
         if (!ownershipLoadedFromServer)

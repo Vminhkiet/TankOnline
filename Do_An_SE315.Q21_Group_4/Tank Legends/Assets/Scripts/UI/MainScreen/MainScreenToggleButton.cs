@@ -10,6 +10,8 @@ public class MainScreenToggleButton : MonoBehaviour
     [SerializeField] private bool hideMainButtons = true;
     [SerializeField] private bool hideOtherButtons = true;
     [SerializeField] private GameObject selectedVisual;
+    [Tooltip("Nếu true, click vào nút đang chọn lần 2 sẽ đóng panel của nó và quay về Main. Nếu false, click lần 2 sẽ giữ nguyên panel.")]
+    [SerializeField] private bool allowDeselect = true;
 
     private Button cachedButton;
     private bool isSelected;
@@ -19,6 +21,7 @@ public class MainScreenToggleButton : MonoBehaviour
     public bool HideMainButtons => hideMainButtons;
     public bool HideOtherButtons => hideOtherButtons;
     public bool IsSelected => isSelected;
+    public bool AllowDeselect => allowDeselect;
 
     private void Awake()
     {
