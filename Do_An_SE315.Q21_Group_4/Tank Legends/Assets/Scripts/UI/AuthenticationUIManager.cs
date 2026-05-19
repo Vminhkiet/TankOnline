@@ -355,4 +355,22 @@ public class AuthenticationUIManager : MonoBehaviour
         else if (errorText  != null) errorText.text = msg;
         else Debug.Log("[Auth] " + msg);
     }
+
+    #region QUICK_TEST_LOGIN (Dễ dàng xóa khi release game)
+    /// <summary>
+    /// Điền nhanh tài khoản và kích hoạt đăng nhập lập tức, phục vụ việc test game.
+    /// </summary>
+    public void QuickLogin(string username, string password)
+    {
+        if (isBusy) return;
+
+        if (usernameInput != null)
+            usernameInput.text = username;
+
+        if (passwordInput != null)
+            passwordInput.text = password;
+
+        OnLoginButtonClicked();
+    }
+    #endregion
 }

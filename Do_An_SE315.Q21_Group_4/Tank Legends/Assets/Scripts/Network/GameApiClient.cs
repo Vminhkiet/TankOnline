@@ -10,19 +10,29 @@ using UnityEngine.Networking;
 /// </summary>
 public static class GameApiClient
 {
-    // Tự động cấu hình: Build di động (Android/iOS) dùng IP LAN, chạy Editor/PC dùng localhost
-#if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
-    public const string DefaultBaseUrl = "http://10.140.89.219:8080";
-#else
-    public const string DefaultBaseUrl = "http://localhost:8080";
-#endif
+    #region TEST_CONNECTION_MODE (Dễ dàng xóa region này khi release game)
+    // Cấu hình các cổng kết nối test
+    private const string LocalhostUrl = "http://localhost:8080";
+    private const string LanUrl = "http://192.168.137.86:8080";
+    public const string ConnectionModePrefKey = "test_connection_mode"; // "localhost" hoặc "lan"
+
+    public static string BaseUrl
+    {
+        get
+        {
+            // Đọc mode từ PlayerPrefs, nếu chưa set thì mặc định là localhost
+            string mode = PlayerPrefs.GetString(ConnectionModePrefKey, "localhost");
+            if (mode == "lan")
+                return LanUrl;
+            return LocalhostUrl;
+        }
+    }
+    #endregion
+
     public const string JwtKey          = "jwt";
     public const string RefreshTokenKey = "refreshToken";
     public const string UsernameKey     = "username";
     public const string EmailKey        = "email";
-
-    // BaseUrl luôn dùng DefaultBaseUrl — không lưu PlayerPrefs để tránh localhost bị cache từ Editor
-    public static string BaseUrl => DefaultBaseUrl;
 
     public static string GetJwt() => PlayerPrefs.GetString(JwtKey, "");
 
