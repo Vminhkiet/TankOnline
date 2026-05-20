@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: matchmaking-service
+  kafka:
+    bootstrap-servers: 172.25.203.168:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   data:
     redis:
       host: localhost

@@ -194,7 +194,7 @@ void Match::broadcastSnapshot() {
         hdr.serverTick    = tick;
         hdr.localPlayerId = static_cast<uint16_t>(pid); // tell client which tank is theirs
         hdr.timeRemainingTenths = static_cast<uint16_t>(std::roundf(
-            std::max(0.0f, _config.maxDurationSecs - _elapsed) * 10.0f));
+            (std::max)(0.0f, _config.maxDurationSecs - _elapsed) * 10.0f));
         std::memcpy(&hdr.tankCount, body.data(), 2);
 
         std::vector<uint8_t> pkt(sizeof(SnapshotHeader) + body.size());
