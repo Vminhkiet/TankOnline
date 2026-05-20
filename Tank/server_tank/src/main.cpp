@@ -5,6 +5,7 @@
 #include "Utils/Logger.hpp"
 #include <csignal>
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <cstdlib>
 #include <timeapi.h>   // timeBeginPeriod / timeEndPeriod (winmm)
@@ -70,19 +71,45 @@ int main() {
     MatchManager manager(*netPtr);
     manager.start(kafkaBrokers);
 
-    // ── Create N test matches (NUM_MATCHES env var, default 1) ──────────────
-    // Each match gets 2 player slots: match M → playerIds {2M-1, 2M}
-    const int numMatches = std::stoi(getEnv("NUM_MATCHES", "10")); // Create 10 matches for more range
-    for (int m = 1; m <= numMatches; ++m) {
-        MatchConfig cfg;
-        cfg.matchId         = static_cast<uint32_t>(1002 + m); // Will create 1003, 1004...
-        cfg.mapName         = "world";
-        cfg.maxDurationSecs = 600;
-        cfg.playerIds       = { static_cast<uint32_t>(2*m - 1),
-                                 static_cast<uint32_t>(2*m) };
-        manager.createMatch(std::move(cfg));
+    // ── Debug matches: load from debug_matches.json if present ─────────────
+    // Format: [{"matchId":1,"players":[1,2],"mapName":"world","maxDuration":600}, ...]
+    // If file not found, fall back to NUM_MATCHES auto-generated matches.
+    bool debugFileLoaded = false;
+    {
+        std::ifstream f("debug_matches.json");
+        if (f.good()) {
+            try {
+                auto arr = json::parse(f);
+                for (auto& entry : arr) {
+                    MatchConfig cfg;
+                    cfg.matchId         = entry.at("matchId").get<uint32_t>();
+                    cfg.mapName         = entry.value("mapName", "world");
+                    cfg.maxDurationSecs = entry.value("maxDuration", 600);
+                    for (auto& pid : entry.at("players"))
+                        cfg.playerIds.push_back(pid.get<uint32_t>());
+                    manager.createMatch(std::move(cfg));
+                    LOG_INFO("main: [debug] match {} created (players: {})", cfg.matchId, cfg.playerIds.size());
+                }
+                LOG_INFO("main: loaded {} debug match(es) from debug_matches.json", arr.size());
+                debugFileLoaded = true;
+            } catch (const std::exception& e) {
+                LOG_WARN("main: failed to parse debug_matches.json: {}", e.what());
+            }
+        }
     }
-    LOG_INFO("main: {} test match(es) created", numMatches);
+    if (!debugFileLoaded) {
+        const int numMatches = std::stoi(getEnv("NUM_MATCHES", "10"));
+        for (int m = 1; m <= numMatches; ++m) {
+            MatchConfig cfg;
+            cfg.matchId         = static_cast<uint32_t>(1002 + m);
+            cfg.mapName         = "world";
+            cfg.maxDurationSecs = 600;
+            cfg.playerIds       = { static_cast<uint32_t>(2*m - 1),
+                                     static_cast<uint32_t>(2*m) };
+            manager.createMatch(std::move(cfg));
+        }
+        LOG_INFO("main: {} auto test match(es) created", numMatches);
+    }
 
     KafkaConsumer consumer;
     bool kafkaOk = !kafkaBrokers.empty() &&

@@ -18,6 +18,7 @@ namespace TankNet
     {
         public ushort     ServerTick;
         public uint       LocalPlayerId;  // server-assigned ID for this client
+        public float TimeRemaining;
         public TankState[]   Tanks;
         public BulletState[] Bullets;
     }
@@ -27,6 +28,7 @@ namespace TankNet
         public static TankNetClient Instance { get; private set; }
 
         public event Action<SnapshotData> OnSnapshot;
+        public event Action<MatchEndData> OnMatchEnd;
         public event Action<ushort, string, uint> OnForceLogout; // (code, message, disconnectAfterMs)
 
         [Header("Network")]
@@ -160,6 +162,24 @@ namespace TankNet
                         continue;
                     }
 
+                    if ((Opcode)opcode == Opcode.S2C_MATCH_END)
+                    {
+                        if (data.Length < Marshal.SizeOf<MatchEndHeader>()) continue;
+                        var hdr = BytesToStruct<MatchEndHeader>(data, 0);
+                        if (hdr.matchId != MatchId) continue;
+
+                        var end = new MatchEndData
+                        {
+                            MatchId      = hdr.matchId,
+                            Outcome      = hdr.outcome,
+                            WinnerId     = hdr.winnerId,
+                            DurationSecs = hdr.durationSecs,
+                            MyKills      = hdr.myKills,
+                        };
+                        UnityMainThread.Post(() => OnMatchEnd?.Invoke(end));
+                        continue;
+                    }
+
                     if ((Opcode)opcode == Opcode.S2C_FORCE_LOGOUT)
                     {
                         if (data.Length < Marshal.SizeOf<ForceLogoutHeader>()) continue;
@@ -189,7 +209,7 @@ namespace TankNet
             int tankSize   = Marshal.SizeOf<TankState>();
             int bulletSize = Marshal.SizeOf<BulletState>();
 
-            var snap = new SnapshotData { ServerTick = hdr.serverTick, LocalPlayerId = hdr.localPlayerId };
+            var snap = new SnapshotData { ServerTick = hdr.serverTick, LocalPlayerId = hdr.localPlayerId, TimeRemaining = hdr.timeRemainingTenths / 10f};
 
             // body bắt đầu bằng uint16 tankCount (trùng với hdr.tankCount), skip nó
             int offset = hdrSize + 2;

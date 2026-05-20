@@ -27,7 +27,7 @@ except ImportError:
     _kafka_available = False
 
 # ── Config ────────────────────────────────────────────────────────────────────
-LOG_FILE      = "/mnt/d/Unity/TankOnline/Tank/build_full/server_tank/Release/server.log"
+LOG_FILE      = "/mnt/d/Unity/TankOnline/SE315.Q21/Tank/out/build/x64-Release/server_tank/Release/server.log"
 CSV_FILE      = "/tmp/tank_metrics_timeseries.csv"
 AGENT_PORT    = 9100
 TICK_BUDGET_US = 16_667
