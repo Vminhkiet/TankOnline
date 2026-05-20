@@ -170,7 +170,7 @@ class KeepAlive:
         return nm, np, self._sent, self._err
 
 # ── Server log polling ────────────────────────────────────────────────────────
-SERVER_LOG = "/mnt/d/Unity/TankOnline/Tank/build_full/server_tank/Release/server.log"
+SERVER_LOG = "/mnt/d/Unity/TankOnline/SE315.Q21/Tank/out/build/x64-Release/server_tank/Release/server.log"
 PERF_RE    = __import__('re').compile(
     r'\[Perf\]\s+ticks=\d+\s+matches=(\d+).*?tick avg=(\d+).*?max=(\d+).*?overruns=(\d+)')
 

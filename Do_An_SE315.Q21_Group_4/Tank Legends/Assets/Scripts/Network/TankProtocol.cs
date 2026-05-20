@@ -9,6 +9,7 @@ namespace TankNet
         C2S_MOVE     = 1001,
         C2S_SHOOT       = 1002,
         S2C_SNAPSHOT    = 2000,
+        S2C_MATCH_END    = 2004,
         S2C_FORCE_LOGOUT = 2005,
     }
 
@@ -65,6 +66,7 @@ namespace TankNet
         public ushort serverTick;
         public ushort tankCount;
         public ushort localPlayerId;   // which tank belongs to this client
+        public ushort timeRemainingTenths;
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -75,6 +77,28 @@ namespace TankNet
         public ushort code;               // e.g. 1003
         public ushort messageLen;         // UTF-8 bytes appended after header
         public uint disconnectAfterMs;    // e.g. 10000
+    }
+
+    // S2C_MATCH_END = 2004, 15 bytes packed
+    // outcome: 0=win 1=lose 2=draw 3=timeout (from recipient's POV)
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct MatchEndHeader
+    {
+        public uint   matchId;
+        public ushort opcode;       // = 2004
+        public byte   outcome;      // 0=win 1=lose 2=draw 3=timeout
+        public uint   winnerId;
+        public ushort durationSecs;
+        public ushort myKills;
+    }
+
+    public class MatchEndData
+    {
+        public uint   MatchId;
+        public byte   Outcome;      // 0=win 1=lose 2=draw 3=timeout
+        public uint   WinnerId;
+        public ushort DurationSecs;
+        public ushort MyKills;
     }
 
     // ── Packet builders ───────────────────────────────────────────────────────
