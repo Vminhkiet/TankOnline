@@ -8,16 +8,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.vminhkiet.matchmaking_service.model.Match;
@@ -36,16 +34,16 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    @Autowired
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    private static final String MATCH_CREATE_TOPIC = "match.create";
 
     @Value("${tank.server.host:127.0.0.1}")
     private String tankHost;
 
     @Value("${tank.server.udp-port:8080}")
     private int tankUdpPort;
-
-    @Value("${tank.server.mgmt-port:9090}")
-    private int tankMgmtPort;
 
     // ── Helpers status ────────────────────────────────────────────────────────
 
@@ -144,7 +142,7 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
         return null;
     }
 
-    // ── Notify Tank server ────────────────────────────────────────────────────
+    // ── Notify Tank server via Kafka match.create ─────────────────────────────
 
     private void notifyTankServer(long matchId, List<String> playerStrIds) {
         try {
@@ -157,23 +155,16 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
                 .collect(Collectors.toList());
 
             Map<String, Object> bodyMap = new HashMap<>();
-            bodyMap.put("matchId",         (int) matchId);
-            bodyMap.put("playerIds",       playerIntIds);
-            bodyMap.put("mapName",         "world");
-            bodyMap.put("maxDurationSecs", 300);
+            bodyMap.put("matchId",     (int) matchId);
+            bodyMap.put("players",     playerIntIds);   // key "players" — matches server C++ consumer
+            bodyMap.put("mapName",     "world");
+            bodyMap.put("maxDuration", 180);            // 3 phút
 
-            // Serialize to JSON string first so Content-Length is set (not chunked)
-            String jsonBody = new ObjectMapper().writeValueAsString(bodyMap);
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setContentLength(jsonBody.getBytes().length);
-            HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
-
-            String url = "http://" + tankHost + ":" + tankMgmtPort + "/internal/match/create";
-            restTemplate.postForObject(url, entity, String.class);
-            log.info("Notified Tank server: matchId={} players={}", matchId, playerIntIds);
+            String json = new ObjectMapper().writeValueAsString(bodyMap);
+            kafkaTemplate.send(MATCH_CREATE_TOPIC, json);
+            log.info("Published match.create to Kafka: matchId={} players={}", matchId, playerIntIds);
         } catch (Exception e) {
-            log.warn("Tank server unreachable at {}:{} — {}", tankHost, tankMgmtPort, e.getMessage());
+            log.warn("Failed to publish match.create to Kafka: {}", e.getMessage());
         }
     }
 }
