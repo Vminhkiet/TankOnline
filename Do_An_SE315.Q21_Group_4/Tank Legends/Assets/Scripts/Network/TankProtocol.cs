@@ -107,31 +107,32 @@ namespace TankNet
     {
         // Write bit-packed PacketHeader (matches server PacketHeader::Serialize)
         private static void WriteHeader(BitWriter w, Opcode op, uint matchId,
-                                        int size, byte seq = 0, ushort tick = 0)
+                                        int size, uint playerId = 0, byte seq = 0, ushort tick = 0)
         {
-            w.WriteInt(size,          NetConst.PACKET_SIZE_MIN, NetConst.PACKET_SIZE_MAX);
-            w.WriteInt((int)op,       NetConst.UINT16_MIN,      NetConst.UINT16_MAX);
-            w.WriteInt((int)matchId,  NetConst.MATCH_ID_MIN,    NetConst.MATCH_ID_MAX);
-            w.WriteInt(0,             NetConst.FLAGS_MIN,        NetConst.FLAGS_MAX);
-            w.WriteInt(seq,           NetConst.SEQ_MIN,          NetConst.SEQ_MAX);
-            w.WriteInt(tick,          NetConst.TICK_MIN,         NetConst.TICK_MAX);
+            w.WriteInt(size,           NetConst.PACKET_SIZE_MIN, NetConst.PACKET_SIZE_MAX);
+            w.WriteInt((int)op,        NetConst.UINT16_MIN,      NetConst.UINT16_MAX);
+            w.WriteInt((int)matchId,   NetConst.MATCH_ID_MIN,    NetConst.MATCH_ID_MAX);
+            w.WriteInt((int)playerId,  NetConst.FLAGS_MIN,        NetConst.FLAGS_MAX);
+            w.WriteInt(seq,            NetConst.SEQ_MIN,          NetConst.SEQ_MAX);
+            w.WriteInt(tick,           NetConst.TICK_MIN,         NetConst.TICK_MAX);
         }
 
         public static byte[] BuildMove(uint matchId, int moveX, int moveZ,
-                                       byte seq = 0, ushort tick = 0)
+                                       uint playerId = 0, byte seq = 0, ushort tick = 0)
         {
             var w = new BitWriter(8);
-            WriteHeader(w, Opcode.C2S_MOVE, matchId, 12, seq, tick);
-            w.WriteInt(moveX + 1, NetConst.DIR_MIN,   NetConst.DIR_MAX);   // encode offset
+            WriteHeader(w, Opcode.C2S_MOVE, matchId, 12, playerId, seq, tick);
+            w.WriteInt(moveX + 1, NetConst.DIR_MIN,   NetConst.DIR_MAX);
             w.WriteInt(moveZ + 1, NetConst.DIR_MIN,   NetConst.DIR_MAX);
             w.WriteInt(0,         NetConst.SPEED_MIN,  NetConst.SPEED_MAX);
             return w.ToBytes();
         }
 
-        public static byte[] BuildShoot(uint matchId, int launchForce = 20, byte seq = 0)
+        public static byte[] BuildShoot(uint matchId, int launchForce = 20,
+                                        uint playerId = 0, byte seq = 0)
         {
             var w = new BitWriter(8);
-            WriteHeader(w, Opcode.C2S_SHOOT, matchId, 8, seq);
+            WriteHeader(w, Opcode.C2S_SHOOT, matchId, 8, playerId, seq);
             int force = System.Math.Max(NetConst.FORCE_MIN,
                         System.Math.Min(NetConst.FORCE_MAX, launchForce));
             w.WriteInt(force, NetConst.FORCE_MIN, NetConst.FORCE_MAX);

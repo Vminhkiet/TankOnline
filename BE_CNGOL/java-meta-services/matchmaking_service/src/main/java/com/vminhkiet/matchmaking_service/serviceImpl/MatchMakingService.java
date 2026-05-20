@@ -92,7 +92,9 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
 
     @Override
     public Match findOrCreateMatch(String userId) throws InterruptedException {
-        // Đặt trạng thái waiting và thêm vào queue (string)
+        // Xóa mọi entry cũ của userId khỏi queue trước khi thêm lại
+        // (tránh A vs A khi cùng user tìm trận nhiều lần liên tiếp)
+        redisTemplate.opsForList().remove(QUEUE_KEY, 0, userId);
         setStatus(userId, "waiting");
         redisTemplate.opsForList().rightPush(QUEUE_KEY, userId);
 
@@ -123,7 +125,7 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
             if (raw == null) break;
 
             String pid = raw.toString();
-            if ("waiting".equals(getStatus(pid))) {
+            if ("waiting".equals(getStatus(pid)) && !validPlayers.contains(pid)) {
                 validPlayers.add(pid);
             } else {
                 log.debug("Skipped stale queue entry: {} (status={})", pid, getStatus(pid));
@@ -146,23 +148,32 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
 
     private void notifyTankServer(long matchId, List<String> playerStrIds) {
         try {
-            List<Integer> playerIntIds = playerStrIds.stream()
-                .map(id -> {
-                    try { return Integer.parseInt(id); }
-                    catch (NumberFormatException e) { return 0; }
-                })
-                .filter(id -> id > 0)
-                .collect(Collectors.toList());
+            // userId từ auth service là username string (vd: "player1"), không phải số nguyên.
+            // Integer.parseInt("player1") → NumberFormatException → bị filter → players=[] rỗng
+            // → server nhận empty playerIds → resolvePlayer luôn fail → không spawn tank.
+            //
+            // Fix: dùng sequential slot ID [1, 2, ..., N] cho game server.
+            // Server chỉ cần int để quản lý session trong match, không cần trùng với DB userId.
+            // Client nhận localPlayerId từ snapshot header → tự cập nhật m_MyPlayerId đúng.
+            // userIds map (slot→username) được gửi kèm để server đính kèm vào match.result.
+            List<Integer> playerIntIds = new ArrayList<>();
+            Map<String, String> userIdMap = new HashMap<>();
+            for (int i = 0; i < playerStrIds.size(); i++) {
+                int slotId = i + 1;          // slot 0 → playerId 1, slot 1 → playerId 2, ...
+                playerIntIds.add(slotId);
+                userIdMap.put(String.valueOf(slotId), playerStrIds.get(i));
+            }
 
             Map<String, Object> bodyMap = new HashMap<>();
             bodyMap.put("matchId",     (int) matchId);
-            bodyMap.put("players",     playerIntIds);   // key "players" — matches server C++ consumer
+            bodyMap.put("players",     playerIntIds);
+            bodyMap.put("userIds",     userIdMap);   // {1:"player1", 2:"player2"} cho match.result
             bodyMap.put("mapName",     "world");
-            bodyMap.put("maxDuration", 180);            // 3 phút
+            bodyMap.put("maxDuration", 180);
 
             String json = new ObjectMapper().writeValueAsString(bodyMap);
             kafkaTemplate.send(MATCH_CREATE_TOPIC, json);
-            log.info("Published match.create to Kafka: matchId={} players={}", matchId, playerIntIds);
+            log.info("Published match.create matchId={} players={} userIds={}", matchId, playerIntIds, userIdMap);
         } catch (Exception e) {
             log.warn("Failed to publish match.create to Kafka: {}", e.getMessage());
         }

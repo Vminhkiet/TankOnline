@@ -70,11 +70,13 @@ namespace Complete
             // Read MatchInfo from GlobalMatchState if available
             if (GlobalMatchState.HasMatchInfo)
             {
-                m_OnlineMode = true;
-                m_MatchId = GlobalMatchState.MatchId;
-                m_ServerHost = GlobalMatchState.ServerHost;
-                m_ServerPort = GlobalMatchState.ServerPort;
-                Debug.Log($"[GameManager] Loaded MatchInfo from GlobalMatchState: MatchId={m_MatchId}, {m_ServerHost}:{m_ServerPort}");
+                m_OnlineMode  = true;
+                m_MatchId     = GlobalMatchState.MatchId;
+                m_ServerHost  = GlobalMatchState.ServerHost;
+                m_ServerPort  = GlobalMatchState.ServerPort;
+                if (GlobalMatchState.PlayerId > 0)
+                    m_MyPlayerId = GlobalMatchState.PlayerId;
+                Debug.Log($"[GameManager] Loaded MatchInfo: MatchId={m_MatchId}, {m_ServerHost}:{m_ServerPort}, playerId={m_MyPlayerId}");
             }
 
             // Đọc -playerid từ command line: TankLegends.exe -playerid 2
@@ -123,7 +125,7 @@ namespace Complete
 
                     TankNetClient.Instance.OnSnapshot    += HandleSnapshot;
                     TankNetClient.Instance.OnForceLogout += HandleForceLogout;
-                    TankNetClient.Instance.Connect(m_ServerHost, m_ServerPort, m_MatchId);
+                    TankNetClient.Instance.Connect(m_ServerHost, m_ServerPort, m_MatchId, m_MyPlayerId);
                 }
             }
 
@@ -224,6 +226,31 @@ namespace Complete
             }
         }
 
+        // Loại bỏ toàn bộ collider vật lý trên tank khi online.
+        // Server là authoritative — Unity physics không được phép di chuyển tank.
+        // Giữ lại BulletHitVolume (trigger) vì nó dùng để detect visual hit, không phải physics.
+        //
+        // Editor  : chỉ disable (enabled = false) để dễ bật lại khi test offline.
+        // Build   : Destroy hoàn toàn — component không còn tồn tại trong memory,
+        //           PhysX không allocate broadphase slot, tránh overhead trên mobile.
+        //
+        // KHÔNG destroy Rigidbody: TankMovement cache m_Rigidbody trong Awake() và gọi
+        // MovePosition/MoveRotation mỗi FixedUpdate. Destroy rb → MissingReferenceException
+        // ngay frame sau spawn → tank crash. Giữ rb kinematic là đủ (kinematic rb không
+        // tham gia collision resolution, chỉ dùng cho movement API).
+        private static void DisablePhysicsColliders(GameObject tankGo)
+        {
+            foreach (var col in tankGo.GetComponentsInChildren<Collider>())
+            {
+                if (col.gameObject.name == "BulletHitVolume") continue;
+#if UNITY_EDITOR
+                col.enabled = false;
+#else
+                Object.Destroy(col);
+#endif
+            }
+        }
+
         // Add a separate tall trigger BoxCollider (child) for bullet-only hit detection.
         // The original BoxCollider is untouched so physics (wall/tank collisions) is unaffected.
         // Bullet collision is XZ-only — mirrors the server which ignores Y when checking hits.
@@ -264,6 +291,7 @@ namespace Complete
             if (rb != null) { rb.isKinematic = true; rb.useGravity = false; }
 
             AddBulletHitTrigger(m_Tanks[0].m_Instance);
+            DisablePhysicsColliders(m_Tanks[0].m_Instance);
 
             // Camera follow local tank
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
@@ -696,6 +724,7 @@ namespace Complete
                 if (remoteRb != null) { remoteRb.isKinematic = true; remoteRb.useGravity = false; }
 
                 AddBulletHitTrigger(go);
+                DisablePhysicsColliders(go);
 
                 // Remote tank is driven purely by snapshots — disable all local input components
                 // so they don't read keyboard input or send packets to the server.

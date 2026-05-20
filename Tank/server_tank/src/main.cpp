@@ -139,6 +139,10 @@ int main() {
                         for (auto& [pidStr, uid] : j.at("userIds").items())
                             cfg.userIds[static_cast<uint32_t>(std::stoul(pidStr))] = uid.get<std::string>();
                     }
+                    if (j.contains("tokens")) {
+                        for (auto& [pidStr, tok] : j.at("tokens").items())
+                            cfg.playerTokens[static_cast<uint32_t>(std::stoul(pidStr))] = tok.get<std::string>();
+                    }
                     manager.createMatch(std::move(cfg));
                     return;
                 }
