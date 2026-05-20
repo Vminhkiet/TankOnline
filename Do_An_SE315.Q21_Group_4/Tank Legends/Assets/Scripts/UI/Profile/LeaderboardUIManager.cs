@@ -45,6 +45,21 @@ private const string LeaderboardPath = "/api/history/leaderboard";
     private readonly List<GameObject> spawnedTopRows = new List<GameObject>();
     private readonly List<GameObject> spawnedSharedRows = new List<GameObject>();
 
+
+    private void Start()
+    {
+        if (top1To4Container != null)
+        {
+            for (int i = top1To4Container.childCount - 1; i >= 0; i--)
+                Destroy(top1To4Container.GetChild(i).gameObject);
+        }
+        if (top5To10Container != null)
+        {
+            for (int i = top5To10Container.childCount - 1; i >= 0; i--)
+                Destroy(top5To10Container.GetChild(i).gameObject);
+        }
+    }
+
     private void OnEnable()
     {
         StartCoroutine(LoadLeaderboardCoroutine());
