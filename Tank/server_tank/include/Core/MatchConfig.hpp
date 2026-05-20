@@ -7,7 +7,8 @@
 struct MatchConfig {
     uint32_t             matchId        = 0;
     std::vector<uint32_t> playerIds;
-    std::unordered_map<uint32_t, std::string> userIds; // playerId -> userId string
+    std::unordered_map<uint32_t, std::string> userIds;   // playerId -> userId string
+    std::unordered_map<uint32_t, std::string> playerTokens; // playerId -> match token
     std::string          mapName        = "world";
     int                  maxDurationSecs = 300;
     int                  port           = 8080;

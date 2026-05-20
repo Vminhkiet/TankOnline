@@ -35,6 +35,7 @@ namespace TankNet
         public string ServerHost = "127.0.0.1";
         public int    ServerPort = 8080;
         public uint   MatchId    = 0;
+        public uint   PlayerId   = 0;
 
         [Header("Input")]
         public float SendRateHz = 20f;
@@ -66,11 +67,11 @@ namespace TankNet
 
         public bool IsConnected => _running;
 
-        public void Connect(string host, int port, uint matchId)
+        public void Connect(string host, int port, uint matchId, uint playerId = 0)
         {
             if (_running) Disconnect();   // clean up old socket/thread before reconnecting
 
-            ServerHost = host; ServerPort = port; MatchId = matchId;
+            ServerHost = host; ServerPort = port; MatchId = matchId; PlayerId = playerId;
 
             _server = new IPEndPoint(IPAddress.Parse(host), port);
             _udp    = new UdpClient();
@@ -106,7 +107,7 @@ namespace TankNet
             // Keep pending in sync so SendTick (heartbeat/shoot) doesn't override with (0,0)
             _pendingMoveX = Mathf.Clamp(moveX, -1, 1);
             _pendingMoveZ = Mathf.Clamp(moveZ, -1, 1);
-            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _seq++);
+            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, PlayerId, _seq++);
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
         }
 
@@ -114,7 +115,7 @@ namespace TankNet
         {
             if (!_running) return;
             // Send immediately so server bullet spawns in sync with local prediction shell
-            byte[] pkt = PacketBuilder.BuildShoot(MatchId, (int)force, _seq++);
+            byte[] pkt = PacketBuilder.BuildShoot(MatchId, (int)force, PlayerId, _seq++);
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
             // Do NOT set _pendingShoot — SendTick would double-send and fire a second bullet
         }
@@ -125,12 +126,12 @@ namespace TankNet
         {
             if (!_running) return;
 
-            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _seq++);
+            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, PlayerId, _seq++);
             _udp.Send(pkt, pkt.Length, _server);
 
             if (_pendingShoot)
             {
-                byte[] shoot = PacketBuilder.BuildShoot(MatchId, (int)_pendingShootForce, _seq++);
+                byte[] shoot = PacketBuilder.BuildShoot(MatchId, (int)_pendingShootForce, PlayerId, _seq++);
                 _udp.Send(shoot, shoot.Length, _server);
                 _pendingShoot = false;
             }
