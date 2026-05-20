@@ -1,0 +1,82 @@
+{
+  "date": "2026-05-19",
+  "config": "PROFILING_SINGLE_CORE",
+  "cores": 1,
+  "ppm": 10,
+  "keepalive_hz": 15,
+  "shoot_every": 10,
+  "budget_us": 16667,
+  "task_samples": 1561,
+  "rows": [
+    {
+      "matches": 5,
+      "players": 50,
+      "perf_samples": 33,
+      "tick_avg_us": 2812,
+      "tick_max_us": 6951,
+      "tick_per_match_us": 562.5,
+      "tick_per_match_core_us": 562.5,
+      "budget_pct": 16.9,
+      "bullet_us_avg": 15.3,
+      "physics_us_avg": 173.9,
+      "snap_us_avg": 199.0,
+      "task_total_per_match_us": 388.2
+    },
+    {
+      "matches": 10,
+      "players": 100,
+      "perf_samples": 148,
+      "tick_avg_us": 2754,
+      "tick_max_us": 10326,
+      "tick_per_match_us": 275.4,
+      "tick_per_match_core_us": 275.4,
+      "budget_pct": 16.5,
+      "bullet_us_avg": 15.3,
+      "physics_us_avg": 173.9,
+      "snap_us_avg": 199.0,
+      "task_total_per_match_us": 388.2
+    },
+    {
+      "matches": 15,
+      "players": 150,
+      "perf_samples": 66,
+      "tick_avg_us": 4674,
+      "tick_max_us": 10971,
+      "tick_per_match_us": 311.6,
+      "tick_per_match_core_us": 311.6,
+      "budget_pct": 28.0,
+      "bullet_us_avg": 15.3,
+      "physics_us_avg": 173.9,
+      "snap_us_avg": 199.0,
+      "task_total_per_match_us": 388.2
+    },
+    {
+      "matches": 20,
+      "players": 200,
+      "perf_samples": 41,
+      "tick_avg_us": 4659,
+      "tick_max_us": 12121,
+      "tick_per_match_us": 232.9,
+      "tick_per_match_core_us": 232.9,
+      "budget_pct": 28.0,
+      "bullet_us_avg": 15.3,
+      "physics_us_avg": 173.9,
+      "snap_us_avg": 199.0,
+      "task_total_per_match_us": 388.2
+    },
+    {
+      "matches": 25,
+      "players": 250,
+      "perf_samples": 22,
+      "tick_avg_us": 5380,
+      "tick_max_us": 11910,
+      "tick_per_match_us": 215.2,
+      "tick_per_match_core_us": 215.2,
+      "budget_pct": 32.3,
+      "bullet_us_avg": 15.3,
+      "physics_us_avg": 173.9,
+      "snap_us_avg": 199.0,
+      "task_total_per_match_us": 388.2
+    }
+  ]
+}
