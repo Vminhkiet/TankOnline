@@ -446,20 +446,45 @@ Vector3 GameWorld::getSpawnPosition(size_t slotIndex) const {
     return defaultSpawn(static_cast<uint32_t>(slotIndex));
 }
 
-// Trả về chiều cao mặt đứng tại (x,z): max của heightmap và top của các walkable box (bridge/floor)
+// Trả về chiều cao mặt đứng tại (x,z): max của heightmap và top của các walkable box.
 // Non-walkable walls bị bỏ qua để tránh snap tank lên đỉnh tường.
+//
+// Phân biệt 2 loại walkable box:
+//   Flat  (|axisX.y| <= 0.1 && |axisZ.y| <= 0.1): mặt phẳng nằm ngang (sàn cầu, mặt đất)
+//         → dùng topY cố định vì toàn bộ mặt cùng một chiều cao.
+//   Tilted (|axisX.y| > 0.1 || |axisZ.y| > 0.1): panel nghiêng (ramp, dốc)
+//         → KHÔNG dùng topY (= đỉnh cao nhất của box, gây teleport tức thì).
+//         → Dùng baked heightmap từ BakeColliderHeightmap, vốn đã raycast từng điểm
+//           trên mặt nghiêng → chiều cao tăng dần theo vị trí → tank đi lên mượt.
 float GameWorld::surfaceHeight(float x, float z, uint32_t* outBoxId) const
 {
-    float    h     = _map.GetHeightAt(x, z);
+    float    h     = _map.GetHeightAt(x, z);  // heightmap (terrain + baked colliders)
     uint32_t boxId = 0;
     for (const auto& box : _physics._boxes) {
         if (!box.isActive || !box.isWalkable) continue;
+
+        // Chuyển (x,z) về local space của box để kiểm tra footprint.
+        // Chỉ dùng thành phần XZ của axis vì footprint là hình chiếu xuống mặt phẳng Y=const.
         float dx = x - box.center.x;
         float dz = z - box.center.z;
         float lx = dx * box.axisX.x + dz * box.axisX.z;
         float lz = dx * box.axisZ.x + dz * box.axisZ.z;
         if (std::fabs(lx) > box.extents.x) continue;
         if (std::fabs(lz) > box.extents.z) continue;
+
+        // Kiểm tra xem box có bị nghiêng không (ramp / panel xoay).
+        // axisX.y và axisZ.y khác 0 khi box xoay quanh trục ngang → mặt nghiêng.
+        const bool isTilted = (std::fabs(box.axisX.y) > 0.1f || std::fabs(box.axisZ.y) > 0.1f);
+
+        if (isTilted) {
+            // Ramp: chiều cao thực tế thay đổi từng điểm → đã được bake vào heightmap.
+            // Không tính topY ở đây để tránh snap tức thì lên đỉnh ramp.
+            // Vẫn ghi nhận boxId để _tankOnBox tracking biết tank đang trên surface này.
+            if (boxId == 0) boxId = box.entityId;
+            continue;
+        }
+
+        // Flat box: topY là hằng số trên toàn mặt → dùng trực tiếp để snap tank lên sàn.
         float topY = box.center.y
             + std::fabs(box.axisX.y) * box.extents.x
             + std::fabs(box.axisY.y) * box.extents.y

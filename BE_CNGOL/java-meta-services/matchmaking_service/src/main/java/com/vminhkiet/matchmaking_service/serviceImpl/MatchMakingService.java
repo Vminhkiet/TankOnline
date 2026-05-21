@@ -8,16 +8,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.vminhkiet.matchmaking_service.model.Match;
@@ -36,16 +34,16 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    @Autowired
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    private static final String MATCH_CREATE_TOPIC = "match.create";
 
     @Value("${tank.server.host:127.0.0.1}")
     private String tankHost;
 
     @Value("${tank.server.udp-port:8080}")
     private int tankUdpPort;
-
-    @Value("${tank.server.mgmt-port:9090}")
-    private int tankMgmtPort;
 
     // ── Helpers status ────────────────────────────────────────────────────────
 
@@ -94,7 +92,9 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
 
     @Override
     public Match findOrCreateMatch(String userId) throws InterruptedException {
-        // Đặt trạng thái waiting và thêm vào queue (string)
+        // Xóa mọi entry cũ của userId khỏi queue trước khi thêm lại
+        // (tránh A vs A khi cùng user tìm trận nhiều lần liên tiếp)
+        redisTemplate.opsForList().remove(QUEUE_KEY, 0, userId);
         setStatus(userId, "waiting");
         redisTemplate.opsForList().rightPush(QUEUE_KEY, userId);
 
@@ -125,7 +125,7 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
             if (raw == null) break;
 
             String pid = raw.toString();
-            if ("waiting".equals(getStatus(pid))) {
+            if ("waiting".equals(getStatus(pid)) && !validPlayers.contains(pid)) {
                 validPlayers.add(pid);
             } else {
                 log.debug("Skipped stale queue entry: {} (status={})", pid, getStatus(pid));
@@ -144,36 +144,38 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
         return null;
     }
 
-    // ── Notify Tank server ────────────────────────────────────────────────────
+    // ── Notify Tank server via Kafka match.create ─────────────────────────────
 
     private void notifyTankServer(long matchId, List<String> playerStrIds) {
         try {
-            List<Integer> playerIntIds = playerStrIds.stream()
-                .map(id -> {
-                    try { return Integer.parseInt(id); }
-                    catch (NumberFormatException e) { return 0; }
-                })
-                .filter(id -> id > 0)
-                .collect(Collectors.toList());
+            // userId từ auth service là username string (vd: "player1"), không phải số nguyên.
+            // Integer.parseInt("player1") → NumberFormatException → bị filter → players=[] rỗng
+            // → server nhận empty playerIds → resolvePlayer luôn fail → không spawn tank.
+            //
+            // Fix: dùng sequential slot ID [1, 2, ..., N] cho game server.
+            // Server chỉ cần int để quản lý session trong match, không cần trùng với DB userId.
+            // Client nhận localPlayerId từ snapshot header → tự cập nhật m_MyPlayerId đúng.
+            // userIds map (slot→username) được gửi kèm để server đính kèm vào match.result.
+            List<Integer> playerIntIds = new ArrayList<>();
+            Map<String, String> userIdMap = new HashMap<>();
+            for (int i = 0; i < playerStrIds.size(); i++) {
+                int slotId = i + 1;          // slot 0 → playerId 1, slot 1 → playerId 2, ...
+                playerIntIds.add(slotId);
+                userIdMap.put(String.valueOf(slotId), playerStrIds.get(i));
+            }
 
             Map<String, Object> bodyMap = new HashMap<>();
-            bodyMap.put("matchId",         (int) matchId);
-            bodyMap.put("playerIds",       playerIntIds);
-            bodyMap.put("mapName",         "world");
-            bodyMap.put("maxDurationSecs", 300);
+            bodyMap.put("matchId",     (int) matchId);
+            bodyMap.put("players",     playerIntIds);
+            bodyMap.put("userIds",     userIdMap);   // {1:"player1", 2:"player2"} cho match.result
+            bodyMap.put("mapName",     "world");
+            bodyMap.put("maxDuration", 180);
 
-            // Serialize to JSON string first so Content-Length is set (not chunked)
-            String jsonBody = new ObjectMapper().writeValueAsString(bodyMap);
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setContentLength(jsonBody.getBytes().length);
-            HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
-
-            String url = "http://" + tankHost + ":" + tankMgmtPort + "/internal/match/create";
-            restTemplate.postForObject(url, entity, String.class);
-            log.info("Notified Tank server: matchId={} players={}", matchId, playerIntIds);
+            String json = new ObjectMapper().writeValueAsString(bodyMap);
+            kafkaTemplate.send(MATCH_CREATE_TOPIC, json);
+            log.info("Published match.create matchId={} players={} userIds={}", matchId, playerIntIds, userIdMap);
         } catch (Exception e) {
-            log.warn("Tank server unreachable at {}:{} — {}", tankHost, tankMgmtPort, e.getMessage());
+            log.warn("Failed to publish match.create to Kafka: {}", e.getMessage());
         }
     }
 }

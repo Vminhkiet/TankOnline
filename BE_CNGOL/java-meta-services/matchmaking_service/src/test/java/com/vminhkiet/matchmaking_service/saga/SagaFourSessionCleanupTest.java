@@ -55,7 +55,7 @@ class SagaFourSessionCleanupTest {
         @Test
         @DisplayName("Khi chỉ 1 player → chưa đủ, trả về null (chờ thêm)")
         void whenOnePlayerAdded_thenNoBatchFormed() {
-            WaitingEntry e = new WaitingEntry(101L, 1, new CompletableFuture<>());
+            WaitingEntry e = new WaitingEntry(101L, new CompletableFuture<>());
 
             assertThat(lobbyManager.addAndTryForm(e, 2)).isNull();
             assertThat(lobbyManager.size()).isEqualTo(1);
@@ -64,8 +64,8 @@ class SagaFourSessionCleanupTest {
         @Test
         @DisplayName("Khi 2 player → batch trả về, lobby rỗng")
         void whenTwoPlayersAdded_thenBatchFormedAndLobbyCleared() {
-            WaitingEntry e1 = new WaitingEntry(101L, 1, new CompletableFuture<>());
-            WaitingEntry e2 = new WaitingEntry(102L, 2, new CompletableFuture<>());
+            WaitingEntry e1 = new WaitingEntry(101L, new CompletableFuture<>());
+            WaitingEntry e2 = new WaitingEntry(102L, new CompletableFuture<>());
 
             assertThat(lobbyManager.addAndTryForm(e1, 2)).isNull();
             List<WaitingEntry> batch = lobbyManager.addAndTryForm(e2, 2);
@@ -79,7 +79,7 @@ class SagaFourSessionCleanupTest {
         @DisplayName("removePlayer → future completed exceptionally, lobby rỗng")
         void whenPlayerRemoved_thenFutureCompletedExceptionally() throws Exception {
             CompletableFuture<ResponseEntity<Map<String, Object>>> future = new CompletableFuture<>();
-            lobbyManager.addAndTryForm(new WaitingEntry(101L, 1, future), 2);
+            lobbyManager.addAndTryForm(new WaitingEntry(101L, future), 2);
 
             lobbyManager.removePlayer(101L);
 
@@ -93,7 +93,7 @@ class SagaFourSessionCleanupTest {
         @Test
         @DisplayName("removePlayer userId không tồn tại → không crash, lobby không đổi")
         void whenRemoveNonExistentPlayer_thenNoEffect() {
-            lobbyManager.addAndTryForm(new WaitingEntry(999L, 1, new CompletableFuture<>()), 2);
+            lobbyManager.addAndTryForm(new WaitingEntry(999L, new CompletableFuture<>()), 2);
 
             lobbyManager.removePlayer(888L);
 
@@ -105,8 +105,8 @@ class SagaFourSessionCleanupTest {
         void whenRemoveOnePlayer_thenOtherPlayersRemain() {
             CompletableFuture<ResponseEntity<Map<String, Object>>> f1 = new CompletableFuture<>();
             CompletableFuture<ResponseEntity<Map<String, Object>>> f2 = new CompletableFuture<>();
-            lobbyManager.addAndTryForm(new WaitingEntry(101L, 1, f1), 3);
-            lobbyManager.addAndTryForm(new WaitingEntry(102L, 2, f2), 3);
+            lobbyManager.addAndTryForm(new WaitingEntry(101L, f1), 3);
+            lobbyManager.addAndTryForm(new WaitingEntry(102L, f2), 3);
 
             lobbyManager.removePlayer(101L);
 

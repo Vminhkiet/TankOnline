@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: matchmaking-service
+  kafka:
+    bootstrap-servers: 172.25.203.168:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   data:
     redis:
       host: localhost
@@ -33,6 +38,6 @@ management:
 # mgmt-port: Java gọi HTTP để tạo match (Tank server phải đang chạy)
 tank:
   server:
-    host: 127.0.0.1
+    host: 10.11.1.177   # Windows WiFi IP — mobile cùng mạng kết nối UDP được
     udp-port: 8080
     mgmt-port: 9090

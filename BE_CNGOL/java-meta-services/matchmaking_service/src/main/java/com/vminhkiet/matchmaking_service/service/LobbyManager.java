@@ -19,6 +19,17 @@ public class LobbyManager {
 
     /** Thêm player vào lobby, trả về batch nếu đủ MATCH_SIZE player. */
     public synchronized List<WaitingEntry> addAndTryForm(WaitingEntry entry, int matchSize) {
+        // Xóa entry cũ của cùng userId (tìm trận lại sau khi hủy/khi cùng user gọi nhiều lần)
+        // Complete future cũ để giải phóng HTTP thread đang chờ
+        lobby.removeIf(existing -> {
+            if (existing.userId() == entry.userId()) {
+                existing.future().complete(
+                        org.springframework.http.ResponseEntity.status(409)
+                                .body(java.util.Map.of("error", "replaced_by_new_search")));
+                return true;
+            }
+            return false;
+        });
         lobby.add(entry);
         if (lobby.size() >= matchSize) {
             List<WaitingEntry> batch = new ArrayList<>(lobby.subList(0, matchSize));
@@ -30,7 +41,6 @@ public class LobbyManager {
 
     /**
      * Saga-4 Compensation: xóa player khỏi lobby khi session bị invalidate.
-     * CompletableFuture của player đó được complete với lỗi để giải phóng HTTP thread.
      */
     public synchronized void removePlayer(long userId) {
         boolean removed = lobby.removeIf(entry -> {

@@ -7,6 +7,5 @@ import java.util.concurrent.CompletableFuture;
 
 public record WaitingEntry(
         long userId,
-        int playerId,
         CompletableFuture<ResponseEntity<Map<String, Object>>> future
 ) {}
