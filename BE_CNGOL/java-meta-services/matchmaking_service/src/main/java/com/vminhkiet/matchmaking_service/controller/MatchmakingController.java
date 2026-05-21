@@ -20,7 +20,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.http.HttpStatus;
 
 @Slf4j
 @RestController
@@ -50,10 +55,14 @@ public class MatchmakingController {
     private final AtomicInteger matchCounter = new AtomicInteger(1000);
     private final ObjectMapper  objectMapper = new ObjectMapper();
 
-    // Redis key prefixes
+    // Redis key prefixes (from remote branch)
     private static final String R_SEARCHING = "matchmaking:searching:";  // TTL 120s
     private static final String R_TOKEN     = "matchmaking:token:";       // TTL 120s
     private static final String R_MATCH     = "matchmaking:match:";       // TTL 600s
+
+    // ACK mechanism (from HEAD): pending matches waiting for game server ACK
+    private final Map<Integer, List<WaitingEntry>> pendingMatches = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     @PostMapping("/find")
     public CompletableFuture<ResponseEntity<Map<String, Object>>> findMatch() {
@@ -73,7 +82,6 @@ public class MatchmakingController {
             int matchId = matchCounter.getAndIncrement();
 
             // Assign per-match slot IDs: 1, 2, ... (luôn trong range [1..255] của packet format)
-            // tokenMap và userIdMap đều key theo slotId (String)
             LinkedHashMap<String, String> tokenMap  = new LinkedHashMap<>();
             LinkedHashMap<String, String> userIdMap = new LinkedHashMap<>();
             List<Integer> slotIds = new java.util.ArrayList<>();
@@ -104,19 +112,22 @@ public class MatchmakingController {
                 Duration.ofSeconds(600));
             log.info("[Redis] SET {}{}  =  match active", R_MATCH, matchId);
 
+            // Lưu pending match và gửi lên Kafka, chờ game server ACK
+            pendingMatches.put(matchId, batch);
             publishMatch(matchId, slotIds, userIdMap, tokenMap);
 
-            for (int i = 0; i < batch.size(); i++) {
-                int slotId = i + 1;
-                WaitingEntry e = batch.get(i);
-                e.future().complete(ResponseEntity.ok(Map.of(
-                        "matchId",    matchId,
-                        "serverHost", serverHost,
-                        "serverPort", serverPort,
-                        "playerId",   slotId,
-                        "token",      tokenMap.get(String.valueOf(slotId))
-                )));
-            }
+            // Timeout after 5 seconds if game server doesn't respond
+            final LinkedHashMap<String, String> finalTokenMap = tokenMap;
+            scheduler.schedule(() -> {
+                List<WaitingEntry> removed = pendingMatches.remove(matchId);
+                if (removed != null) {
+                    log.warn("[MatchmakingController] Match {} timed out waiting for game server ACK", matchId);
+                    for (WaitingEntry e : removed) {
+                        e.future().complete(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                .body(Map.of("error", "Máy chủ trò chơi hiện đang không khả dụng. Vui lòng thử lại sau.")));
+                    }
+                }
+            }, 5, TimeUnit.SECONDS);
         }
 
         return myFuture;
@@ -139,6 +150,34 @@ public class MatchmakingController {
                      matchId, slotIds, tokenMap.keySet());
         } catch (Exception e) {
             log.error("[MatchmakingController] Kafka publish failed for matchId={}: {}", matchId, e.getMessage());
+        }
+    }
+
+    @org.springframework.kafka.annotation.KafkaListener(topics = "match.ready", groupId = "matchmaking-service")
+    public void onMatchReady(String payload) {
+        try {
+            var root = objectMapper.readTree(payload);
+            if (root.has("matchId")) {
+                int matchId = root.get("matchId").asInt();
+                List<WaitingEntry> batch = pendingMatches.remove(matchId);
+                if (batch != null) {
+                    log.info("[MatchmakingController] Match {} is ready on game server!", matchId);
+                    for (int i = 0; i < batch.size(); i++) {
+                        int slotId = i + 1;
+                        WaitingEntry e = batch.get(i);
+                        e.future().complete(ResponseEntity.ok(Map.of(
+                                "matchId",    matchId,
+                                "serverHost", serverHost,
+                                "serverPort", serverPort,
+                                "playerId",   slotId
+                        )));
+                    }
+                } else {
+                    log.debug("[MatchmakingController] Received match.ready for match {}, but no pending entry found (timeout?)", matchId);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[MatchmakingController] Error processing match.ready: {}", e.getMessage());
         }
     }
 

@@ -171,6 +171,15 @@ void MatchManager::createMatch(MatchConfig config) {
 
     LOG_INFO("MatchManager: match {} created (total active: {})",
              config.matchId, _matches.size());
+
+    // Publish match.ready to Kafka to acknowledge MatchmakingService
+    json j;
+    j["matchId"] = config.matchId;
+    if (_producer.publish("match.ready", j.dump())) {
+        LOG_INFO("MatchManager: match {} ready signal published to Kafka", config.matchId);
+    } else {
+        LOG_WARN("MatchManager: match {} ready signal not published (Kafka unavailable)", config.matchId);
+    }
 }
 
 void MatchManager::routeCommand(GameCommand cmd) {
@@ -218,6 +227,9 @@ void MatchManager::onMatchEnd(MatchResult r) {
     j["kills"]        = json::object();
     for (auto& [pid, k] : r.kills)
         j["kills"][std::to_string(pid)] = k;
+    j["deaths"]       = json::object();
+    for (auto& [pid, d] : r.deaths)
+        j["deaths"][std::to_string(pid)] = d;
     j["userIds"]      = json::object();
     for (auto& [pid, uid] : r.userIds)
         j["userIds"][std::to_string(pid)] = uid;

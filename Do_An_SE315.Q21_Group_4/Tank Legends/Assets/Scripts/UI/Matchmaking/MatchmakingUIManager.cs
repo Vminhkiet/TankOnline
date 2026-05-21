@@ -31,10 +31,21 @@ public class MatchmakingUIManager : MonoBehaviour
 
     private bool isSearching = false;
 
-    private void Start()
+    private IEnumerator Start()
     {
         if (findMatchPanel != null) findMatchPanel.SetActive(false);
         if (statusText != null) statusText.text = "";
+
+        // Chờ 1 frame để đảm bảo MainScreenButtonManager.Start() đã chạy xong và tắt các panel
+        yield return null;
+
+        // Tự động tìm trận nếu có yêu cầu từ màn hình kết thúc trận đấu trước đó
+        if (GlobalMatchState.AutoMatchmake)
+        {
+            GlobalMatchState.AutoMatchmake = false; // Reset cờ
+            if (findMatchPanel != null) findMatchPanel.SetActive(true); // Hiển thị bảng tìm trận
+            OnFindMatchButtonClicked(); // Kích hoạt tiến trình tìm trận
+        }
     }
 
     public void OnFindMatchButtonClicked()

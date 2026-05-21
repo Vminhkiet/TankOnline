@@ -120,6 +120,7 @@ void GameWorld::updateBullets(float deltaTime)
                     LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} KILLED (dealt {} dmg)",
                              b.id, b.ownerTankId, tid, Tank::BULLET_DAMAGE);
                     _kills[b.ownerTankId]++;
+                    _deaths[tid]++;
                 } else {
                     LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} hp={} (dealt {} dmg)",
                              b.id, b.ownerTankId, tid, tank.health, Tank::BULLET_DAMAGE);
@@ -392,7 +393,8 @@ MatchOutcome GameWorld::checkOutcome(float elapsed, float maxDuration,
                                      const std::vector<uint32_t>& playerIds,
                                      MatchResult& result) const
 {
-    result.kills = _kills;
+    result.kills  = _kills;
+    result.deaths = _deaths;
     result.durationSecs = elapsed;
 
     // Count players who have actually spawned (connected)

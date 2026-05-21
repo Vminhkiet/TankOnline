@@ -37,8 +37,9 @@ public class MatchResultKafkaListener {
     private void saveForAllPlayers(MatchResultEvent event) {
         if (event.getUserIds() == null || event.getUserIds().isEmpty()) return;
 
-        Map<String, String> userIds = event.getUserIds();
-        Map<String, Integer> kills  = event.getKills();
+        Map<String, String> userIds  = event.getUserIds();
+        Map<String, Integer> kills   = event.getKills();
+        Map<String, Integer> deaths  = event.getDeaths();
 
         String[] playerKeys = userIds.keySet().toArray(new String[0]);
 
@@ -57,7 +58,8 @@ public class MatchResultKafkaListener {
             if (repo.existsByMatchIdAndPlayerId(event.getMatchId(), userId)) continue;
 
             MatchResult result = resolveResult(event, pid);
-            int killCount = kills != null ? kills.getOrDefault(pidStr, 0) : 0;
+            int killCount  = kills  != null ? kills.getOrDefault(pidStr, 0) : 0;
+            int deathCount = deaths != null ? deaths.getOrDefault(pidStr, 0) : 0;
 
             MatchHistory h = MatchHistory.builder()
                     .matchId(event.getMatchId())
@@ -65,7 +67,7 @@ public class MatchResultKafkaListener {
                     .opponentId(opponentUserId)
                     .result(result)
                     .kills(killCount)
-                    .deaths(0)
+                    .deaths(deathCount)
                     .durationSecs((int) event.getDurationSecs())
                     .mapName(event.getMapName() != null ? event.getMapName() : "world")
                     .playedAt(Instant.now())

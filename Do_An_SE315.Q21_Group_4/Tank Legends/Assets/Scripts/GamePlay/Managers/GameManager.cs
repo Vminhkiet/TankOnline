@@ -33,6 +33,9 @@ namespace Complete
         public TextMeshProUGUI matchEndStatsText;
         public string          lobbySceneName = "Lobby";
 
+        [Header("Match HUD")]
+        public TextMeshProUGUI matchTimerText;
+
         // ── Match tracking (online) ───────────────────────────────────────────
         private float   _matchStartTime;
         private bool    _matchEnded;
@@ -40,6 +43,7 @@ namespace Complete
         private int     _myDeaths;
         private string  _opponentId = "bot-1";
         private int     _totalPlayersSeen;
+        private float   _serverTimeRemaining = -1f;
         private readonly Dictionary<uint, bool> _prevAliveStatus = new();
 
         private readonly Dictionary<uint, GameObject> _remoteTanks   = new();
@@ -144,6 +148,15 @@ namespace Complete
                 if (kvp.Value == null) continue;
                 if (_remoteSnaps.TryGetValue(kvp.Key, out var buf))
                     ApplyInterp(buf, kvp.Value.transform, renderTime);
+            }
+
+            // Update match timer UI
+            if (m_OnlineMode && matchTimerText != null && _serverTimeRemaining >= 0f)
+            {
+                int totalSecs = Mathf.CeilToInt(_serverTimeRemaining);
+                int minutes   = totalSecs / 60;
+                int seconds   = totalSecs % 60;
+                matchTimerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
             }
         }
 
@@ -509,6 +522,9 @@ namespace Complete
 
             // Check if match should end
             if (!_matchEnded) CheckMatchEnd(snap);
+
+            // Sync server time remaining for HUD timer
+            _serverTimeRemaining = snap.TimeRemaining;
         }
 
         // Cached bullet prefab: m_RemoteBulletPrefab if assigned, otherwise auto-detected
@@ -872,10 +888,28 @@ namespace Complete
                 durationSecs: durationSecs
             );
 
-            // Wait then return to lobby
-            yield return new WaitForSeconds(5f);
+            // Không tự động chuyển cảnh nữa, chờ người chơi tương tác với các nút trên Panel kết thúc
+            yield return null;
+        }
 
+        /// <summary>
+        /// Được gọi khi người chơi bấm nút "Main Menu" trên Panel kết thúc trận đấu.
+        /// </summary>
+        public void OnMainMenuClicked()
+        {
             GlobalMatchState.Clear();
+            SceneManager.LoadScene(
+                string.IsNullOrEmpty(lobbySceneName) ? "Lobby" : lobbySceneName
+            );
+        }
+
+        /// <summary>
+        /// Được gọi khi người chơi bấm nút "Tìm trận mới" trên Panel kết thúc trận đấu.
+        /// </summary>
+        public void OnFindNewMatchClicked()
+        {
+            GlobalMatchState.Clear();
+            GlobalMatchState.AutoMatchmake = true; // Kích hoạt cờ tự động tìm trận
             SceneManager.LoadScene(
                 string.IsNullOrEmpty(lobbySceneName) ? "Lobby" : lobbySceneName
             );

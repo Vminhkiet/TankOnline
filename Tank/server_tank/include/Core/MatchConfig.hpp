@@ -22,6 +22,7 @@ struct MatchResult {
     uint32_t     winnerId    = 0;
     float        durationSecs = 0.f;
     std::unordered_map<uint32_t, int>         kills;   // playerId -> kill count
+    std::unordered_map<uint32_t, int>         deaths;  // playerId -> death count
     std::unordered_map<uint32_t, std::string> userIds; // playerId -> userId string
     std::string  mapName     = "world";
 };

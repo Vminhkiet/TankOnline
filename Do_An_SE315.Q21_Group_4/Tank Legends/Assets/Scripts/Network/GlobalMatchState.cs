@@ -6,6 +6,7 @@ public static class GlobalMatchState
     public static uint MatchId { get; set; } = 0;
     public static string ServerHost { get; set; } = "";
     public static int ServerPort { get; set; } = 0;
+    public static bool AutoMatchmake { get; set; } = false; // Tự động tìm trận sau khi kết thúc trận cũ
     public static uint PlayerId { get; set; } = 0;
     public static string Token { get; set; } = "";
 

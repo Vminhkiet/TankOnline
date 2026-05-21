@@ -77,6 +77,9 @@ public class MatchHistoryUIManager : MonoBehaviour
 
     private void Start()
     {
+        foreach (Transform child in historyContainer)
+            Destroy(child.gameObject);
+
         if (!GameApiClient.HasJwt())
         {
             Debug.LogWarning("[History] Start skipped load: jwt is empty.");
