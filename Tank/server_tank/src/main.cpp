@@ -29,7 +29,7 @@ int main() {
     timeBeginPeriod(1);
 
     std::cout << "=========================================\n"
-              << "        SERVER-TANK  v0.2 (match mode)  \n"
+              << "  SERVER-TANK  v0.3 (Matchmaking ACK)   \n"
               << "=========================================\n\n";
 
     std::signal(SIGINT,  onSignal);

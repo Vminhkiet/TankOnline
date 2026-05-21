@@ -31,7 +31,8 @@ public:
     std::vector<uint8_t> getSnapshot() const;
 
     size_t playerCount() const { return _tanks.size(); }
-    const std::unordered_map<uint32_t, int>& getKills() const { return _kills; }
+    const std::unordered_map<uint32_t, int>& getKills()  const { return _kills; }
+    const std::unordered_map<uint32_t, int>& getDeaths() const { return _deaths; }
     void logTankPositions(uint32_t matchId) const;
     void killPlayer(uint32_t playerId);   // mark disconnected player as dead
 
@@ -47,6 +48,7 @@ private:
     PhysicsWorld                          _physics;
     GameMap                               _map;
     std::unordered_map<uint32_t, int>     _kills;  // ownerTankId → kills this match
+    std::unordered_map<uint32_t, int>     _deaths; // victimTankId → deaths this match
     uint32_t                              _nextBulletId = 50000;
     bool                                  _respawnOnDeath = true;
 

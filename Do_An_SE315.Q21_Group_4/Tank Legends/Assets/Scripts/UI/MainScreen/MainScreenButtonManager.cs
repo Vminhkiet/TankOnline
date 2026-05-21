@@ -16,7 +16,6 @@ public class MainScreenButtonManager : MonoBehaviour
     private void Start()
     {
         RegisterManagedButtons();
-        ShowMainPanel();
     }
 
     private void RegisterManagedButtons()

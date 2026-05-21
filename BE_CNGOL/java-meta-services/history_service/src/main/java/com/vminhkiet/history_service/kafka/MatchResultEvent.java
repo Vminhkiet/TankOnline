@@ -11,6 +11,7 @@ public class MatchResultEvent {
     private long winnerId;        // numeric playerId of winner (0 if draw/timeout)
     private float durationSecs;
     private Map<String, Integer> kills;    // playerId(str) -> kill count
+    private Map<String, Integer> deaths;   // playerId(str) -> death count
     private Map<String, String> userIds;   // playerId(str) -> userId(str)
     private String mapName;
 }

@@ -57,8 +57,8 @@ public class AuthSessionRuntime : MonoBehaviour
 
             if (_isHandlingForceLogout) continue;
 
-            string jwt          = PlayerPrefs.GetString(GameApiClient.JwtKey, "");
-            string refreshToken = PlayerPrefs.GetString(GameApiClient.RefreshTokenKey, "");
+            string jwt          = GameApiClient.GetJwt();
+            string refreshToken = GameApiClient.GetRefreshToken();
             if (string.IsNullOrEmpty(jwt) || string.IsNullOrEmpty(refreshToken)) continue;
 
             // Bọc toàn bộ trong try-catch để coroutine polling KHÔNG BAO GIỜ bị crash vĩnh viễn
@@ -82,9 +82,9 @@ public class AuthSessionRuntime : MonoBehaviour
                     string newRefresh = ExtractJsonField(responseText, "refreshToken");
                     
                     if (!string.IsNullOrEmpty(newJwt))
-                        PlayerPrefs.SetString(GameApiClient.JwtKey, newJwt);
+                        GameApiClient.SetJwt(newJwt);
                     if (!string.IsNullOrEmpty(newRefresh))
-                        PlayerPrefs.SetString(GameApiClient.RefreshTokenKey, newRefresh);
+                        GameApiClient.SetRefreshToken(newRefresh);
                     PlayerPrefs.Save();
                     
                 }

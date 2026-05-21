@@ -132,8 +132,8 @@ public class AuthenticationUIManager : MonoBehaviour
                     AuthResponseData res = JsonUtility.FromJson<AuthResponseData>(apiResult.Body);
                     if (!string.IsNullOrEmpty(res.jwt))
                     {
-                        PlayerPrefs.SetString(GameApiClient.JwtKey, res.jwt);
-                        PlayerPrefs.SetString(GameApiClient.RefreshTokenKey, res.refreshToken);
+                        GameApiClient.SetJwt(res.jwt);
+                        GameApiClient.SetRefreshToken(res.refreshToken);
                         PlayerPrefs.SetString(GameApiClient.UsernameKey, username);
                         PlayerPrefs.Save();
                         loginOk = true;
@@ -222,8 +222,8 @@ public class AuthenticationUIManager : MonoBehaviour
                     AuthResponseData res = JsonUtility.FromJson<AuthResponseData>(apiResult.Body);
                     if (!string.IsNullOrEmpty(res.jwt))
                     {
-                        PlayerPrefs.SetString(GameApiClient.JwtKey, res.jwt);
-                        PlayerPrefs.SetString(GameApiClient.RefreshTokenKey, res.refreshToken);
+                        GameApiClient.SetJwt(res.jwt);
+                        GameApiClient.SetRefreshToken(res.refreshToken);
                         PlayerPrefs.SetString(GameApiClient.UsernameKey, username);
                         PlayerPrefs.SetString(GameApiClient.EmailKey, email);
                         PlayerPrefs.Save();
@@ -328,6 +328,7 @@ public class AuthenticationUIManager : MonoBehaviour
 
     public static void ClearLocalAuth()
     {
+        GameApiClient.ClearMemoryCache();
         PlayerPrefs.DeleteKey(GameApiClient.JwtKey);
         PlayerPrefs.DeleteKey(GameApiClient.RefreshTokenKey);
         PlayerPrefs.DeleteKey(GameApiClient.UsernameKey);

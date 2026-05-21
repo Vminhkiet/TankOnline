@@ -34,7 +34,38 @@ public static class GameApiClient
     public const string UsernameKey     = "username";
     public const string EmailKey        = "email";
 
-    public static string GetJwt() => PlayerPrefs.GetString(JwtKey, "");
+    private static string _jwt;
+    private static string _refreshToken;
+
+    public static string GetJwt() 
+    {
+        if (_jwt == null) _jwt = PlayerPrefs.GetString(JwtKey, "");
+        return _jwt;
+    }
+
+    public static void SetJwt(string token)
+    {
+        _jwt = token;
+        PlayerPrefs.SetString(JwtKey, token);
+    }
+
+    public static string GetRefreshToken()
+    {
+        if (_refreshToken == null) _refreshToken = PlayerPrefs.GetString(RefreshTokenKey, "");
+        return _refreshToken;
+    }
+
+    public static void SetRefreshToken(string token)
+    {
+        _refreshToken = token;
+        PlayerPrefs.SetString(RefreshTokenKey, token);
+    }
+
+    public static void ClearMemoryCache()
+    {
+        _jwt = null;
+        _refreshToken = null;
+    }
 
     public static bool HasJwt() => !string.IsNullOrEmpty(GetJwt());
 
