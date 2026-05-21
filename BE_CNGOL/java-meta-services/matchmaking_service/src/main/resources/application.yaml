@@ -38,6 +38,6 @@ management:
 # mgmt-port: Java gọi HTTP để tạo match (Tank server phải đang chạy)
 tank:
   server:
-    host: 10.11.1.177   # Windows WiFi IP — mobile cùng mạng kết nối UDP được
+    host: 10.83.136.219   # Windows WiFi IP - mobile cùng mạng kết nối UDP được
     udp-port: 8080
     mgmt-port: 9090
