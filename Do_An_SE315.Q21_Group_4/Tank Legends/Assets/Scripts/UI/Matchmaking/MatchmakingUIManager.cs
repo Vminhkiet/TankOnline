@@ -10,6 +10,8 @@ public class MatchmakingResponseData
     public uint matchId;
     public string serverHost;
     public int serverPort;
+    public uint playerId;
+    public string token;
 }
 
 public class MatchmakingUIManager : MonoBehaviour
@@ -26,10 +28,16 @@ public class MatchmakingUIManager : MonoBehaviour
     [Tooltip("Path or full URL. Default: /api/matchmaking/find")]
     public string matchmakingPath = "/api/matchmaking/find";
     
+    [Tooltip("Path or full URL. Default: /api/matchmaking/cancel")]
+    public string cancelPath = "/api/matchmaking/cancel";
+    
     [Header("Scene Settings")]
     public string gameSceneName = "_Complete-Game";
 
     private bool isSearching = false;
+    private UnityWebRequest _activeRequest;  // Track the active HTTP request
+    private Coroutine _findCoroutine;
+    private Coroutine _timerCoroutine;
 
     private IEnumerator Start()
     {
@@ -52,17 +60,49 @@ public class MatchmakingUIManager : MonoBehaviour
     {
         if (isSearching) return;
         
-        StartCoroutine(FindMatchCoroutine());
-        StartCoroutine(UpdateTimerCoroutine());
+        _findCoroutine  = StartCoroutine(FindMatchCoroutine());
+        _timerCoroutine = StartCoroutine(UpdateTimerCoroutine());
     }
 
     public void OnCancelMatchButtonClicked()
     {
-        // Add functionality to cancel match search if supported by your API
         isSearching = false;
+
+        // Stop coroutines first so they don't touch the request after Abort
+        if (_findCoroutine != null)  { StopCoroutine(_findCoroutine);  _findCoroutine = null; }
+        if (_timerCoroutine != null) { StopCoroutine(_timerCoroutine); _timerCoroutine = null; }
+
+        // Abort the pending HTTP request (Dispose is handled by the using block,
+        // but since we stopped the coroutine, we need to dispose manually here)
+        if (_activeRequest != null)
+        {
+            _activeRequest.Abort();
+            _activeRequest.Dispose();
+            _activeRequest = null;
+        }
+
         if (findMatchPanel != null) findMatchPanel.SetActive(false);
         if (statusText != null) statusText.text = "Matchmaking cancelled.";
         if (timerText != null) timerText.text = "00:00";
+
+        // Báo server xóa người chơi khỏi lobby
+        StartCoroutine(SendCancelRequestCoroutine());
+    }
+
+    private IEnumerator SendCancelRequestCoroutine()
+    {
+        if (!GameApiClient.HasJwt()) yield break;
+
+        using (UnityWebRequest request = GameApiClient.CreateRequest(cancelPath, "POST"))
+        {
+            GameApiClient.ApiCallResult result = default;
+            yield return GameApiClient.Send(request, r => result = r);
+            
+            if (!result.Success)
+            {
+                Debug.LogWarning("[Matchmaking] Failed to notify server of cancellation: " + result.Error);
+            }
+        }
     }
 
     private IEnumerator UpdateTimerCoroutine()
@@ -95,10 +135,15 @@ public class MatchmakingUIManager : MonoBehaviour
             yield break;
         }
 
-        using (UnityWebRequest request = GameApiClient.CreateRequest(matchmakingPath, "POST"))
+        _activeRequest = GameApiClient.CreateRequest(matchmakingPath, "POST");
+        var request = _activeRequest;
+
+        using (request)
         {
             GameApiClient.ApiCallResult result = default;
             yield return GameApiClient.Send(request, r => result = r);
+
+            _activeRequest = null; // Request finished, clear reference
 
             if (!isSearching) yield break; // was cancelled
 
@@ -110,9 +155,9 @@ public class MatchmakingUIManager : MonoBehaviour
                 {
                     MatchmakingResponseData response = JsonUtility.FromJson<MatchmakingResponseData>(result.Body);
                     
-                    GlobalMatchState.SetMatchInfo(response.matchId, response.serverHost, response.serverPort);
+                    GlobalMatchState.SetMatchInfo(response.matchId, response.serverHost, response.serverPort, response.playerId, response.token);
                     
-                    Debug.Log($"Match Found! ID: {response.matchId}, Host: {response.serverHost}:{response.serverPort}");
+                    Debug.Log($"Match Found! ID: {response.matchId}, Host: {response.serverHost}:{response.serverPort}, PlayerId: {response.playerId}");
                 }
                 catch (System.Exception e)
                 {
@@ -128,6 +173,14 @@ public class MatchmakingUIManager : MonoBehaviour
             }
             else
             {
+                // Ignore 409 "replaced_by_new_search" — this is expected when user
+                // cancels and immediately searches again
+                if (result.Error != null && result.Error.Contains("409"))
+                {
+                    Debug.Log("[Matchmaking] Previous search replaced by new one (409) — ignoring.");
+                    yield break;
+                }
+
                 string errorMsg = "Matchmaking failed: " + result.Error;
                 Debug.LogError(errorMsg);
                 if (statusText != null) statusText.text = errorMsg;

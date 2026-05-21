@@ -94,6 +94,24 @@ public class MainScreenButtonManager : MonoBehaviour
         RefreshAllButtons();
     }
 
+    /// <summary>
+    /// Gọi từ nút Back riêng khi tắt panel bằng cách khác (không phải ấn lại toggle button).
+    /// Reset trạng thái CurrentButton để tránh phải ấn 2 lần mới mở lại panel.
+    /// </summary>
+    public void NotifyPanelClosed()
+    {
+        if (CurrentButton != null)
+        {
+            CurrentButton.SetSelected(false);
+            CurrentButton = null;
+        }
+
+        if (mainPanel != null)
+            mainPanel.SetActive(true);
+
+        RefreshAllButtons();
+    }
+
     private void ShowButtonPanel(MainScreenToggleButton button)
     {
         CurrentButton = button;

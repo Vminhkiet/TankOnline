@@ -64,6 +64,18 @@ public class MatchmakingController {
     private final Map<Integer, List<WaitingEntry>> pendingMatches = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
+    @PostMapping("/cancel")
+    public ResponseEntity<Map<String, Object>> cancelSearch() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        long userId = parseLong(auth != null ? (String) auth.getPrincipal() : null, 0L);
+
+        lobbyManager.removePlayer(userId);
+        redisTemplate.delete(R_SEARCHING + userId);
+        log.info("[Matchmaking] userId={} cancelled search", userId);
+
+        return ResponseEntity.ok(Map.of("status", "cancelled"));
+    }
+
     @PostMapping("/find")
     public CompletableFuture<ResponseEntity<Map<String, Object>>> findMatch() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
