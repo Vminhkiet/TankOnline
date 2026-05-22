@@ -218,12 +218,24 @@ void MatchManager::onMatchEnd(MatchResult r) {
     LOG_INFO("MatchManager: match {} ended (outcome={}, winner={}, dur={:.1f}s)",
              r.matchId, outcomeStr, r.winnerId, r.durationSecs);
 
+    // RP is already computed in Match.cpp checkOutcome
+    
     json j;
     j["matchId"]      = r.matchId;
     j["outcome"]      = outcomeStr;
     j["winnerId"]     = r.winnerId;
     j["durationSecs"] = r.durationSecs;
     j["mapName"]      = r.mapName;
+    
+    j["stats"] = json::object();
+    for (auto& [pid, uid] : r.userIds) {
+        json pStat;
+        pStat["rp_reward"] = r.rpRewards[pid];
+        pStat["match_score"] = r.matchScores[pid];
+        pStat["placement"] = r.placements[pid];
+        j["stats"][std::to_string(pid)] = pStat;
+    }
+
     j["kills"]        = json::object();
     for (auto& [pid, k] : r.kills)
         j["kills"][std::to_string(pid)] = k;

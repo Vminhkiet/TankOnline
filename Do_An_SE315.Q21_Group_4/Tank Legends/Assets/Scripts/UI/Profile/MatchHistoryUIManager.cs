@@ -66,6 +66,11 @@ public class MatchHistoryUIManager : MonoBehaviour
     public Transform historyContainer;
     public GameObject historyItemPrefab;
 
+    [Header("Result Sprites")]
+    public Sprite winSprite;
+    public Sprite loseSprite;
+    public Sprite drawSprite;
+
     private readonly Dictionary<string, Sprite> _resultSprites = new Dictionary<string, Sprite>();
     private readonly Dictionary<string, Sprite> _mapSprites = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
 
@@ -272,20 +277,13 @@ public class MatchHistoryUIManager : MonoBehaviour
     {
         _resultSprites.Clear();
 
-        Sprite[] sprites = Resources.LoadAll<Sprite>("Sprites/UI");
-        foreach (var s in sprites)
-        {
-            if (s.name.Equals("Win", StringComparison.OrdinalIgnoreCase))
-                _resultSprites["WIN"] = s;
-            else if (s.name.Equals("Lose", StringComparison.OrdinalIgnoreCase))
-                _resultSprites["LOSE"] = s;
-            else if (s.name.Equals("Draw", StringComparison.OrdinalIgnoreCase))
-                _resultSprites["DRAW"] = s;
-        }
+        if (winSprite != null) _resultSprites["WIN"] = winSprite;
+        if (loseSprite != null) _resultSprites["LOSE"] = loseSprite;
+        if (drawSprite != null) _resultSprites["DRAW"] = drawSprite;
 
         if (!_resultSprites.ContainsKey("WIN") || !_resultSprites.ContainsKey("LOSE") || !_resultSprites.ContainsKey("DRAW"))
         {
-            Debug.LogWarning("[History] Missing one or more result sprites in Resources/Sprites/UI (Win/Lose/Draw).");
+            Debug.LogWarning("[History] Missing one or more result sprites in Inspector (win/lose/draw).");
         }
     }
 

@@ -25,6 +25,9 @@ public class UserProfile {
     @Column(nullable = false)
     private Long coins;
 
+    @Column(nullable = false)
+    private Integer rp = 0;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -39,6 +42,7 @@ public class UserProfile {
         createdAt = Instant.now();
         updatedAt = Instant.now();
         if (coins == null) coins = 0L;
+        if (rp == null) rp = 0;
     }
 
     @PreUpdate

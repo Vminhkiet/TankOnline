@@ -147,6 +147,13 @@ void Match::tick(float dt) {
             r.kills        = _world.getKills();
             r.userIds      = _config.userIds;
             r.mapName      = _config.mapName;
+            
+            // Compute RP for early quit
+            size_t totalPlayers = r.userIds.size();
+            for (auto& [pid, uid] : r.userIds) {
+                r.rpRewards[pid] = 0; // everyone gets 0 RP for early quit
+            }
+            
             _running.store(false);
             _onEnd(r);
             return;
@@ -166,6 +173,30 @@ void Match::tick(float dt) {
     if (outcome != MatchOutcome::Running) {
         result.userIds = _config.userIds;
         result.mapName = _config.mapName;
+
+        // Compute RP for each player before broadcasting
+        size_t totalPlayers = result.userIds.size();
+        for (auto& [pid, uid] : result.userIds) {
+            int placement = result.placements.count(pid) ? result.placements.at(pid) : totalPlayers;
+            int placementRp = 0;
+            if (placement == 1) placementRp = 25;
+            else if (placement == 2) placementRp = 18;
+            else if (placement == 3) placementRp = 12;
+            else if (placement <= (totalPlayers + 1) / 2) placementRp = 4;
+            else placementRp = -5;
+
+            int kills = result.kills.count(pid) ? result.kills.at(pid) : 0;
+            int damage = result.damageDealt.count(pid) ? result.damageDealt.at(pid) : 0;
+            
+            int combatBonus = kills + (damage / 1000);
+            if (combatBonus > 5) combatBonus = 5;
+            
+            int finalRp = placementRp + combatBonus;
+            if (finalRp < 0) finalRp = 0;
+            
+            result.rpRewards[pid] = finalRp;
+        }
+
         broadcastMatchEnd(result);
         _running.store(false);
         LOG_INFO("Match {}: ended (outcome={}, winner={}, dur={:.1f}s)",
@@ -256,6 +287,31 @@ void Match::broadcastMatchEnd(const MatchResult& r) {
     pkt.winnerId     = r.winnerId;
     pkt.durationSecs = static_cast<uint16_t>(r.durationSecs);
 
+    // Prepare leaderboard array
+    std::vector<MatchEndPlayer> players;
+    for (uint32_t pid : _config.playerIds) {
+        MatchEndPlayer p;
+        p.tankId = pid;
+        p.rpReward = r.rpRewards.count(pid) ? r.rpRewards.at(pid) : 0;
+        p.kills = r.kills.count(pid) ? r.kills.at(pid) : 0;
+        
+        std::string uidStr = r.userIds.count(pid) ? r.userIds.at(pid) : "";
+        std::strncpy(p.userId, uidStr.c_str(), sizeof(p.userId) - 1);
+        p.userId[sizeof(p.userId) - 1] = '\0';
+        
+        players.push_back(p);
+    }
+    
+    // Sort by RP descending
+    std::sort(players.begin(), players.end(), [](const MatchEndPlayer& a, const MatchEndPlayer& b) {
+        return a.rpReward > b.rpReward;
+    });
+
+    pkt.playerCount = static_cast<uint8_t>(players.size());
+    size_t totalSize = sizeof(MatchEndPacket) + players.size() * sizeof(MatchEndPlayer);
+    std::vector<uint8_t> buffer(totalSize);
+    std::memcpy(buffer.data() + sizeof(MatchEndPacket), players.data(), players.size() * sizeof(MatchEndPlayer));
+
     for (uint32_t pid : _config.playerIds) {
         sockaddr_in addr{};
         if (!_sessions.getAddress(pid, addr)) continue;
@@ -268,12 +324,19 @@ void Match::broadcastMatchEnd(const MatchResult& r) {
 
         auto it = r.kills.find(pid);
         pkt.myKills = static_cast<uint16_t>(it != r.kills.end() ? it->second : 0);
+        
+        auto rpIt = r.rpRewards.find(pid);
+        pkt.rpReward = static_cast<int16_t>(rpIt != r.rpRewards.end() ? rpIt->second : 0);
+        
+        auto pIt = r.placements.find(pid);
+        pkt.placement = static_cast<uint8_t>(pIt != r.placements.end() ? pIt->second : 0);
 
-        _network.send(addr, reinterpret_cast<const uint8_t*>(&pkt), sizeof(pkt));
+        std::memcpy(buffer.data(), &pkt, sizeof(MatchEndPacket));
+        _network.send(addr, buffer.data(), buffer.size());
     }
 
-    LOG_INFO("Match {}: S2C_MATCH_END broadcast ({} recipients)",
-             r.matchId, _sessions.size());
+    LOG_INFO("Match {}: S2C_MATCH_END broadcast ({} recipients, {} players in leaderboard)",
+             r.matchId, _sessions.size(), players.size());
 }
 
 bool Match::forceLogoutByUserId(const std::string& userId, uint16_t code,

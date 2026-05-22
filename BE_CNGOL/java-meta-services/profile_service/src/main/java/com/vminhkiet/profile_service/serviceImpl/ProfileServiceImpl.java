@@ -118,4 +118,24 @@ public class ProfileServiceImpl implements ProfileService {
         profile.setCoins(profile.getCoins() + amount);
         repo.save(profile);
     }
+
+    @Override
+    @Transactional
+    public void addRp(String userId, int amount) {
+        UserProfile profile = repo.findByUserIdForUpdate(userId).orElseGet(() -> {
+            UserProfile newProfile = UserProfile.builder()
+                    .userId(userId)
+                    .displayName("Player_" + userId)
+                    .imageId("")
+                    .coins(defaultCoins)
+                    .rp(0)
+                    .build();
+            return repo.save(newProfile);
+        });
+
+        int newRp = (profile.getRp() == null ? 0 : profile.getRp()) + amount;
+        if (newRp < 0) newRp = 0;
+        profile.setRp(newRp);
+        repo.save(profile);
+    }
 }

@@ -52,7 +52,7 @@ public class MatchmakingController {
 
     private static final int MATCH_SIZE = 2;
 
-    private final AtomicInteger matchCounter = new AtomicInteger(1000);
+    private final AtomicInteger matchCounter = new AtomicInteger((int)(System.currentTimeMillis() / 1000 % 1000000));
     private final ObjectMapper  objectMapper = new ObjectMapper();
 
     // Redis key prefixes (from remote branch)

@@ -26,10 +26,22 @@ public class ProfileUIManager : MonoBehaviour
     [Tooltip("Các Text khác hiển thị cùng display name từ profile API.")]
     [SerializeField] private TextMeshProUGUI[] extraDisplayNameTexts;
     [SerializeField] private TextMeshProUGUI coinsText;
+    [SerializeField] private TextMeshProUGUI rpText;
     [SerializeField] private Image avatarImage;
     [Tooltip("Các Image khác hiển thị cùng avatar (ví dụ header + card).")]
     [SerializeField] private Image[] extraAvatarImages;
     [SerializeField] private TextMeshProUGUI errorText;
+
+    [Header("Rank UI")]
+    [SerializeField] private Image rankIconImage;
+    [SerializeField] private TextMeshProUGUI rankNameText;
+    
+    [Header("Rank Sprites")]
+    [SerializeField] private Sprite bronzeSprite;
+    [SerializeField] private Sprite silverSprite;
+    [SerializeField] private Sprite goldSprite;
+    [SerializeField] private Sprite platinumSprite;
+    [SerializeField] private Sprite diamondSprite;
 
     [Header("Avatar presets")]
     [SerializeField] private AvatarCatalog avatarCatalog;
@@ -166,11 +178,52 @@ public class ProfileUIManager : MonoBehaviour
 
         if (coinsText != null)
             coinsText.text = profile.coins.ToString("N0");
+            
+        if (rpText != null)
+            rpText.text = profile.rp.ToString("N0");
+
+        UpdateRankUI(profile.rp);
 
         if (avatarCatalog != null)
         {
             Sprite sprite = avatarCatalog.GetSprite(profile.imageId);
             ApplyAvatarSprite(sprite);
+        }
+    }
+
+    private void UpdateRankUI(int rp)
+    {
+        string rankName = "Bronze";
+        Sprite rankSprite = bronzeSprite;
+
+        if (rp >= 5500)
+        {
+            rankName = "Diamond";
+            rankSprite = diamondSprite;
+        }
+        else if (rp >= 3500)
+        {
+            rankName = "Platinum";
+            rankSprite = platinumSprite;
+        }
+        else if (rp >= 2000)
+        {
+            rankName = "Gold";
+            rankSprite = goldSprite;
+        }
+        else if (rp >= 1000)
+        {
+            rankName = "Silver";
+            rankSprite = silverSprite;
+        }
+
+        if (rankNameText != null)
+            rankNameText.text = rankName;
+
+        if (rankIconImage != null)
+        {
+            rankIconImage.sprite = rankSprite;
+            rankIconImage.enabled = rankSprite != null;
         }
     }
 

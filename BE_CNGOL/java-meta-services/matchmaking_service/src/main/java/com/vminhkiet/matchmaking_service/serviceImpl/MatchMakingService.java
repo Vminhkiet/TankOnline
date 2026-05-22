@@ -1,5 +1,7 @@
 package com.vminhkiet.matchmaking_service.serviceImpl;
 
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -59,6 +61,19 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
         redisTemplate.opsForValue().set(statusKey(userId), status);
     }
 
+    private String getAutoDetectedIp() {
+        if (!"auto".equalsIgnoreCase(tankHost) && tankHost != null && !tankHost.isEmpty()) {
+            return tankHost;
+        }
+        try (DatagramSocket socket = new DatagramSocket()) {
+            socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
+            return socket.getLocalAddress().getHostAddress();
+        } catch (Exception e) {
+            log.warn("Failed to auto-detect IP, fallback to 127.0.0.1", e);
+            return "127.0.0.1";
+        }
+    }
+
     // ── Interface compat — không dùng trong findOrCreateMatch ─────────────────
 
     @Override
@@ -80,7 +95,8 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
         Long matchId = redisTemplate.opsForValue().increment("matchmaking:counter", 1);
         if (matchId == null) matchId = 1L;
 
-        Match match = new Match(matchId, players, Instant.now(), tankHost, tankUdpPort);
+        String hostIp = getAutoDetectedIp();
+        Match match = new Match(matchId, players, Instant.now(), hostIp, tankUdpPort);
         redisTemplate.opsForHash().put("matchmaking:match", String.valueOf(matchId), match);
         players.forEach(id -> setStatus(id, "matched"));
 

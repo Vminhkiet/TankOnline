@@ -90,6 +90,8 @@ struct TankState {
     float    yaw    = 0.f;
     int16_t  health = 100;
     uint8_t  flags  = 0;   // bit0 = isAlive
+    uint16_t score  = 0;
+    uint8_t  placement = 0;
 };
 
 // ─── S2C: per-bullet state entry ─────────────────────────────────────────────
@@ -112,6 +114,16 @@ struct MatchEndPacket {
     uint32_t winnerId     = 0;
     uint16_t durationSecs = 0;
     uint16_t myKills      = 0;
+    int16_t  rpReward     = 0;
+    uint8_t  placement    = 0;
+    uint8_t  playerCount  = 0; // followed by MatchEndPlayer array
+};
+
+struct MatchEndPlayer {
+    uint32_t tankId       = 0;
+    int16_t  rpReward     = 0;
+    uint16_t kills        = 0;
+    char     userId[37]   = {0}; // 36-char UUID + null terminator
 };
 
 // Raw S2C force-logout header + variable UTF-8 message bytes

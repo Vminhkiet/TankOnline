@@ -31,6 +31,9 @@ namespace Complete
         public GameObject     matchEndPanel;
         public TextMeshProUGUI matchEndResultText;
         public TextMeshProUGUI matchEndStatsText;
+        public TextMeshProUGUI matchEndRpText;
+        public TextMeshProUGUI matchEndCoinText;
+        public MatchEndLeaderboardUIManager leaderboardUI;
         public string          lobbySceneName = "Lobby";
 
         [Header("Match HUD")]
@@ -128,6 +131,7 @@ namespace Complete
                     _remoteSnaps.Clear();
 
                     TankNetClient.Instance.OnSnapshot    += HandleSnapshot;
+                    TankNetClient.Instance.OnMatchEnd    += HandleMatchEnd;
                     TankNetClient.Instance.OnForceLogout += HandleForceLogout;
                     TankNetClient.Instance.Connect(m_ServerHost, m_ServerPort, m_MatchId, m_MyPlayerId);
                 }
@@ -194,6 +198,7 @@ namespace Complete
             if (m_OnlineMode && TankNetClient.Instance != null)
             {
                 TankNetClient.Instance.OnSnapshot    -= HandleSnapshot;
+                TankNetClient.Instance.OnMatchEnd    -= HandleMatchEnd;
                 TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
             }
 
@@ -459,27 +464,54 @@ namespace Complete
         // Returns a string message to display at the end of each round.
         private string EndMessage()
         {
+            if (m_OnlineMode)
+            {
+                // In online mode, we act as a final leaderboard based on score and placement
+                string message = "MATCH ENDED\n\nLEADERBOARD:\n\n";
+                
+                var sortedTanks = new List<TankManager>();
+                for (int i = 0; i < m_Tanks.Length; i++)
+                {
+                    if (m_Tanks[i].m_Instance != null && m_Tanks[i].m_Instance.activeSelf || m_Tanks[i].m_Placement > 0)
+                    {
+                        sortedTanks.Add(m_Tanks[i]);
+                    }
+                }
+                
+                sortedTanks.Sort((a, b) => {
+                    int pCmp = a.m_Placement.CompareTo(b.m_Placement);
+                    if (pCmp != 0) return pCmp;
+                    return b.m_Score.CompareTo(a.m_Score); // Higher score wins tiebreaker
+                });
+
+                foreach (var t in sortedTanks)
+                {
+                    message += $"{t.m_ColoredPlayerText} - Rank #{t.m_Placement} - {t.m_Score} PTS\n";
+                }
+                return message;
+            }
+
             // By default when a round ends there are no winners so the default end message is a draw.
-            string message = "DRAW!";
+            string offlineMessage = "DRAW!";
 
             // If there is a winner then change the message to reflect that.
             if (m_RoundWinner != null)
-                message = m_RoundWinner.m_ColoredPlayerText + " WINS THE ROUND!";
+                offlineMessage = m_RoundWinner.m_ColoredPlayerText + " WINS THE ROUND!";
 
             // Add some line breaks after the initial message.
-            message += "\n\n\n\n";
+            offlineMessage += "\n\n\n\n";
 
             // Go through all the tanks and add each of their scores to the message.
             for (int i = 0; i < m_Tanks.Length; i++)
             {
-                message += m_Tanks[i].m_ColoredPlayerText + ": " + m_Tanks[i].m_Wins + " WINS\n";
+                offlineMessage += m_Tanks[i].m_ColoredPlayerText + ": " + m_Tanks[i].m_Wins + " WINS\n";
             }
 
             // If there is a game winner, change the entire message to reflect that.
             if (m_GameWinner != null)
-                message = m_GameWinner.m_ColoredPlayerText + " WINS THE GAME!";
+                offlineMessage = m_GameWinner.m_ColoredPlayerText + " WINS THE GAME!";
 
-            return message;
+            return offlineMessage;
         }
 
 
@@ -642,6 +674,13 @@ namespace Complete
 
         private void ApplyLocalCorrection(TankState ts)
         {
+            // Update local TankManager stats
+            if (m_Tanks.Length > 0)
+            {
+                m_Tanks[0].m_Score = ts.score;
+                m_Tanks[0].m_Placement = ts.placement;
+            }
+
             // Lần đầu nhận snapshot: spawn local tank đúng vị trí server
             if (m_Tanks.Length == 0) return;
             if (m_Tanks[0].m_Instance == null)
@@ -724,7 +763,7 @@ namespace Complete
 
         private void UpdateRemoteTank(TankState ts)
         {
-            if (!_remoteTanks.TryGetValue(ts.tankId, out var go))
+            if (!_remoteTanks.TryGetValue(ts.tankId, out var go) || go == null)
             {
                 if (m_RemoteTankPrefab == null)
                 {
@@ -748,6 +787,17 @@ namespace Complete
                 if (remoteShooting != null) remoteShooting.enabled = false;
                 var remoteMovement = go.GetComponent<TankMovement>();
                 if (remoteMovement != null) remoteMovement.enabled = false;
+            }
+            
+            // Find remote TankManager to sync score/placement
+            for (int i = 1; i < m_Tanks.Length; i++)
+            {
+                if (m_Tanks[i].m_PlayerNumber == ts.tankId)
+                {
+                    m_Tanks[i].m_Score = ts.score;
+                    m_Tanks[i].m_Placement = ts.placement;
+                    break;
+                }
             }
 
             bool wasAlive = go.activeSelf;
@@ -848,16 +898,19 @@ namespace Complete
                 if (ts.IsAlive) alivePlayers++;
                 if (ts.tankId == m_MyPlayerId && ts.IsAlive) myPlayerAlive = true;
             }
-
-            if (alivePlayers <= 1)
-            {
-                _matchEnded = true;
-                bool draw = (alivePlayers == 0);
-                StartCoroutine(TriggerMatchEnd(myPlayerAlive && !draw, draw));
-            }
         }
 
-        private IEnumerator TriggerMatchEnd(bool won, bool draw)
+        private void HandleMatchEnd(MatchEndData end)
+        {
+            if (_matchEnded) return;
+            _matchEnded = true;
+
+            bool won = (end.Outcome == 0); // 0=win, 1=lose, 2=draw, 3=timeout
+            bool draw = (end.Outcome == 2);
+            StartCoroutine(TriggerMatchEnd(won, draw, end));
+        }
+
+        private IEnumerator TriggerMatchEnd(bool won, bool draw, MatchEndData end = null)
         {
             DisableTankControl();
             TankNetClient.Instance?.Disconnect();
@@ -872,9 +925,38 @@ namespace Complete
                 matchEndResultText.text = resultText;
 
             if (matchEndStatsText != null)
-                matchEndStatsText.text =
-                    $"Kills: {_myKills}   Deaths: {_myDeaths}\n" +
-                    $"Duration: {durationSecs / 60}:{durationSecs % 60:00}";
+            {
+                if (end != null)
+                {
+                    matchEndStatsText.text =
+                        $"Kills: {_myKills}   Deaths: {_myDeaths}\n" +
+                        $"Duration: {durationSecs / 60}:{durationSecs % 60:00}\n" +
+                        $"Rank: #{end.Placement}";
+                }
+                else
+                {
+                    matchEndStatsText.text =
+                        $"Kills: {_myKills}   Deaths: {_myDeaths}\n" +
+                        $"Duration: {durationSecs / 60}:{durationSecs % 60:00}";
+                }
+            }
+
+            if (end != null)
+            {
+                if (matchEndRpText != null)
+                    matchEndRpText.text = $"{(end.RpReward > 0 ? "+" : "")}{end.RpReward}";
+                    
+                if (matchEndCoinText != null)
+                    matchEndCoinText.text = "+25";
+
+                if (leaderboardUI != null)
+                    leaderboardUI.BuildLeaderboard(end.Players);
+            }
+            else
+            {
+                if (matchEndRpText != null) matchEndRpText.text = "+0";
+                if (matchEndCoinText != null) matchEndCoinText.text = "+25";
+            }
 
             // Save match to history service
             MatchHistoryUIManager.SaveMatchResult(

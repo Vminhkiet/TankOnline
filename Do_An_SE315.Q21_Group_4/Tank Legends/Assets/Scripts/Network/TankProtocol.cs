@@ -45,6 +45,8 @@ namespace TankNet
         public float yaw;
         public short health;
         public byte  flags;          // bit0 = isAlive
+        public ushort score;
+        public byte   placement;
 
         public bool IsAlive => (flags & 1) != 0;
     }
@@ -90,6 +92,19 @@ namespace TankNet
         public uint   winnerId;
         public ushort durationSecs;
         public ushort myKills;
+        public short  rpReward;
+        public byte   placement;
+        public byte   playerCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1, CharSet = CharSet.Ansi)]
+    public struct MatchEndPlayer
+    {
+        public uint tankId;
+        public short rpReward;
+        public ushort kills;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 37)]
+        public string userId;
     }
 
     public class MatchEndData
@@ -99,6 +114,9 @@ namespace TankNet
         public uint   WinnerId;
         public ushort DurationSecs;
         public ushort MyKills;
+        public short  RpReward;
+        public byte   Placement;
+        public MatchEndPlayer[] Players;
     }
 
     // ── Packet builders ───────────────────────────────────────────────────────

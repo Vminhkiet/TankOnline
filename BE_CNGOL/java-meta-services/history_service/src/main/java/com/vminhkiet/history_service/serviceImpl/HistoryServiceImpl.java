@@ -33,7 +33,7 @@ public class HistoryServiceImpl implements HistoryService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${auth.service.url:http://localhost:8082}")
+    @Value("${auth.service.url:http://localhost:8081}")
     private String authServiceUrl;
 
     @Autowired

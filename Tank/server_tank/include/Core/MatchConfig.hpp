@@ -23,6 +23,10 @@ struct MatchResult {
     float        durationSecs = 0.f;
     std::unordered_map<uint32_t, int>         kills;   // playerId -> kill count
     std::unordered_map<uint32_t, int>         deaths;  // playerId -> death count
+    std::unordered_map<uint32_t, int>         placements; // playerId -> placement
+    std::unordered_map<uint32_t, int>         matchScores; // playerId -> score
+    std::unordered_map<uint32_t, int>         rpRewards; // playerId -> RP reward
+    std::unordered_map<uint32_t, int>         damageDealt; // playerId -> damage
     std::unordered_map<uint32_t, std::string> userIds; // playerId -> userId string
     std::string  mapName     = "world";
 };
