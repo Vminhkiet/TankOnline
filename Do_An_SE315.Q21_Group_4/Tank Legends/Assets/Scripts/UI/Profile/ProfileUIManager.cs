@@ -193,27 +193,27 @@ public class ProfileUIManager : MonoBehaviour
 
     private void UpdateRankUI(int rp)
     {
-        string rankName = "Bronze";
+        string rankName = "TÂN BINH";
         Sprite rankSprite = bronzeSprite;
 
         if (rp >= 5500)
         {
-            rankName = "Diamond";
+            rankName = "THỐNG SOÁI TĂNG";
             rankSprite = diamondSprite;
         }
         else if (rp >= 3500)
         {
-            rankName = "Platinum";
+            rankName = "CHỈ HUY ĐỘI";
             rankSprite = platinumSprite;
         }
         else if (rp >= 2000)
         {
-            rankName = "Gold";
+            rankName = "KỴ SĨ Tăng";
             rankSprite = goldSprite;
         }
         else if (rp >= 1000)
         {
-            rankName = "Silver";
+            rankName = "CHIẾN BINH";
             rankSprite = silverSprite;
         }
 
