@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 namespace Complete
@@ -20,6 +20,8 @@ namespace Complete
         // survives Stop → next Play → m_Instance != null but object is gone → NullRef.
         [System.NonSerialized] public GameObject m_Instance;
         [HideInInspector] public int m_Wins;
+        [HideInInspector] public int m_Score;
+        [HideInInspector] public int m_Placement;
         
 
         private TankMovement m_Movement;                        // Reference to tank's movement script, used to disable and enable control.

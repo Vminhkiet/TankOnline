@@ -42,5 +42,14 @@ public class UserController {
         return ResponseEntity.ok(users);
     }
 
+    @GetMapping("/{userId}")
+    public ResponseEntity<UserMeResponse> getUserById(@org.springframework.web.bind.annotation.PathVariable Long userId) {
+        try {
+            return ResponseEntity.ok(userService.getUserMe(userId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
 
 }

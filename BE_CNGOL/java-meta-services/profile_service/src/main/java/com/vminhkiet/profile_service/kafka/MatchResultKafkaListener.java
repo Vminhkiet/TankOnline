@@ -20,9 +20,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class MatchResultKafkaListener {
 
-    private static final long COINS_WIN         = 100L;
-    private static final long COINS_DRAW        = 20L;
-    private static final long COINS_LOSE        = 10L;
+    private static final long COINS_WIN         = 25L;
+    private static final long COINS_DRAW        = 25L;
+    private static final long COINS_LOSE        = 25L;
 
     private final ProfileService profileService;
     private final ObjectMapper objectMapper;
@@ -47,18 +47,34 @@ public class MatchResultKafkaListener {
 
             Set<String> alreadyRewarded = new java.util.HashSet<>();
 
+            @SuppressWarnings("unchecked")
+            Map<String, Object> stats = (Map<String, Object>) event.get("stats");
+
             for (Map.Entry<String, String> entry : userIds.entrySet()) {
                 long   playerId = parseLong(entry.getKey());
                 String userId   = entry.getValue();
 
                 if (userId == null || userId.isBlank() || alreadyRewarded.contains(userId)) continue;
 
+                // 1. Add Coins
                 long reward = resolveReward(outcome, playerId, winnerId);
                 profileService.addCoins(userId, reward);
+                
+                // 2. Add RP
+                int rpReward = 0;
+                if (stats != null && stats.containsKey(entry.getKey())) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> playerStats = (Map<String, Object>) stats.get(entry.getKey());
+                    if (playerStats != null && playerStats.containsKey("rp_reward")) {
+                        rpReward = Integer.parseInt(String.valueOf(playerStats.get("rp_reward")));
+                        profileService.addRp(userId, rpReward);
+                    }
+                }
+
                 alreadyRewarded.add(userId);
 
-                log.info("[Saga-3] Rewarded {} coins to userId={} (matchId={}, outcome={}, playerId={})",
-                        reward, userId, matchId, outcome, playerId);
+                log.info("[Saga-3] Rewarded {} coins, {} RP to userId={} (matchId={}, outcome={}, playerId={})",
+                        reward, rpReward, userId, matchId, outcome, playerId);
             }
         } catch (Exception e) {
             log.error("[Saga-3] Failed to process match.result: {}", e.getMessage());

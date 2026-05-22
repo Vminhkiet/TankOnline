@@ -33,11 +33,8 @@ management:
     health:
       show-details: always
 
-# ── Địa chỉ Tank C++ server ────────────────────────────────────────────────────
-# udp-port : Unity kết nối UDP để chơi game
-# mgmt-port: Java gọi HTTP để tạo match (Tank server phải đang chạy)
 tank:
   server:
-    host: 10.83.136.219   # Windows WiFi IP - mobile cùng mạng kết nối UDP được
+    host: auto   # Automatically detect LAN IP using outbound UDP socket
     udp-port: 8080
     mgmt-port: 9090

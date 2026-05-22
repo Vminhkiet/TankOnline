@@ -10,6 +10,7 @@ public class ProfileResponse {
     private String displayName;
     private String imageId;
     private Long   coins;
+    private Integer rp;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -19,6 +20,7 @@ public class ProfileResponse {
         r.displayName = p.getDisplayName();
         r.imageId   = p.getImageId();
         r.coins       = p.getCoins();
+        r.rp          = p.getRp();
         r.createdAt   = p.getCreatedAt();
         r.updatedAt   = p.getUpdatedAt();
         return r;

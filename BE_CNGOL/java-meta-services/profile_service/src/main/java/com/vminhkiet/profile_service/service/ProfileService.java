@@ -9,4 +9,5 @@ public interface ProfileService {
     ProfileResponse    updateProfile(String userId, UpdateProfileRequest req);
     CoinDeductResponse deductCoins(String userId, Long amount);
     void               addCoins(String userId, Long amount);
+    void               addRp(String userId, int amount);
 }

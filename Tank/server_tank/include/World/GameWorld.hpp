@@ -49,8 +49,15 @@ private:
     GameMap                               _map;
     std::unordered_map<uint32_t, int>     _kills;  // ownerTankId → kills this match
     std::unordered_map<uint32_t, int>     _deaths; // victimTankId → deaths this match
+    std::unordered_map<uint32_t, int>     _damageDealt;
+    std::unordered_map<uint32_t, std::unordered_map<uint32_t, int>> _damageHistory; // victimId -> attackerId -> damage
+    std::unordered_map<uint32_t, float>   _lastCombatTime; // playerId -> elapsed time
+    std::unordered_map<uint32_t, int>     _matchScoreBase; // playerId -> score
+    std::unordered_map<uint32_t, int>     _survivalPlacement; // playerId -> placement (1=first, 2=second)
+    std::unordered_map<uint32_t, int>     _maxHealth; // playerId -> max health
     uint32_t                              _nextBulletId = 50000;
     bool                                  _respawnOnDeath = true;
+    float                                 _elapsedTime = 0.0f;
 
     void syncColliders();
     void applyPhysicsResults(float deltaTime);

@@ -15,6 +15,7 @@ public class ProfileResponseData
     public string displayName;
     public string imageId;
     public long coins;
+    public int rp;
     public string createdAt;
     public string updatedAt;
 }

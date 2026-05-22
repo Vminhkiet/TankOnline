@@ -13,6 +13,7 @@ public class MapExporter
         GameObject[] roots = GameObject.FindObjectsOfType<GameObject>();
 
         List<ColliderData> colliders = new List<ColliderData>();
+        List<ColliderData> bushes = new List<ColliderData>();
         List<HeightmapData> heightmaps = new List<HeightmapData>();
         List<SpawnData> spawns = new List<SpawnData>();
 
@@ -25,7 +26,7 @@ public class MapExporter
 
             if (obj.CompareTag("Map"))
             {
-                ProcessColliders(obj, colliders);
+                ProcessColliders(obj, colliders, bushes);
                 // Track terrains already exported under Map
                 foreach (var t in obj.GetComponentsInChildren<Terrain>())
                     processedTerrains.Add(t);
@@ -48,6 +49,7 @@ public class MapExporter
         WorldData world = new WorldData
         {
             colliders = colliders,
+            bushes    = bushes,
             heightmaps = heightmaps,
             spawns    = spawns,
             tank      = BuildTankConfig(),
@@ -250,7 +252,7 @@ public class MapExporter
     // =========================
     // COLLIDER EXPORT
     // =========================
-    static void ProcessColliders(GameObject root, List<ColliderData> list)
+    static void ProcessColliders(GameObject root, List<ColliderData> list, List<ColliderData> bushesList)
     {
         Collider[] cols = root.GetComponentsInChildren<Collider>();
 
@@ -302,7 +304,14 @@ public class MapExporter
                 continue; // ignore MeshCollider etc
             }
 
-            list.Add(data);
+            if (col.gameObject.CompareTag("Bush"))
+            {
+                bushesList.Add(data);
+            }
+            else
+            {
+                list.Add(data);
+            }
         }
     }
 
@@ -369,6 +378,7 @@ public class MapExporter
     public class WorldData
     {
         public List<ColliderData> colliders;
+        public List<ColliderData> bushes;
         public List<HeightmapData> heightmaps;
         public List<SpawnData> spawns;
         public TankConfigData   tank;

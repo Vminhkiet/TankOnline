@@ -69,11 +69,45 @@ namespace TankNet
 
         public void Connect(string host, int port, uint matchId, uint playerId = 0)
         {
-            if (_running) Disconnect();   // clean up old socket/thread before reconnecting
+            if (_running) return;
+
+#if UNITY_EDITOR || UNITY_STANDALONE_WIN
+            if (host.StartsWith("10.") || host.StartsWith("192.168.") || host.StartsWith("172."))
+            {
+                host = "127.0.0.1";
+            }
+#endif
+            if (host == "auto" || host.ToLower() == "localhost")
+            {
+                host = "127.0.0.1";
+            }
 
             ServerHost = host; ServerPort = port; MatchId = matchId; PlayerId = playerId;
 
-            _server = new IPEndPoint(IPAddress.Parse(host), port);
+            IPAddress ipAddr;
+            if (!IPAddress.TryParse(host, out ipAddr))
+            {
+                try
+                {
+                    var addresses = System.Net.Dns.GetHostAddresses(host);
+                    if (addresses.Length > 0)
+                    {
+                        ipAddr = addresses[0];
+                    }
+                    else
+                    {
+                        Debug.LogError($"[TankNet] Could not resolve host: {host}");
+                        return;
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"[TankNet] DNS resolve error for {host}: {ex.Message}");
+                    return;
+                }
+            }
+
+            _server = new IPEndPoint(ipAddr, port);
             _udp    = new UdpClient();
             _udp.Client.ReceiveTimeout = 0; // non-blocking via thread
 
@@ -126,14 +160,24 @@ namespace TankNet
         {
             if (!_running) return;
 
-            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, PlayerId, _seq++);
-            _udp.Send(pkt, pkt.Length, _server);
-
-            if (_pendingShoot)
+            try 
             {
-                byte[] shoot = PacketBuilder.BuildShoot(MatchId, (int)_pendingShootForce, PlayerId, _seq++);
-                _udp.Send(shoot, shoot.Length, _server);
-                _pendingShoot = false;
+                byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, PlayerId, _seq++);
+                int sent = _udp.Send(pkt, pkt.Length, _server);
+                
+                if (_seq % 20 == 0) // Log once per second
+                    Debug.Log($"[TankNet] Sent {sent} bytes UDP to {_server.Address}:{_server.Port} for Match {MatchId}");
+
+                if (_pendingShoot)
+                {
+                    byte[] shoot = PacketBuilder.BuildShoot(MatchId, (int)_pendingShootForce, PlayerId, _seq++);
+                    _udp.Send(shoot, shoot.Length, _server);
+                    _pendingShoot = false;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[TankNet] SendTick Exception: {e.Message}");
             }
         }
 
@@ -176,7 +220,27 @@ namespace TankNet
                             WinnerId     = hdr.winnerId,
                             DurationSecs = hdr.durationSecs,
                             MyKills      = hdr.myKills,
+                            RpReward     = hdr.rpReward,
+                            Placement    = hdr.placement,
+                            Players      = new MatchEndPlayer[hdr.playerCount]
                         };
+
+                        int offset = Marshal.SizeOf<MatchEndHeader>();
+                        int playerSize = Marshal.SizeOf<MatchEndPlayer>();
+                        
+                        Debug.Log($"[TankNet] S2C_MATCH_END: pktLength={data.Length}, hdrSize={offset}, playerSize={playerSize}, playerCount={hdr.playerCount}");
+
+                        for (int i = 0; i < hdr.playerCount; i++)
+                        {
+                            if (offset + playerSize > data.Length) 
+                            {
+                                Debug.LogWarning($"[TankNet] Not enough data for player {i}. offset={offset}, len={data.Length}");
+                                break;
+                            }
+                            end.Players[i] = BytesToStruct<MatchEndPlayer>(data, offset);
+                            offset += playerSize;
+                        }
+
                         UnityMainThread.Post(() => OnMatchEnd?.Invoke(end));
                         continue;
                     }

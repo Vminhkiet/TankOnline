@@ -45,6 +45,11 @@ void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos)
 
     LOG_INFO("GameWorld: player {} spawned at ({:.1f},{:.1f},{:.1f})",
              playerId, spawnPos.x, spawnPos.y, spawnPos.z);
+             
+    // Initialize tracking for this player
+    _maxHealth[playerId] = 100;
+    _lastCombatTime[playerId] = 0.0f; // Will be properly initialized in first update
+    _matchScoreBase[playerId] = 0;
 }
 
 void GameWorld::removePlayer(uint32_t playerId)
@@ -116,11 +121,39 @@ void GameWorld::updateBullets(float deltaTime)
                 if (std::fabs(lx) > bulletHitX || std::fabs(lz) > bulletHitZ) continue;
                 bool wasAlive = tank.isAlive;
                 tank.takeDamage(Tank::BULLET_DAMAGE);
+                
+                // Track damage for score and assist
+                _damageDealt[b.ownerTankId] += Tank::BULLET_DAMAGE;
+                _damageHistory[tid][b.ownerTankId] += Tank::BULLET_DAMAGE;
+                
+                // Update combat time for anti-camp
+                _lastCombatTime[b.ownerTankId] = _elapsedTime;
+                _lastCombatTime[tid] = _elapsedTime;
+
                 if (tank.isDead() && wasAlive) {
                     LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} KILLED (dealt {} dmg)",
                              b.id, b.ownerTankId, tid, Tank::BULLET_DAMAGE);
                     _kills[b.ownerTankId]++;
                     _deaths[tid]++;
+                    
+                    // Kill bonus
+                    _matchScoreBase[b.ownerTankId] += 5;
+                    
+                    // Assist bonus
+                    float maxHp = _maxHealth[tid] > 0 ? _maxHealth[tid] : 100.0f;
+                    float assistThreshold = maxHp * 0.3f;
+                    for (auto const& [attacker, dmg] : _damageHistory[tid]) {
+                        if (attacker != b.ownerTankId && dmg >= assistThreshold) {
+                            _matchScoreBase[attacker] += 2; // Assist!
+                        }
+                    }
+                    
+                    // Assign survival placement dynamically based on CURRENT number of alive players
+                    int aliveCount = 0;
+                    for (auto const& [otherId, otherTank] : _tanks) {
+                        if (otherTank.isAlive) aliveCount++;
+                    }
+                    _survivalPlacement[tid] = aliveCount + 1; // e.g. 5 alive + 1 just died = 6th place
                 } else {
                     LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} hp={} (dealt {} dmg)",
                              b.id, b.ownerTankId, tid, tank.health, Tank::BULLET_DAMAGE);
@@ -220,6 +253,7 @@ void GameWorld::runPhysics(float deltaTime)
 
 void GameWorld::update(float deltaTime)
 {
+    _elapsedTime += deltaTime;
     updateBullets(deltaTime);
     runPhysics(deltaTime);
 }
@@ -345,6 +379,32 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
         t.yaw    = tank.yaw;
         t.health = static_cast<int16_t>(tank.health);
         t.flags  = tank.isAlive ? 1u : 0u;
+        
+        // Calculate dynamic match score
+        int score = _matchScoreBase.count(id) ? _matchScoreBase.at(id) : 0;
+        int damage = _damageDealt.count(id) ? _damageDealt.at(id) : 0;
+        t.score = score + (damage / 100);
+        
+        // Dynamic placement logic
+        if (!tank.isAlive && _survivalPlacement.count(id)) {
+            t.placement = _survivalPlacement.at(id); // Dead: locked placement
+        } else {
+            // Alive: their current dynamic placement is the number of alive players
+            int aliveCount = 0;
+            for (auto const& [otherId, otherTank] : _tanks) {
+                if (otherTank.isAlive) aliveCount++;
+            }
+            t.placement = aliveCount;
+        }
+        
+        // Anti-camp visualization (optional flag)
+        float lastCombat = _lastCombatTime.count(id) ? _lastCombatTime.at(id) : 0.0f;
+        if (_elapsedTime - lastCombat > 30.0f) {
+            // Mark inactive (could use flag bit if desired, but for now just limits score gain optionally)
+            // (Current requirement: "temporarily disable passive score gain or mark inactive")
+            // We just let the UI know they are inactive if needed, but not implemented flag for it yet.
+        }
+
         ts.push_back(t);
     }
     for (const auto& b : _bullets) {
@@ -408,28 +468,46 @@ MatchOutcome GameWorld::checkOutcome(float elapsed, float maxDuration,
                 alive.push_back(pid);
         }
     }
+    
+    // Assign survivor placement to result structure early if match is ending
+    auto assignSurvivorPlacements = [&]() {
+        for (uint32_t pid : alive) {
+            result.placements[pid] = alive.size();
+        }
+        for (uint32_t pid : playerIds) {
+            if (_survivalPlacement.count(pid)) {
+                result.placements[pid] = _survivalPlacement.at(pid);
+            }
+            int score = _matchScoreBase.count(pid) ? _matchScoreBase.at(pid) : 0;
+            int damage = _damageDealt.count(pid) ? _damageDealt.at(pid) : 0;
+            result.matchScores[pid] = score + (damage / 100);
+            result.damageDealt[pid] = damage;
+        }
+    };
 
     // Win/Draw only make sense once at least 2 players have joined
     if (spawned >= 2) {
         if (alive.size() == 1) {
             result.outcome  = MatchOutcome::Win;
             result.winnerId = alive[0];
+            assignSurvivorPlacements();
             return MatchOutcome::Win;
         }
         if (alive.empty()) {
             result.outcome = MatchOutcome::Draw;
+            assignSurvivorPlacements();
             return MatchOutcome::Draw;
         }
     }
 
     if (elapsed >= maxDuration) {
         result.outcome = MatchOutcome::Timeout;
-        // Winner by kill count
-        uint32_t best = 0; int bestKills = -1;
+        // Winner by match score
+        uint32_t best = 0; int bestScore = -1;
+        assignSurvivorPlacements();
         for (uint32_t pid : playerIds) {
-            auto it = _kills.find(pid);
-            int k = (it != _kills.end()) ? it->second : 0;
-            if (k > bestKills) { bestKills = k; best = pid; }
+            int score = result.matchScores[pid];
+            if (score > bestScore) { bestScore = score; best = pid; }
         }
         result.winnerId = best;
         return MatchOutcome::Timeout;
