@@ -44,11 +44,12 @@ namespace TankNet
         public float x, y, z;
         public float yaw;
         public short health;
-        public byte  flags;          // bit0 = isAlive
+        public byte  flags;          // bit0 = isAlive, bit1 = inBush
         public ushort score;
         public byte   placement;
 
         public bool IsAlive => (flags & 1) != 0;
+        public bool IsInBush => (flags & 2) != 0;
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]

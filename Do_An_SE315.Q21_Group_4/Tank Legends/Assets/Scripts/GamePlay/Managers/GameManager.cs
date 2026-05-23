@@ -200,6 +200,7 @@ namespace Complete
                 TankNetClient.Instance.OnSnapshot    -= HandleSnapshot;
                 TankNetClient.Instance.OnMatchEnd    -= HandleMatchEnd;
                 TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
+                TankNetClient.Instance.Disconnect();
             }
 
             // Xóa hết tank khi scene kết thúc
@@ -244,13 +245,13 @@ namespace Complete
             }
         }
 
-        // Loại bỏ toàn bộ collider vật lý trên tank khi online.
+        // Loại bỏ hoặc chuyển collider vật lý trên tank khi online.
         // Server là authoritative — Unity physics không được phép di chuyển tank.
         // Giữ lại BulletHitVolume (trigger) vì nó dùng để detect visual hit, không phải physics.
         //
-        // Editor  : chỉ disable (enabled = false) để dễ bật lại khi test offline.
-        // Build   : Destroy hoàn toàn — component không còn tồn tại trong memory,
-        //           PhysX không allocate broadphase slot, tránh overhead trên mobile.
+        // BoxCollider gốc trên root tank object sẽ được chuyển thành isTrigger
+        // để hỗ trợ phát hiện va chạm với bụi rậm (Bush stealth).
+        // Các collider con khác (không liên quan) sẽ bị disable/destroy.
         //
         // KHÔNG destroy Rigidbody: TankMovement cache m_Rigidbody trong Awake() và gọi
         // MovePosition/MoveRotation mỗi FixedUpdate. Destroy rb → MissingReferenceException
@@ -258,9 +259,20 @@ namespace Complete
         // tham gia collision resolution, chỉ dùng cho movement API).
         private static void DisablePhysicsColliders(GameObject tankGo)
         {
+            // Identify the root BoxCollider — keep it as a trigger for bush detection
+            var rootBox = tankGo.GetComponent<BoxCollider>();
+
             foreach (var col in tankGo.GetComponentsInChildren<Collider>())
             {
                 if (col.gameObject.name == "BulletHitVolume") continue;
+
+                // Keep the root BoxCollider alive as a trigger for bush stealth
+                if (col == rootBox)
+                {
+                    col.isTrigger = true;
+                    continue;
+                }
+
 #if UNITY_EDITOR
                 col.enabled = false;
 #else
@@ -304,12 +316,19 @@ namespace Complete
             m_Tanks[0].m_PlayerNumber = 1;
             m_Tanks[0].Setup();
 
-            // Kinematic + no gravity: server is fully authoritative, Unity physics won't push tank
+            var tm = m_Tanks[0].m_Instance.GetComponent<Complete.TankMovement>();
+            bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
+
             var rb = m_Tanks[0].m_Instance.GetComponent<Rigidbody>();
-            if (rb != null) { rb.isKinematic = true; rb.useGravity = false; }
+            if (rb != null) { rb.isKinematic = customPhysics; rb.useGravity = !customPhysics; }
 
             AddBulletHitTrigger(m_Tanks[0].m_Instance);
-            DisablePhysicsColliders(m_Tanks[0].m_Instance);
+            if (customPhysics) DisablePhysicsColliders(m_Tanks[0].m_Instance);
+
+            // Bush stealth for local tank
+            var localStealth = m_Tanks[0].m_Instance.GetComponent<TankStealth>()
+                            ?? m_Tanks[0].m_Instance.AddComponent<TankStealth>();
+            localStealth.IsLocalTank = true;
 
             // Camera follow local tank
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
@@ -693,19 +712,22 @@ namespace Complete
             var serverPos = new Vector3(ts.x, ts.y, ts.z);
             var serverRot = Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0);
 
-            // Always sync Y: client has no terrain height simulation.
-            // Must use rb.position, NOT transform.position — setting transform.position
-            // directly on a non-kinematic rigidbody causes PhysX to detect a warp and
-            // generate large correction impulses → jitter at walls.
+            var tm = go.GetComponent<Complete.TankMovement>();
+            bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
             var rb0 = go.GetComponent<Rigidbody>();
-            if (rb0 != null)
+
+            // Always sync Y if using custom online physics (client has no terrain height simulation).
+            if (customPhysics)
             {
-                var p = rb0.position; p.y = serverPos.y; rb0.position = p;
-            }
-            else
-            {
-                var pos = go.transform.position; pos.y = serverPos.y;
-                go.transform.position = pos;
+                if (rb0 != null)
+                {
+                    var p = rb0.position; p.y = serverPos.y; rb0.position = p;
+                }
+                else
+                {
+                    var pos = go.transform.position; pos.y = serverPos.y;
+                    go.transform.position = pos;
+                }
             }
 
             // XZ error = khoảng cách giữa client prediction và server position.
@@ -723,11 +745,6 @@ namespace Complete
             float xzErr = new Vector2(
                 go.transform.position.x - serverPos.x,
                 go.transform.position.z - serverPos.z).magnitude;
-
-#if UNITY_EDITOR
-            if (xzErr > 0.5f)
-                Debug.Log($"[CSP] xzErr={xzErr:F3}");
-#endif
 
             if (xzErr > HARD_THRESHOLD)
             {
@@ -759,6 +776,10 @@ namespace Complete
             var localHealth = go.GetComponent<TankHealth>();
             if (localHealth != null) localHealth.SyncFromServer(ts.health);
             else if (!ts.IsAlive) go.SetActive(false);
+
+            // Forward server InBush flag to local TankStealth (server is authoritative backup)
+            var localStealth = go.GetComponent<TankStealth>();
+            if (localStealth != null) localStealth.ServerInBush = ts.IsInBush;
         }
 
         private void UpdateRemoteTank(TankState ts)
@@ -779,7 +800,10 @@ namespace Complete
                 if (remoteRb != null) { remoteRb.isKinematic = true; remoteRb.useGravity = false; }
 
                 AddBulletHitTrigger(go);
-                DisablePhysicsColliders(go);
+                
+                var tm = go.GetComponent<Complete.TankMovement>();
+                bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
+                if (customPhysics) DisablePhysicsColliders(go);
 
                 // Remote tank is driven purely by snapshots — disable all local input components
                 // so they don't read keyboard input or send packets to the server.
@@ -787,6 +811,11 @@ namespace Complete
                 if (remoteShooting != null) remoteShooting.enabled = false;
                 var remoteMovement = go.GetComponent<TankMovement>();
                 if (remoteMovement != null) remoteMovement.enabled = false;
+
+                // Bush stealth for remote tank (server-driven)
+                var remoteStealth = go.GetComponent<TankStealth>()
+                                 ?? go.AddComponent<TankStealth>();
+                remoteStealth.IsLocalTank = false;
             }
             
             // Find remote TankManager to sync score/placement
@@ -807,6 +836,10 @@ namespace Complete
                 go.SetActive(true);
                 var health = go.GetComponent<TankHealth>();
                 if (health != null) health.SyncFromServer(ts.health);
+
+                // Forward server InBush flag to remote TankStealth
+                var stealth = go.GetComponent<TankStealth>();
+                if (stealth != null) stealth.ServerInBush = ts.IsInBush;
 
                 if (!_remoteSnaps.ContainsKey(ts.tankId))
                     _remoteSnaps[ts.tankId] = new List<SnapEntry>();

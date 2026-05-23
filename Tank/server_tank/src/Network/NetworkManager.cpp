@@ -81,11 +81,20 @@ void NetworkManager::workerThread() {
         ULONG_PTR  key   = 0;
         OVERLAPPED* ov   = nullptr;
 
-        if (!GetQueuedCompletionStatus(_hCompPort, &bytes, &key, &ov, 500))
-            continue;
+        BOOL ok = GetQueuedCompletionStatus(_hCompPort, &bytes, &key, &ov, 500);
+        
+        // Timeout or unassociated error
         if (!ov) continue;
 
         auto* ctx = reinterpret_cast<IoContext*>(ov);
+
+        // If I/O failed (e.g. WSAECONNRESET from ICMP Port Unreachable),
+        // we MUST recycle the context instead of leaking it.
+        if (!ok) {
+            postReceive(ctx);
+            continue;
+        }
+
         handleReader(ctx, bytes);
     }
 }

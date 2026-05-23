@@ -69,7 +69,12 @@ namespace TankNet
 
         public void Connect(string host, int port, uint matchId, uint playerId = 0)
         {
-            if (_running) return;
+            if (_running)
+            {
+                if (MatchId == matchId && ServerHost == host && ServerPort == port && PlayerId == playerId)
+                    return;
+                Disconnect();
+            }
 
 #if UNITY_EDITOR || UNITY_STANDALONE_WIN
             if (host.StartsWith("10.") || host.StartsWith("192.168.") || host.StartsWith("172."))
@@ -165,8 +170,8 @@ namespace TankNet
                 byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, PlayerId, _seq++);
                 int sent = _udp.Send(pkt, pkt.Length, _server);
                 
-                if (_seq % 20 == 0) // Log once per second
-                    Debug.Log($"[TankNet] Sent {sent} bytes UDP to {_server.Address}:{_server.Port} for Match {MatchId}");
+             /*   if (_seq % 20 == 0) // Log once per second
+                    Debug.Log($"[TankNet] Sent {sent} bytes UDP to {_server.Address}:{_server.Port} for Match {MatchId}");*/
 
                 if (_pendingShoot)
                 {

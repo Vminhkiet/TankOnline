@@ -7,6 +7,11 @@ class GameMap {
 public:
     struct SpawnPoint { int id; float x, y, z; };
 
+    struct Bush {
+        Vector3 min;
+        Vector3 max;
+    };
+
     // Half-extents of the tank's box collider (matches Unity BoxCollider / 2)
     struct TankConfig {
         float extentX = 0.9f;
@@ -25,6 +30,7 @@ public:
     bool LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWorld);
     float GetHeightAt(float x, float z) const;
     const std::vector<SpawnPoint>& getSpawnPoints() const { return _spawnPoints; }
+    const std::vector<Bush>& getBushes() const { return _bushes; }
     const TankConfig&   getTankConfig()   const { return _tankConfig; }
     const BulletConfig& getBulletConfig() const { return _bulletConfig; }
 
@@ -43,6 +49,7 @@ private:
     std::string _mapName;
     std::vector<HeightLayer> _layers;
     std::vector<SpawnPoint>  _spawnPoints;
+    std::vector<Bush>        _bushes;
     TankConfig               _tankConfig;
     BulletConfig             _bulletConfig;
 };

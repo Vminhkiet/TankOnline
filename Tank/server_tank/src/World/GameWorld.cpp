@@ -405,6 +405,22 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
             // We just let the UI know they are inactive if needed, but not implemented flag for it yet.
         }
 
+        // Check Bush overlap for stealth (flags bit 1)
+        if (tank.isAlive) {
+            const auto& ext = _map.getTankConfig();
+            Vector3 tmin = { tank.position.x - ext.extentX, tank.position.y, tank.position.z - ext.extentZ };
+            Vector3 tmax = { tank.position.x + ext.extentX, tank.position.y + 2.0f * ext.extentY, tank.position.z + ext.extentZ };
+            
+            for (const auto& b : _map.getBushes()) {
+                if (tmin.x <= b.max.x && tmax.x >= b.min.x &&
+                    tmin.y <= b.max.y && tmax.y >= b.min.y &&
+                    tmin.z <= b.max.z && tmax.z >= b.min.z) {
+                    t.flags |= 2u; // InBush
+                    break;
+                }
+            }
+        }
+
         ts.push_back(t);
     }
     for (const auto& b : _bullets) {
