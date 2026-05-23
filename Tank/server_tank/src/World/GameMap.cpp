@@ -104,6 +104,21 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
         }
     }
 
+    if (data.contains("bushes")) {
+        for (const auto& item : data["bushes"]) {
+            glm::vec3 center(item["center"]["x"].get<float>(), item["center"]["y"].get<float>(), item["center"]["z"].get<float>());
+            glm::vec3 extents(
+                item["size"]["x"].get<float>() * 0.5f,
+                item["size"]["y"].get<float>() * 0.5f,
+                item["size"]["z"].get<float>() * 0.5f
+            );
+            Bush b;
+            b.min = { center.x - extents.x, center.y - extents.y, center.z - extents.z };
+            b.max = { center.x + extents.x, center.y + extents.y, center.z + extents.z };
+            _bushes.push_back(b);
+        }
+    }
+
     if (data.contains("heightmaps")) {
         for (const auto& hm : data["heightmaps"]) {
             try {

@@ -288,7 +288,8 @@ namespace Complete
 
             int count = Physics.BoxCastNonAlloc(
                 center, extents * 0.95f, dir,
-                s_HitBuffer, transform.rotation, dist + 0.05f);
+                s_HitBuffer, transform.rotation, dist + 0.05f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
 
             for (int i = 0; i < count; i++)
             {

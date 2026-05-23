@@ -245,13 +245,13 @@ namespace Complete
             }
         }
 
-        // Loại bỏ toàn bộ collider vật lý trên tank khi online.
+        // Loại bỏ hoặc chuyển collider vật lý trên tank khi online.
         // Server là authoritative — Unity physics không được phép di chuyển tank.
         // Giữ lại BulletHitVolume (trigger) vì nó dùng để detect visual hit, không phải physics.
         //
-        // Editor  : chỉ disable (enabled = false) để dễ bật lại khi test offline.
-        // Build   : Destroy hoàn toàn — component không còn tồn tại trong memory,
-        //           PhysX không allocate broadphase slot, tránh overhead trên mobile.
+        // BoxCollider gốc trên root tank object sẽ được chuyển thành isTrigger
+        // để hỗ trợ phát hiện va chạm với bụi rậm (Bush stealth).
+        // Các collider con khác (không liên quan) sẽ bị disable/destroy.
         //
         // KHÔNG destroy Rigidbody: TankMovement cache m_Rigidbody trong Awake() và gọi
         // MovePosition/MoveRotation mỗi FixedUpdate. Destroy rb → MissingReferenceException
@@ -259,9 +259,20 @@ namespace Complete
         // tham gia collision resolution, chỉ dùng cho movement API).
         private static void DisablePhysicsColliders(GameObject tankGo)
         {
+            // Identify the root BoxCollider — keep it as a trigger for bush detection
+            var rootBox = tankGo.GetComponent<BoxCollider>();
+
             foreach (var col in tankGo.GetComponentsInChildren<Collider>())
             {
                 if (col.gameObject.name == "BulletHitVolume") continue;
+
+                // Keep the root BoxCollider alive as a trigger for bush stealth
+                if (col == rootBox)
+                {
+                    col.isTrigger = true;
+                    continue;
+                }
+
 #if UNITY_EDITOR
                 col.enabled = false;
 #else
@@ -313,6 +324,11 @@ namespace Complete
 
             AddBulletHitTrigger(m_Tanks[0].m_Instance);
             if (customPhysics) DisablePhysicsColliders(m_Tanks[0].m_Instance);
+
+            // Bush stealth for local tank
+            var localStealth = m_Tanks[0].m_Instance.GetComponent<TankStealth>()
+                            ?? m_Tanks[0].m_Instance.AddComponent<TankStealth>();
+            localStealth.IsLocalTank = true;
 
             // Camera follow local tank
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
@@ -760,6 +776,10 @@ namespace Complete
             var localHealth = go.GetComponent<TankHealth>();
             if (localHealth != null) localHealth.SyncFromServer(ts.health);
             else if (!ts.IsAlive) go.SetActive(false);
+
+            // Forward server InBush flag to local TankStealth (server is authoritative backup)
+            var localStealth = go.GetComponent<TankStealth>();
+            if (localStealth != null) localStealth.ServerInBush = ts.IsInBush;
         }
 
         private void UpdateRemoteTank(TankState ts)
@@ -791,6 +811,11 @@ namespace Complete
                 if (remoteShooting != null) remoteShooting.enabled = false;
                 var remoteMovement = go.GetComponent<TankMovement>();
                 if (remoteMovement != null) remoteMovement.enabled = false;
+
+                // Bush stealth for remote tank (server-driven)
+                var remoteStealth = go.GetComponent<TankStealth>()
+                                 ?? go.AddComponent<TankStealth>();
+                remoteStealth.IsLocalTank = false;
             }
             
             // Find remote TankManager to sync score/placement
@@ -811,6 +836,10 @@ namespace Complete
                 go.SetActive(true);
                 var health = go.GetComponent<TankHealth>();
                 if (health != null) health.SyncFromServer(ts.health);
+
+                // Forward server InBush flag to remote TankStealth
+                var stealth = go.GetComponent<TankStealth>();
+                if (stealth != null) stealth.ServerInBush = ts.IsInBush;
 
                 if (!_remoteSnaps.ContainsKey(ts.tankId))
                     _remoteSnaps[ts.tankId] = new List<SnapEntry>();
