@@ -200,6 +200,7 @@ namespace Complete
                 TankNetClient.Instance.OnSnapshot    -= HandleSnapshot;
                 TankNetClient.Instance.OnMatchEnd    -= HandleMatchEnd;
                 TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
+                TankNetClient.Instance.Disconnect();
             }
 
             // Xóa hết tank khi scene kết thúc
@@ -304,12 +305,14 @@ namespace Complete
             m_Tanks[0].m_PlayerNumber = 1;
             m_Tanks[0].Setup();
 
-            // Kinematic + no gravity: server is fully authoritative, Unity physics won't push tank
+            var tm = m_Tanks[0].m_Instance.GetComponent<Complete.TankMovement>();
+            bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
+
             var rb = m_Tanks[0].m_Instance.GetComponent<Rigidbody>();
-            if (rb != null) { rb.isKinematic = true; rb.useGravity = false; }
+            if (rb != null) { rb.isKinematic = customPhysics; rb.useGravity = !customPhysics; }
 
             AddBulletHitTrigger(m_Tanks[0].m_Instance);
-            DisablePhysicsColliders(m_Tanks[0].m_Instance);
+            if (customPhysics) DisablePhysicsColliders(m_Tanks[0].m_Instance);
 
             // Camera follow local tank
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
@@ -693,19 +696,22 @@ namespace Complete
             var serverPos = new Vector3(ts.x, ts.y, ts.z);
             var serverRot = Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0);
 
-            // Always sync Y: client has no terrain height simulation.
-            // Must use rb.position, NOT transform.position — setting transform.position
-            // directly on a non-kinematic rigidbody causes PhysX to detect a warp and
-            // generate large correction impulses → jitter at walls.
+            var tm = go.GetComponent<Complete.TankMovement>();
+            bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
             var rb0 = go.GetComponent<Rigidbody>();
-            if (rb0 != null)
+
+            // Always sync Y if using custom online physics (client has no terrain height simulation).
+            if (customPhysics)
             {
-                var p = rb0.position; p.y = serverPos.y; rb0.position = p;
-            }
-            else
-            {
-                var pos = go.transform.position; pos.y = serverPos.y;
-                go.transform.position = pos;
+                if (rb0 != null)
+                {
+                    var p = rb0.position; p.y = serverPos.y; rb0.position = p;
+                }
+                else
+                {
+                    var pos = go.transform.position; pos.y = serverPos.y;
+                    go.transform.position = pos;
+                }
             }
 
             // XZ error = khoảng cách giữa client prediction và server position.
@@ -723,11 +729,6 @@ namespace Complete
             float xzErr = new Vector2(
                 go.transform.position.x - serverPos.x,
                 go.transform.position.z - serverPos.z).magnitude;
-
-#if UNITY_EDITOR
-            if (xzErr > 0.5f)
-                Debug.Log($"[CSP] xzErr={xzErr:F3}");
-#endif
 
             if (xzErr > HARD_THRESHOLD)
             {
@@ -779,7 +780,10 @@ namespace Complete
                 if (remoteRb != null) { remoteRb.isKinematic = true; remoteRb.useGravity = false; }
 
                 AddBulletHitTrigger(go);
-                DisablePhysicsColliders(go);
+                
+                var tm = go.GetComponent<Complete.TankMovement>();
+                bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
+                if (customPhysics) DisablePhysicsColliders(go);
 
                 // Remote tank is driven purely by snapshots — disable all local input components
                 // so they don't read keyboard input or send packets to the server.

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using TankNet;
 
 namespace Complete
@@ -17,6 +17,10 @@ namespace Complete
         public float m_MaxTiltBeforeRighting = 70f;
         public float m_TimeBeforeRighting = 1f;
         public float m_RightingSpeed = 180f;
+        
+        [Header("Physics Sync")]
+        [Tooltip("If true, uses custom kinematic wall slide. If false, uses Unity's default dynamic rigidbody colliders.")]
+        public bool m_UseCustomOnlinePhysics = true;
 
         private string m_MovementAxisName;          // The name of the input axis for moving forward and back.
         private string m_TurnAxisName;              // The name of the input axis for turning.
@@ -30,22 +34,32 @@ namespace Complete
         private float m_OriginalPitch;              // The pitch of the audio source at the start of the scene.
         private ParticleSystem[] m_particleSystems; // References to all the particles systems used by the Tanks
 
+        private Vector3 m_CachedColliderCenter = new Vector3(0, 0.85f, 0);
+        private Vector3 m_CachedColliderExtents = new Vector3(0.75f, 0.85f, 0.9f);
+
         private static readonly RaycastHit[] s_HitBuffer = new RaycastHit[8];
 
         private void Awake()
         {
             m_Rigidbody = GetComponent<Rigidbody>();
             m_Collider = GetComponent<Collider>();
+            if (m_Collider is BoxCollider box)
+            {
+                m_CachedColliderCenter = box.center;
+                m_CachedColliderExtents = box.size * 0.5f;
+                // Áp dụng scale nếu có
+                m_CachedColliderExtents.Scale(transform.lossyScale);
+            }
         }
 
 
         private void OnEnable()
         {
             bool online = TankNetClient.Instance != null;
-            // Online: kinematic + manual wall slide (matches server); offline: dynamic rigidbody.
-            m_Rigidbody.isKinematic = online;
-            if (online)
-                m_Rigidbody.useGravity = false;
+            
+            bool useKinematic = online && m_UseCustomOnlinePhysics;
+            m_Rigidbody.isKinematic = useKinematic;
+            m_Rigidbody.useGravity = !useKinematic;
 
             // Also reset the input values.
             m_MovementInputValue = 0f;
@@ -146,7 +160,7 @@ namespace Complete
         {
             bool online = TankNetClient.Instance != null;
 
-            if (online)
+            if (online && m_UseCustomOnlinePhysics)
             {
                 if (AutoRightTank())
                 {
@@ -206,8 +220,11 @@ namespace Complete
                 {
                     Vector3 newPos = m_Rigidbody.position + move;
                     float sampledY = SampleTerrainHeight(newPos);
-                    if (sampledY > newPos.y)
+                    // Match server STEP_HEIGHT = 0.3f
+                    if (sampledY > newPos.y && sampledY - newPos.y <= 0.85f)
                         newPos.y = sampledY;
+                    else if (sampledY < newPos.y)
+                        newPos.y = sampledY; // Allow falling down
                     m_Rigidbody.MovePosition(newPos);
                 }
                 else
@@ -254,15 +271,23 @@ namespace Complete
         private bool IsBlocked(Vector3 move, out Vector3 wallNormal)
         {
             wallNormal = Vector3.zero;
-            if (m_Collider == null)
-                return false;
 
-            Bounds b = m_Collider.bounds;
+            // Do not rely on m_Collider, as GameManager may disable or destroy it 
+            // when UseCustomOnlinePhysics is enabled. Use the cached bounds.
+            Vector3 center = transform.TransformPoint(m_CachedColliderCenter);
+            Vector3 extents = m_CachedColliderExtents;
+
+            // Nâng đáy của BoxCast lên một chút để mô phỏng STEP_HEIGHT = 0.85f của server.
+            // Điều này giúp BoxCast không bị vướng vào các con dốc nhỏ hoặc mặt đất.
+            float stepHeight = 0.85f;
+            center.y += stepHeight / 2f;
+            extents.y -= stepHeight / 2f;
+
             Vector3 dir = move.normalized;
             float dist = move.magnitude;
 
             int count = Physics.BoxCastNonAlloc(
-                b.center, b.extents * 0.95f, dir,
+                center, extents * 0.95f, dir,
                 s_HitBuffer, transform.rotation, dist + 0.05f);
 
             for (int i = 0; i < count; i++)
@@ -272,6 +297,15 @@ namespace Complete
                 Rigidbody hr = s_HitBuffer[i].rigidbody;
                 if (hr != null && !hr.isKinematic)
                     continue;
+
+                // Unity's BoxCast can return normal = Vector3.up for initial overlaps.
+                // If distance is 0, we are already intersecting a collider. Treat it as a wall block.
+                if (s_HitBuffer[i].distance == 0)
+                {
+                    wallNormal = -dir;
+                    return true;
+                }
+
                 if (s_HitBuffer[i].normal.y > 0.4f)
                     continue;
                 if (HasSurfaceTag(s_HitBuffer[i].collider.transform))
