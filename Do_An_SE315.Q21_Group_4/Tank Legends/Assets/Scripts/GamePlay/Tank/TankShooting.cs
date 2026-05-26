@@ -344,7 +344,7 @@ namespace Complete
                 }
             }
         }
-        public void RemoteFire(float yaw, int barrelIndex)
+        public void RemoteFire(float yaw, int barrelIndex, byte weaponType = 0)
         {
             if (m_TankHead != null)
             {
@@ -360,9 +360,45 @@ namespace Complete
                     m_ShootingAudio.Play();
                 }
             }
-            
-            // Note: For hitscan weapons, we could render a LineRenderer laser here in the future
 
+            // Play the recoil/shoot animation for remote tanks (only for hitscan, since projectiles handle it in GameManager.UpdateRemoteBullets)
+            if (weaponType == 1)
+            {
+                var anim = GetComponent<TankAnimation>();
+                if (anim != null)
+                {
+                    anim.PlayRemoteShoot();
+                }
+            }
+
+            // For hitscan weapons (weaponType == 1), spawn cosmetic shell locally since the server doesn't spawn a Bullet entity
+            if (weaponType == 1 && m_Shell != null && m_FireTransforms != null && barrelIndex < m_FireTransforms.Length)
+            {
+                Transform muzzle = m_FireTransforms[barrelIndex];
+                if (muzzle != null)
+                {
+                    Rigidbody shellInstance = Instantiate(m_Shell, muzzle.position, muzzle.rotation) as Rigidbody;
+
+                    // Disable local damage and collision for remote cosmetic shell
+                    ShellExplosion shell = shellInstance.GetComponent<ShellExplosion>();
+                    if (shell != null)
+                    {
+                        shell.enabled = false;
+                    }
+                    Collider col = shellInstance.GetComponent<Collider>();
+                    if (col != null)
+                    {
+                        col.enabled = false;
+                    }
+
+                    Vector3 fireDir = muzzle.forward;
+                    fireDir.y = 0f;
+                    fireDir.Normalize();
+                    shellInstance.velocity = m_MaxLaunchForce * fireDir;
+
+                    Destroy(shellInstance.gameObject, 2.0f);
+                }
+            }
         }
     }
 }

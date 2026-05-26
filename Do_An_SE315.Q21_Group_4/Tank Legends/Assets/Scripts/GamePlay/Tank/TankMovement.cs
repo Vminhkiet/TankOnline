@@ -413,7 +413,10 @@ namespace Complete
             Quaternion targetRotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
             Quaternion newRotation = Quaternion.RotateTowards(m_Rigidbody.rotation, targetRotation, m_RightingSpeed * Time.fixedDeltaTime);
 
-            m_Rigidbody.angularVelocity = Vector3.zero;
+            if (!m_Rigidbody.isKinematic)
+            {
+                m_Rigidbody.angularVelocity = Vector3.zero;
+            }
             m_Rigidbody.MoveRotation(newRotation);
             return true;
         }

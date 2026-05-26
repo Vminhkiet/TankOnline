@@ -354,9 +354,11 @@ public class MapExporter
                     float ey = s.y * Mathf.Abs(sc.y) * 0.5f;
                     float ez = s.z * Mathf.Abs(sc.z) * 0.5f;
                     
-                    // Compute center offset relative to the root prefab
+                    // Compute center offset relative to the root prefab (rotation-only, ignore scale)
                     Vector3 worldCenter = box.transform.TransformPoint(box.center);
-                    Vector3 localCenter = def.GameplayPrefab.transform.InverseTransformPoint(worldCenter);
+                    Vector3 diff = worldCenter - def.GameplayPrefab.transform.position;
+                    Quaternion unrotate = Quaternion.Euler(0, -def.GameplayPrefab.transform.eulerAngles.y, 0);
+                    Vector3 localCenter = unrotate * diff;
                     
                     Vector3 turretOffsetVal = Vector3.zero;
                     List<Vec3Data> barrelOffsets = new List<Vec3Data>();
@@ -381,8 +383,8 @@ public class MapExporter
 
                             foreach (var t in shooting.m_FireTransforms)
                             {
-                                Vector3 diff = t.position - turretPivot;
-                                Vector3 localPos = unrotateMuzzle * diff;
+                                Vector3 barrelDiff = t.position - turretPivot;
+                                Vector3 localPos = unrotateMuzzle * barrelDiff;
                                 barrelOffsets.Add(new Vec3Data(localPos.x, localPos.y, localPos.z));
                             }
                         }

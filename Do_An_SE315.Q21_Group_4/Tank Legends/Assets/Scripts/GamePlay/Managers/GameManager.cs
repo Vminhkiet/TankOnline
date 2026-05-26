@@ -352,7 +352,6 @@ namespace Complete
             // Unpack the tank type index from flags (bits 2-7)
             int typeIndex = (ts.flags >> 2) & 0x3F;
             GameObject prefabToSpawn = m_TankPrefab; // fallback to default local tank prefab
-            bool foundMapping = false;
 
             if (m_TankPrefabMappings != null)
             {
@@ -361,13 +360,10 @@ namespace Complete
                     if (mapping.typeIndex == typeIndex && mapping.prefab != null)
                     {
                         prefabToSpawn = mapping.prefab;
-                        foundMapping = true;
                         break;
                     }
                 }
             }
-
-            Debug.Log($"[GameManager] SPAWN LOCAL TANK: ts.flags={ts.flags}, typeIndex={typeIndex}, foundMapping={foundMapping}, chosenPrefab={prefabToSpawn.name}");
 
             m_Tanks[0].m_Instance    = Instantiate(prefabToSpawn, pos, rot) as GameObject;
             m_Tanks[0].m_Instance.SetActive(true);
@@ -391,7 +387,6 @@ namespace Complete
             // Camera follow local tank
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
 
-            Debug.Log($"[GameManager] local tank spawned tại server pos {pos}");
         }
 
 
@@ -647,7 +642,7 @@ namespace Complete
                 {
                     for (int i = 0; i < pkt.barrelCount; i++)
                     {
-                        shooting.RemoteFire(pkt.turretYaw, i);
+                        shooting.RemoteFire(pkt.turretYaw, i, pkt.weaponType);
                     }
                 }
             }
@@ -855,8 +850,11 @@ namespace Complete
                 if (rb != null)
                 {
                     rb.position = serverPos;
-                    rb.velocity = Vector3.zero;
-                    rb.angularVelocity = Vector3.zero;
+                    if (!rb.isKinematic)
+                    {
+                        rb.velocity = Vector3.zero;
+                        rb.angularVelocity = Vector3.zero;
+                    }
                 }
                 else go.transform.position = serverPos;
                 go.transform.rotation = serverRot;
@@ -891,8 +889,6 @@ namespace Complete
                 // Unpack the tank type index from flags (bits 2-7)
                 int typeIndex = (ts.flags >> 2) & 0x3F;
                 GameObject prefabToSpawn = m_RemoteTankPrefab;
-                bool foundMapping = false;
-
                 if (m_TankPrefabMappings != null)
                 {
                     foreach (var mapping in m_TankPrefabMappings)
@@ -900,19 +896,11 @@ namespace Complete
                         if (mapping.typeIndex == typeIndex && mapping.prefab != null)
                         {
                             prefabToSpawn = mapping.prefab;
-                            foundMapping = true;
                             break;
                         }
                     }
                 }
 
-                Debug.Log($"[GameManager] SPAWN REMOTE TANK: ts.tankId={ts.tankId}, ts.flags={ts.flags}, typeIndex={typeIndex}, foundMapping={foundMapping}, chosenPrefab={prefabToSpawn?.name}");
-
-                if (prefabToSpawn == null)
-                {
-                    Debug.LogError("[GameManager] Không tìm thấy Remote Tank Prefab phù hợp hoặc m_RemoteTankPrefab chưa được gán.");
-                    return;
-                }
                 go = Instantiate(prefabToSpawn,
                     new Vector3(ts.x, ts.y, ts.z),
                     Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0));
@@ -962,7 +950,10 @@ namespace Complete
 
                 // Forward server InBush flag to remote TankStealth
                 var stealth = go.GetComponent<TankStealth>();
-                if (stealth != null) stealth.ServerInBush = ts.IsInBush;
+                if (stealth != null)
+                {
+                    stealth.ServerInBush = ts.IsInBush;
+                }
 
                 if (!_remoteSnaps.ContainsKey(ts.tankId))
                     _remoteSnaps[ts.tankId] = new List<SnapEntry>();

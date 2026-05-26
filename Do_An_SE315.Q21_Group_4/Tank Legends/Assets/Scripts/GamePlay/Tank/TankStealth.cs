@@ -52,6 +52,7 @@ namespace Complete
             _mpb = new MaterialPropertyBlock();
             CacheDissolveRenderers();
             CacheWorldCanvas();
+            Debug.Log($"[TankStealth] {gameObject.name}: found {_dissolveRenderers.Count} dissolve renderers, canvas={_worldCanvas != null}");
         }
 
         /// <summary>
