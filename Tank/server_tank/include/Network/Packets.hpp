@@ -151,4 +151,16 @@ struct ForceLogoutPacket {
     uint32_t disconnectAfterMs = 10000; // client should show reason before forced disconnect
 };
 
+// S2C_EVENT_SHOOT = 2006
+struct EventShootPacket {
+    uint32_t matchId      = 0;
+    uint16_t opcode       = 0;   // Opcode::S2C_EVENT_SHOOT
+    uint32_t shooterId    = 0;
+    uint8_t  weaponType   = 0;   // 0 = Projectile, 1 = Hitscan
+    uint8_t  barrelCount  = 1;
+    float    turretYaw    = 0.f;
+    uint32_t hitTankId    = 0;   // 0 if no hit or projectile
+    float    hitX = 0.f, hitY = 0.f, hitZ = 0.f;
+};
+
 #pragma pack(pop)

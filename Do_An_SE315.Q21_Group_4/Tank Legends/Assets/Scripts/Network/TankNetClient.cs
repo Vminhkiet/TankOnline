@@ -29,6 +29,7 @@ namespace TankNet
 
         public event Action<SnapshotData> OnSnapshot;
         public event Action<MatchEndData> OnMatchEnd;
+        public event Action<EventShootPacket> OnEventShoot;
         public event Action<ushort, string, uint> OnForceLogout; // (code, message, disconnectAfterMs)
 
         [Header("Network")]
@@ -228,6 +229,16 @@ namespace TankNet
 
                         var snap = ParseSnapshot(data, hdr);
                         UnityMainThread.Post(() => OnSnapshot?.Invoke(snap));
+                        continue;
+                    }
+
+                    if ((Opcode)opcode == Opcode.S2C_EVENT_SHOOT)
+                    {
+                        if (data.Length < Marshal.SizeOf<EventShootPacket>()) continue;
+                        var pkt = BytesToStruct<EventShootPacket>(data, 0);
+                        if (pkt.matchId != MatchId) continue;
+
+                        UnityMainThread.Post(() => OnEventShoot?.Invoke(pkt));
                         continue;
                     }
 

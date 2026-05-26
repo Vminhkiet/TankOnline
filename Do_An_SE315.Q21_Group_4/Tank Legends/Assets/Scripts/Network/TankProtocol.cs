@@ -11,6 +11,7 @@ namespace TankNet
         S2C_SNAPSHOT    = 2000,
         S2C_MATCH_END    = 2004,
         S2C_FORCE_LOGOUT = 2005,
+        S2C_EVENT_SHOOT  = 2006,
     }
 
     // Must match server NetworkConstants.h exactly
@@ -96,6 +97,21 @@ namespace TankNet
         public short  rpReward;
         public byte   placement;
         public byte   playerCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct EventShootPacket
+    {
+        public uint   matchId;
+        public ushort opcode;       // = 2006
+        public uint   shooterId;
+        public byte   weaponType;   // 0 = Projectile, 1 = Hitscan
+        public byte   barrelCount;
+        public float  turretYaw;
+        public uint   hitTankId;    // 0 if no hit or projectile
+        public float  hitX;
+        public float  hitY;
+        public float  hitZ;
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1, CharSet = CharSet.Ansi)]

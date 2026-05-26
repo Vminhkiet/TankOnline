@@ -113,6 +113,20 @@ void Match::tick(float dt) {
     _world.runPhysics(dt);
     auto t_phys_end = Clock::now();
 
+    // Broadcast shoot events instantly (don't wait for snapshot tick rate)
+    auto shootEvents = _world.getShootEvents();
+    if (!shootEvents.empty()) {
+        for (auto& ev : shootEvents) {
+            ev.matchId = _config.matchId;
+            for (uint32_t pid : _config.playerIds) {
+                sockaddr_in addr{};
+                if (_sessions.getAddress(pid, addr)) {
+                    _network.send(addr, reinterpret_cast<const uint8_t*>(&ev), sizeof(EventShootPacket));
+                }
+            }
+        }
+    }
+
     if (playing) {
         _accumBulletUs    += std::chrono::duration_cast<Us>(t_collision  - t_bullet).count();
         _accumCollisionUs += std::chrono::duration_cast<Us>(t_phys_end   - t_collision).count();

@@ -330,11 +330,9 @@ namespace Complete
 
         public void PlayRemoteShoot(Vector3 bulletForward)
         {
-            if (m_TankHead != null && bulletForward.sqrMagnitude > 0.01f)
-            {
-                m_RemoteTargetDir = bulletForward.normalized;
-                m_RemoteAimTimer = 1.0f; // Aim for 1 second, then return to forward
-            }
+            // Note: We no longer set m_RemoteTargetDir here because bulletForward 
+            // calculated from (spawnPos - tankCenter) is incorrect for multi-barrel tanks.
+            // m_RemoteTargetDir is now perfectly set in RemoteFire using the exact yaw.
 
             // Play shooting audio (if not already playing to prevent double audio for multi-barrel shots)
             if (m_ShootingAudio != null && m_FireClip != null)
@@ -345,6 +343,26 @@ namespace Complete
                     m_ShootingAudio.Play();
                 }
             }
+        }
+        public void RemoteFire(float yaw, int barrelIndex)
+        {
+            if (m_TankHead != null)
+            {
+                m_RemoteTargetDir = new Vector3(Mathf.Sin(yaw), 0, Mathf.Cos(yaw));
+                m_RemoteAimTimer = 1.0f;
+            }
+
+            if (m_ShootingAudio != null && m_FireClip != null)
+            {
+                if (!m_ShootingAudio.isPlaying || m_ShootingAudio.time > 0.1f)
+                {
+                    m_ShootingAudio.clip = m_FireClip;
+                    m_ShootingAudio.Play();
+                }
+            }
+            
+            // Note: For hitscan weapons, we could render a LineRenderer laser here in the future
+
         }
     }
 }

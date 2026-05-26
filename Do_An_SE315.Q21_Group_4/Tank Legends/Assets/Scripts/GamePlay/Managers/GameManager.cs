@@ -155,6 +155,7 @@ namespace Complete
                     TankNetClient.Instance.OnSnapshot    += HandleSnapshot;
                     TankNetClient.Instance.OnMatchEnd    += HandleMatchEnd;
                     TankNetClient.Instance.OnForceLogout += HandleForceLogout;
+                    TankNetClient.Instance.OnEventShoot  += HandleEventShoot;
 
                     TankNetClient.Instance.Connect(m_ServerHost, m_ServerPort, m_MatchId, m_MyPlayerId);
                 }
@@ -234,6 +235,7 @@ namespace Complete
                 TankNetClient.Instance.OnSnapshot    -= HandleSnapshot;
                 TankNetClient.Instance.OnMatchEnd    -= HandleMatchEnd;
                 TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
+                TankNetClient.Instance.OnEventShoot  -= HandleEventShoot;
                 TankNetClient.Instance.Disconnect();
             }
 
@@ -634,6 +636,23 @@ namespace Complete
             _serverTimeRemaining = snap.TimeRemaining;
         }
 
+        private void HandleEventShoot(EventShootPacket pkt)
+        {
+            if (pkt.shooterId == m_MyPlayerId) return; // We already spawned our own bullet visually
+
+            if (_remoteTanks.TryGetValue(pkt.shooterId, out var go))
+            {
+                var shooting = go.GetComponent<Complete.TankShooting>();
+                if (shooting != null)
+                {
+                    for (int i = 0; i < pkt.barrelCount; i++)
+                    {
+                        shooting.RemoteFire(pkt.turretYaw, i);
+                    }
+                }
+            }
+        }
+
         // Cached bullet prefab: m_RemoteBulletPrefab if assigned, otherwise auto-detected
         // from TankShooting.m_Shell so no manual inspector step is required.
         private GameObject _bulletPrefabCache;
@@ -685,7 +704,7 @@ namespace Complete
 
                     // Server is authoritative — disable local physics and damage
                     var rb = go.GetComponent<Rigidbody>();
-                    if (rb != null) { rb.isKinematic = true; rb.velocity = Vector3.zero; }
+                    if (rb != null) { rb.isKinematic = true; }
                     var explosion = go.GetComponent<ShellExplosion>();
                     if (explosion != null) explosion.enabled = false;
                     var col = go.GetComponent<Collider>();

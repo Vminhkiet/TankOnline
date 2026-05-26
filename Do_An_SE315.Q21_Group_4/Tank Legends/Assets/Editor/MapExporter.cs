@@ -358,14 +358,49 @@ public class MapExporter
                     Vector3 worldCenter = box.transform.TransformPoint(box.center);
                     Vector3 localCenter = def.GameplayPrefab.transform.InverseTransformPoint(worldCenter);
                     
+                    Vector3 turretOffsetVal = Vector3.zero;
+                    List<Vec3Data> barrelOffsets = new List<Vec3Data>();
+                    var shooting = def.GameplayPrefab.GetComponent<Complete.TankShooting>();
+                    if (shooting != null)
+                    {
+                        float hullYaw = def.GameplayPrefab.transform.eulerAngles.y;
+                        Quaternion unrotateHull = Quaternion.Euler(0, -hullYaw, 0);
+
+                        if (shooting.m_TankHead != null)
+                        {
+                            Vector3 worldDiff = shooting.m_TankHead.position - def.GameplayPrefab.transform.position;
+                            Vector3 p = unrotateHull * worldDiff;
+                            turretOffsetVal = new Vector3(p.x, p.y, p.z);
+                        }
+                        
+                        if (shooting.m_FireTransforms != null && shooting.m_FireTransforms.Length > 0)
+                        {
+                            float refYaw = shooting.m_FireTransforms[0].eulerAngles.y;
+                            Quaternion unrotateMuzzle = Quaternion.Euler(0, -refYaw, 0);
+                            Vector3 turretPivot = shooting.m_TankHead != null ? shooting.m_TankHead.position : def.GameplayPrefab.transform.position;
+
+                            foreach (var t in shooting.m_FireTransforms)
+                            {
+                                Vector3 diff = t.position - turretPivot;
+                                Vector3 localPos = unrotateMuzzle * diff;
+                                barrelOffsets.Add(new Vec3Data(localPos.x, localPos.y, localPos.z));
+                            }
+                        }
+                    }
+                    if (barrelOffsets.Count == 0)
+                        barrelOffsets.Add(new Vec3Data(0f, 1.0f, 2.5f)); // Fallback
+
                     list.Add(new TankConfigData 
                     { 
                         name = def.TankName, 
                         collider_extents = new Vec3Data(ex, ey, ez),
-                        collider_offset = new Vec3Data(localCenter.x, localCenter.y, localCenter.z)
+                        collider_offset = new Vec3Data(localCenter.x, localCenter.y, localCenter.z),
+                        weapon_type = (int)def.WeaponType,
+                        turret_offset = new Vec3Data(turretOffsetVal.x, turretOffsetVal.y, turretOffsetVal.z),
+                        barrel_offsets = barrelOffsets
                     });
                     
-                    Debug.Log($"[MapExporter] Exported Tank {def.TankName} extents: ({ex:F4}, {ey:F4}, {ez:F4}) offset: ({localCenter.x:F4}, {localCenter.y:F4}, {localCenter.z:F4})");
+                    Debug.Log($"[MapExporter] Exported Tank {def.TankName} extents: ({ex:F4}, {ey:F4}, {ez:F4}) offset: ({localCenter.x:F4}, {localCenter.y:F4}, {localCenter.z:F4}) barrels: {barrelOffsets.Count}");
                 }
             }
         }
@@ -423,6 +458,9 @@ public class MapExporter
         public string name;
         public Vec3Data collider_extents; 
         public Vec3Data collider_offset;
+        public int weapon_type; // 0 = Projectile, 1 = Hitscan
+        public Vec3Data turret_offset;
+        public List<Vec3Data> barrel_offsets;
     }
 
     [System.Serializable]

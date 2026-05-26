@@ -92,6 +92,25 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
                     cfg.offsetY = cfg.extentY;
                     cfg.offsetZ = 0.f;
                 }
+                if (t.contains("weapon_type")) {
+                    cfg.weaponType = t["weapon_type"].get<int>();
+                }
+                if (t.contains("turret_offset")) {
+                    cfg.turretOffset = {
+                        t["turret_offset"]["x"].get<float>(),
+                        t["turret_offset"]["y"].get<float>(),
+                        t["turret_offset"]["z"].get<float>()
+                    };
+                }
+                if (t.contains("barrel_offsets")) {
+                    for (const auto& bo : t["barrel_offsets"]) {
+                        cfg.barrelOffsets.push_back({
+                            bo["x"].get<float>(),
+                            bo["y"].get<float>(),
+                            bo["z"].get<float>()
+                        });
+                    }
+                }
                 _tankConfigs[name] = cfg;
             }
         }
@@ -111,6 +130,25 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
                 cfg.offsetX = 0.f;
                 cfg.offsetY = cfg.extentY;
                 cfg.offsetZ = 0.f;
+            }
+            if (t.contains("weapon_type")) {
+                cfg.weaponType = t["weapon_type"].get<int>();
+            }
+            if (t.contains("turret_offset")) {
+                cfg.turretOffset = {
+                    t["turret_offset"]["x"].get<float>(),
+                    t["turret_offset"]["y"].get<float>(),
+                    t["turret_offset"]["z"].get<float>()
+                };
+            }
+            if (t.contains("barrel_offsets")) {
+                for (const auto& bo : t["barrel_offsets"]) {
+                    cfg.barrelOffsets.push_back({
+                        bo["x"].get<float>(),
+                        bo["y"].get<float>(),
+                        bo["z"].get<float>()
+                    });
+                }
             }
             _tankConfigs["BULLDOG"] = cfg;
         }

@@ -11,4 +11,5 @@ enum class Opcode : uint16_t {
     S2C_EVENT_HIT    = 2003,
     S2C_MATCH_END    = 2004,  // raw binary: MatchEndPacket (14 bytes, per-player myKills)
     S2C_FORCE_LOGOUT = 2005,  // raw binary: ForceLogoutPacket + UTF-8 message bytes
+    S2C_EVENT_SHOOT  = 2006,  // raw binary: EventShootPacket
 };

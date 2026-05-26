@@ -29,6 +29,7 @@ public:
                               MatchResult& outResult) const;
 
     std::vector<uint8_t> getSnapshot() const;
+    std::vector<EventShootPacket> getShootEvents();
 
     size_t playerCount() const { return _tanks.size(); }
     const std::unordered_map<uint32_t, int>& getKills()  const { return _kills; }
@@ -57,6 +58,7 @@ private:
     std::unordered_map<uint32_t, int>     _matchScoreBase; // playerId -> score
     std::unordered_map<uint32_t, int>     _survivalPlacement; // playerId -> placement (1=first, 2=second)
     std::unordered_map<uint32_t, int>     _maxHealth; // playerId -> max health
+    std::vector<EventShootPacket>         _shootEvents;
     uint32_t                              _nextBulletId = 50000;
     bool                                  _respawnOnDeath = true;
     float                                 _elapsedTime = 0.0f;

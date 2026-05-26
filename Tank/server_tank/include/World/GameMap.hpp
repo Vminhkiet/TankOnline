@@ -21,6 +21,9 @@ public:
         float offsetX = 0.0f;
         float offsetY = 1.0f;
         float offsetZ = 0.0f;
+        int weaponType = 0; // 0 = Projectile, 1 = Hitscan
+        Vector3 turretOffset; // Offset of turret relative to root
+        std::vector<Vector3> barrelOffsets; // Local to turret
     };
 
     struct BulletConfig {

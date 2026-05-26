@@ -23,6 +23,7 @@ public class TankDefinitionSO : ScriptableObject
 
     [Header("Combat Stats")]
     [SerializeField] private TankStats stats;
+    [SerializeField] private WeaponType weaponType = WeaponType.Projectile;
 
     [Header("Special Ability")]
     [SerializeField] private TankSpecialAbility specialAbility;
@@ -36,6 +37,7 @@ public class TankDefinitionSO : ScriptableObject
     public Vector3 PreviewLocalEulerAngles => previewLocalEulerAngles;
     public Vector3 PreviewLocalScale => previewLocalScale == Vector3.zero ? Vector3.one : previewLocalScale;
     public TankStats Stats => stats;
+    public WeaponType WeaponType => weaponType;
     public TankSpecialAbility SpecialAbility => specialAbility;
 
 #if UNITY_EDITOR
@@ -118,4 +120,10 @@ public enum TankStatType
     FireRate,
     [InspectorName("Fire Range")]
     FireRange
+}
+
+public enum WeaponType
+{
+    Projectile,
+    Hitscan
 }

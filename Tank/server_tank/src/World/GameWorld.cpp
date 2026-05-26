@@ -339,13 +339,14 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
         if (tank.wantsShoot && tank.isAlive) {
             const GameMap::TankConfig& cfg = _map.getTankConfig(tank.stats.name);
             float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
-            Vector3 center{ tank.position.x + cfg.offsetX * cy + cfg.offsetZ * sy,
-                            tank.position.y + cfg.offsetY,
-                            tank.position.z - cfg.offsetX * sy + cfg.offsetZ * cy };
-            // Muzzle is slightly in front and above center, shifted forward to the barrel tip
-            Vector3 localForward = { std::sin(tank.wantsShootYaw), 0.f, std::cos(tank.wantsShootYaw) };
-            Vector3 baseMuzzlePos = center + Vector3{0.f, cfg.extentY * 0.7f, 0.f} + localForward * (cfg.extentZ + 0.8f);
             
+            // Calculate world turret pivot
+            Vector3 worldTurretPivot = {
+                tank.position.x + cfg.turretOffset.x * cy + cfg.turretOffset.z * sy,
+                tank.position.y + cfg.turretOffset.y,
+                tank.position.z - cfg.turretOffset.x * sy + cfg.turretOffset.z * cy
+            };
+
             // Calculate the local Right direction of the turret in world space:
             Vector3 localRight = { std::cos(tank.wantsShootYaw), 0.f, -std::sin(tank.wantsShootYaw) };
 
@@ -358,17 +359,60 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
             }
 
             int count = tank.wantsShootBarrels > 0 ? tank.wantsShootBarrels : 1;
-            float spacing = tank.stats.barrelSpacing > 0 ? tank.stats.barrelSpacing : 0.4f;
 
-            for (int i = 0; i < count; ++i) {
-                // Calculate lateral offset for multi-barrels
-                float offset = (i - (count - 1) / 2.0f) * spacing;
-                Vector3 muzzlePos = baseMuzzlePos + localRight * offset;
-                spawnBullet(id, muzzlePos, tank.wantsShootYaw, tank.wantsShootForce, bulletDamage);
+            EventShootPacket ev{};
+            ev.opcode = static_cast<uint16_t>(Opcode::S2C_EVENT_SHOOT);
+            ev.shooterId = id;
+            ev.weaponType = static_cast<uint8_t>(cfg.weaponType);
+            ev.barrelCount = count;
+            ev.turretYaw = tank.wantsShootYaw;
+            ev.hitTankId = 0; // Hitscan logic can populate this if we implement it later
+
+            if (!cfg.barrelOffsets.empty()) {
+                count = (std::min)((int)cfg.barrelOffsets.size(), count);
+                for (int i = 0; i < count; ++i) {
+                    Vector3 bo = cfg.barrelOffsets[i];
+                    // Rotate local barrel offset by tank's turret yaw
+                    float by = std::sin(tank.wantsShootYaw), cty = std::cos(tank.wantsShootYaw);
+                    Vector3 worldOffset = {
+                        bo.x * cty + bo.z * by,
+                        bo.y,
+                        -bo.x * by + bo.z * cty
+                    };
+                    Vector3 muzzlePos = worldTurretPivot + worldOffset;
+                    
+                    if (cfg.weaponType == 0) { // Projectile
+                        spawnBullet(id, muzzlePos, tank.wantsShootYaw, tank.wantsShootForce, bulletDamage);
+                    }
+                }
+            } else {
+                // Fallback heuristic if no exact offsets exist
+                Vector3 center{ tank.position.x + cfg.offsetX * std::cos(tank.yaw) + cfg.offsetZ * std::sin(tank.yaw),
+                                tank.position.y + cfg.offsetY,
+                                tank.position.z - cfg.offsetX * std::sin(tank.yaw) + cfg.offsetZ * std::cos(tank.yaw) };
+                Vector3 localForward = { std::sin(tank.wantsShootYaw), 0.f, std::cos(tank.wantsShootYaw) };
+                Vector3 baseMuzzlePos = center + Vector3{0.f, cfg.extentY * 0.7f, 0.f} + localForward * (cfg.extentZ + 0.8f);
+
+                float spacing = tank.stats.barrelSpacing > 0 ? tank.stats.barrelSpacing : 0.4f;
+                for (int i = 0; i < count; ++i) {
+                    float offset = (i - (count - 1) / 2.0f) * spacing;
+                    Vector3 muzzlePos = baseMuzzlePos + localRight * offset;
+                    if (cfg.weaponType == 0) {
+                        spawnBullet(id, muzzlePos, tank.wantsShootYaw, tank.wantsShootForce, bulletDamage);
+                    }
+                }
             }
+            
+            _shootEvents.push_back(ev);
             tank.wantsShoot = false;
         }
     }
+}
+
+std::vector<EventShootPacket> GameWorld::getShootEvents() {
+    auto copy = _shootEvents;
+    _shootEvents.clear();
+    return copy;
 }
 
 void GameWorld::spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw, float speed, int damage)
