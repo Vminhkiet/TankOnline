@@ -6,6 +6,7 @@
 #include <cstring>
 #include <vector>
 
+
 // Raw S2C snapshot header — not bit-packed, Unity reads with BinaryReader
 #pragma pack(push, 1)
 struct SnapshotHeader {
@@ -71,6 +72,28 @@ void Match::tick(float dt) {
     // 2. Dispatch — timed to capture handler overhead (handleMove / handleShoot)
     auto t_dispatch_start = Clock::now();
     for (auto& cmd : local) {
+        uint32_t pid = 0;
+        std::string tankNameOverride = "";
+
+        if (cmd.op == Opcode::C2S_LOGIN) {
+            if (!_sessions.getPlayerID(cmd.sender, pid)) {
+                if (!cmd.rawBuffer.empty()) {
+                    ReadStream rs(reinterpret_cast<const uint32_t*>(cmd.rawBuffer.data()), static_cast<int>(cmd.rawBuffer.size()));
+                    PacketHeader dummy;
+                    dummy.Serialize(rs); // skip header
+                    int32_t typeIndex = 0;
+                    if (rs.SerializeInteger(typeIndex, 0, 255)) {
+                        tankNameOverride = _world.getMap().getTankNameByIndex(static_cast<uint8_t>(typeIndex));
+                        LOG_INFO("Match {}: received C2S_LOGIN with tank typeIndex {}, resolved to '{}'", _config.matchId, typeIndex, tankNameOverride);
+                    }
+                }
+            }
+        }
+
+        if (!resolvePlayer(cmd.sender, pid, tankNameOverride)) continue;
+        
+        if (cmd.op == Opcode::C2S_LOGIN) continue; // LOGIN packet has no further logic
+
         cmd.dt = dt;
         _dispatcher.dispatch(cmd);
     }
@@ -235,7 +258,7 @@ void Match::broadcastSnapshot() {
     }
 }
 
-bool Match::resolvePlayer(const sockaddr_in& addr, uint32_t& outPid) {
+bool Match::resolvePlayer(const sockaddr_in& addr, uint32_t& outPid, const std::string& overrideTankName) {
     // Fast path: already registered
     if (_sessions.getPlayerID(addr, outPid)) return true;
 
@@ -249,7 +272,12 @@ bool Match::resolvePlayer(const sockaddr_in& addr, uint32_t& outPid) {
 
     // Spawn tank now that the player has actually connected
     Vector3 spawn = _world.getSpawnPosition(slot);
-    _world.addPlayer(outPid, spawn);
+    TankStats stats = _config.playerStats.count(outPid) ? _config.playerStats[outPid] : TankStats{};
+    if (!overrideTankName.empty()) {
+        stats.name = overrideTankName;
+    }
+
+    _world.addPlayer(outPid, spawn, stats);
 
     LOG_INFO("Match {}: player {} joined from {}:{} → spawn ({:.1f},{:.1f},{:.1f})",
              _config.matchId, outPid,

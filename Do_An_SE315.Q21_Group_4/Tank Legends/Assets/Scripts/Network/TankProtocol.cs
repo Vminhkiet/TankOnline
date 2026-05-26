@@ -136,6 +136,14 @@ namespace TankNet
             w.WriteInt(tick,           NetConst.TICK_MIN,         NetConst.TICK_MAX);
         }
 
+        public static byte[] BuildLogin(uint matchId, int typeIndex, uint playerId = 0)
+        {
+            var w = new BitWriter(16);
+            WriteHeader(w, Opcode.C2S_LOGIN, matchId, 12, playerId, 0, 0); // 12 bytes is safe
+            w.WriteInt(typeIndex, 0, 255);
+            return w.ToBytes();
+        }
+
         public static byte[] BuildMove(uint matchId, int moveX, int moveZ,
                                        uint playerId = 0, byte seq = 0, ushort tick = 0)
         {

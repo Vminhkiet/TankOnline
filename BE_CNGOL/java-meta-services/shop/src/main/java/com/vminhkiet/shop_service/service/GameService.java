@@ -24,4 +24,8 @@ public interface GameService {
     long getShopVersion();
 
     List<Long> getPurchasedItemIds(Long playerId);
+
+    void deployItem(Long playerId, Long itemId);
+
+    Long getDeployedTankId(Long playerId);
 }

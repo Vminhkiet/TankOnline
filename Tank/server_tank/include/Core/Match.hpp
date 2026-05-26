@@ -63,7 +63,7 @@ private:
     uint32_t _taskTickCount    = 0;   // only increments while PLAYING
 
     void registerHandlers();
-    bool resolvePlayer(const sockaddr_in& addr, uint32_t& outPid);
+    bool resolvePlayer(const sockaddr_in& addr, uint32_t& outPid, const std::string& overrideTankName = "");
     void broadcastSnapshot();
     void broadcastMatchEnd(const MatchResult& r);
 

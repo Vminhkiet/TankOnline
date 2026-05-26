@@ -20,5 +20,12 @@ public class Item {
     private String imageUrl;
     private BigDecimal price;
     private String category;
-    private Boolean availble; 
+    private Boolean availble;
+
+    private Integer damage;
+    private Integer armor;
+    private Integer speed;
+    private Integer health;
+    private Integer fireRate;
+    private Integer fireRange;
 }

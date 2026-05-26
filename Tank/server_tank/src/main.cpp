@@ -143,6 +143,19 @@ int main() {
                         for (auto& [pidStr, tok] : j.at("tokens").items())
                             cfg.playerTokens[static_cast<uint32_t>(std::stoul(pidStr))] = tok.get<std::string>();
                     }
+                    if (j.contains("tanks")) {
+                        for (auto& [pidStr, tankData] : j.at("tanks").items()) {
+                            TankStats stats;
+                            stats.name = tankData.value("name", "BULLDOG");
+                            stats.damage = tankData.value("damage", 25);
+                            stats.armor = tankData.value("armor", 0);
+                            stats.speed = tankData.value("speed", 12.0f);
+                            stats.health = tankData.value("health", 100);
+                            stats.fireRate = tankData.value("fireRate", 1.0f);
+                            stats.fireRange = tankData.value("fireRange", 50.0f);
+                            cfg.playerStats[static_cast<uint32_t>(std::stoul(pidStr))] = stats;
+                        }
+                    }
                     manager.createMatch(std::move(cfg));
                     return;
                 }

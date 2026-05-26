@@ -72,12 +72,47 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
         }
     }
 
-    if (data.contains("tank")) {
+    _tankNameToIndex.clear();
+    if (data.contains("tanks")) {
+        uint8_t index = 0;
+        for (const auto& t : data["tanks"]) {
+            std::string name = t.value("name", "BULLDOG");
+            _tankNameToIndex[name] = index++;
+            if (t.contains("collider_extents")) {
+                TankConfig cfg;
+                cfg.extentX = t["collider_extents"]["x"].get<float>();
+                cfg.extentY = t["collider_extents"]["y"].get<float>();
+                cfg.extentZ = t["collider_extents"]["z"].get<float>();
+                if (t.contains("collider_offset")) {
+                    cfg.offsetX = t["collider_offset"]["x"].get<float>();
+                    cfg.offsetY = t["collider_offset"]["y"].get<float>();
+                    cfg.offsetZ = t["collider_offset"]["z"].get<float>();
+                } else {
+                    cfg.offsetX = 0.f;
+                    cfg.offsetY = cfg.extentY;
+                    cfg.offsetZ = 0.f;
+                }
+                _tankConfigs[name] = cfg;
+            }
+        }
+    } else if (data.contains("tank")) {
+        // Fallback for old world.json format
         const auto& t = data["tank"];
         if (t.contains("collider_extents")) {
-            _tankConfig.extentX = t["collider_extents"]["x"].get<float>();
-            _tankConfig.extentY = t["collider_extents"]["y"].get<float>();
-            _tankConfig.extentZ = t["collider_extents"]["z"].get<float>();
+            TankConfig cfg;
+            cfg.extentX = t["collider_extents"]["x"].get<float>();
+            cfg.extentY = t["collider_extents"]["y"].get<float>();
+            cfg.extentZ = t["collider_extents"]["z"].get<float>();
+            if (t.contains("collider_offset")) {
+                cfg.offsetX = t["collider_offset"]["x"].get<float>();
+                cfg.offsetY = t["collider_offset"]["y"].get<float>();
+                cfg.offsetZ = t["collider_offset"]["z"].get<float>();
+            } else {
+                cfg.offsetX = 0.f;
+                cfg.offsetY = cfg.extentY;
+                cfg.offsetZ = 0.f;
+            }
+            _tankConfigs["BULLDOG"] = cfg;
         }
     }
 
@@ -89,9 +124,8 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
             _bulletConfig.hitRadius = b["hit_radius"].get<float>();
     }
 
-    LOG_INFO("GameMap: tank({:.3f},{:.3f},{:.3f}) bullet_r={:.3f} hit_r={:.3f}",
-             _tankConfig.extentX, _tankConfig.extentY, _tankConfig.extentZ,
-             _bulletConfig.radius, _bulletConfig.hitRadius);
+    LOG_INFO("GameMap: loaded {} tank configs, bullet_r={:.3f} hit_r={:.3f}",
+             _tankConfigs.size(), _bulletConfig.radius, _bulletConfig.hitRadius);
 
     if (data.contains("spawns")) {
         for (const auto& sp : data["spawns"]) {

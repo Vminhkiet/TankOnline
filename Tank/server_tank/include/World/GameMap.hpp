@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include "Physics/PhysicsWorld.hpp"
 
 class GameMap {
@@ -17,6 +18,9 @@ public:
         float extentX = 0.9f;
         float extentY = 1.0f;
         float extentZ = 1.2f;
+        float offsetX = 0.0f;
+        float offsetY = 1.0f;
+        float offsetZ = 0.0f;
     };
 
     struct BulletConfig {
@@ -31,8 +35,41 @@ public:
     float GetHeightAt(float x, float z) const;
     const std::vector<SpawnPoint>& getSpawnPoints() const { return _spawnPoints; }
     const std::vector<Bush>& getBushes() const { return _bushes; }
-    const TankConfig&   getTankConfig()   const { return _tankConfig; }
+    const TankConfig   getTankConfig(const std::string& tankName) const { 
+        auto it = _tankConfigs.find(tankName);
+        if (it != _tankConfigs.end()) {
+            return it->second;
+        }
+        // Fallback to default or first available
+        if (!_tankConfigs.empty()) {
+            return _tankConfigs.begin()->second;
+        }
+        return TankConfig{};
+    }
     const BulletConfig& getBulletConfig() const { return _bulletConfig; }
+
+    uint8_t getTankTypeIndex(const std::string& name) const {
+        auto it = _tankNameToIndex.find(name);
+        if (it != _tankNameToIndex.end()) {
+            return it->second;
+        }
+        // Case-insensitive fallback
+        std::string lowercaseName = name;
+        for (auto& c : lowercaseName) c = std::tolower(c);
+        for (const auto& [k, v] : _tankNameToIndex) {
+            std::string kLower = k;
+            for (auto& c : kLower) c = std::tolower(c);
+            if (kLower == lowercaseName) return v;
+        }
+        return 0; // Fallback to index 0
+    }
+
+    std::string getTankNameByIndex(uint8_t index) const {
+        for (const auto& [name, idx] : _tankNameToIndex) {
+            if (idx == index) return name;
+        }
+        return "BULLDOG";
+    }
 
 private:
     struct HeightLayer {
@@ -50,6 +87,7 @@ private:
     std::vector<HeightLayer> _layers;
     std::vector<SpawnPoint>  _spawnPoints;
     std::vector<Bush>        _bushes;
-    TankConfig               _tankConfig;
+    std::unordered_map<std::string, TankConfig> _tankConfigs;
+    std::unordered_map<std::string, uint8_t>    _tankNameToIndex;
     BulletConfig             _bulletConfig;
 };

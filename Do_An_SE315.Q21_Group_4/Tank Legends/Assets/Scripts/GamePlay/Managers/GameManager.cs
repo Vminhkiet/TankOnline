@@ -27,6 +27,18 @@ namespace Complete
         public GameObject m_RemoteTankPrefab;
         public GameObject m_RemoteBulletPrefab;
 
+        [System.Serializable]
+        public struct TankPrefabMapping
+        {
+            public int typeIndex;       // 0=BULLDOG, 1=PHOENIX, 2=TITAN, 3=RHINO
+            public string tankName;     // For self-documenting and readability in Inspector
+            public GameObject prefab;   // The gameplay prefab
+        }
+
+        [Header("Available Tank Prefabs")]
+        [Tooltip("Prefab list mapping to server tank indices explicitly")]
+        public List<TankPrefabMapping> m_TankPrefabMappings;
+
         [Header("Match End UI")]
         public GameObject     matchEndPanel;
         public TextMeshProUGUI matchEndResultText;
@@ -35,6 +47,11 @@ namespace Complete
         public TextMeshProUGUI matchEndCoinText;
         public MatchEndLeaderboardUIManager leaderboardUI;
         public string          lobbySceneName = "Lobby";
+        
+        [Header("Match End Intermediate Screens")]
+        public GameObject m_VictoryScreen;
+        public GameObject m_YouDiedScreen;
+        private bool _skipEndDelay = false;
 
         [Header("Match HUD")]
         public TextMeshProUGUI matchTimerText;
@@ -74,7 +91,6 @@ namespace Complete
             _matchStartTime = Time.time;
             if (matchEndPanel != null) matchEndPanel.SetActive(false);
 
-            // Read MatchInfo from GlobalMatchState if available
             if (GlobalMatchState.HasMatchInfo)
             {
                 m_OnlineMode  = true;
@@ -84,6 +100,12 @@ namespace Complete
                 if (GlobalMatchState.PlayerId > 0)
                     m_MyPlayerId = GlobalMatchState.PlayerId;
                 Debug.Log($"[GameManager] Loaded MatchInfo: MatchId={m_MatchId}, {m_ServerHost}:{m_ServerPort}, playerId={m_MyPlayerId}");
+            }
+
+            if (GlobalMatchState.LocalTankPrefab != null)
+            {
+                m_TankPrefab = GlobalMatchState.LocalTankPrefab;
+                Debug.Log($"[GameManager] Using deployed tank prefab: {m_TankPrefab.name}");
             }
 
             // Đọc -playerid từ command line: TankLegends.exe -playerid 2
@@ -133,12 +155,15 @@ namespace Complete
                     TankNetClient.Instance.OnSnapshot    += HandleSnapshot;
                     TankNetClient.Instance.OnMatchEnd    += HandleMatchEnd;
                     TankNetClient.Instance.OnForceLogout += HandleForceLogout;
+
                     TankNetClient.Instance.Connect(m_ServerHost, m_ServerPort, m_MatchId, m_MyPlayerId);
                 }
             }
 
             StartCoroutine (GameLoop ());
         }
+
+
 
         private void Update()
         {
@@ -240,6 +265,7 @@ namespace Complete
 
                 m_Tanks[i].m_Instance =
                     Instantiate(m_TankPrefab, m_Tanks[i].m_SpawnPoint.position, m_Tanks[i].m_SpawnPoint.rotation) as GameObject;
+                m_Tanks[i].m_Instance.SetActive(true);
                 m_Tanks[i].m_PlayerNumber = i + 1;
                 m_Tanks[i].Setup();
             }
@@ -312,7 +338,28 @@ namespace Complete
             var pos = new Vector3(ts.x, ts.y, ts.z);
             var rot = Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0);
 
-            m_Tanks[0].m_Instance    = Instantiate(m_TankPrefab, pos, rot) as GameObject;
+            // Unpack the tank type index from flags (bits 2-7)
+            int typeIndex = (ts.flags >> 2) & 0x3F;
+            GameObject prefabToSpawn = m_TankPrefab; // fallback to default local tank prefab
+            bool foundMapping = false;
+
+            if (m_TankPrefabMappings != null)
+            {
+                foreach (var mapping in m_TankPrefabMappings)
+                {
+                    if (mapping.typeIndex == typeIndex && mapping.prefab != null)
+                    {
+                        prefabToSpawn = mapping.prefab;
+                        foundMapping = true;
+                        break;
+                    }
+                }
+            }
+
+            Debug.Log($"[GameManager] SPAWN LOCAL TANK: ts.flags={ts.flags}, typeIndex={typeIndex}, foundMapping={foundMapping}, chosenPrefab={prefabToSpawn.name}");
+
+            m_Tanks[0].m_Instance    = Instantiate(prefabToSpawn, pos, rot) as GameObject;
+            m_Tanks[0].m_Instance.SetActive(true);
             m_Tanks[0].m_PlayerNumber = 1;
             m_Tanks[0].Setup();
 
@@ -786,14 +833,35 @@ namespace Complete
         {
             if (!_remoteTanks.TryGetValue(ts.tankId, out var go) || go == null)
             {
-                if (m_RemoteTankPrefab == null)
+                // Unpack the tank type index from flags (bits 2-7)
+                int typeIndex = (ts.flags >> 2) & 0x3F;
+                GameObject prefabToSpawn = m_RemoteTankPrefab;
+                bool foundMapping = false;
+
+                if (m_TankPrefabMappings != null)
                 {
-                    Debug.LogError("[GameManager] m_RemoteTankPrefab chưa được gán. Kéo prefab vào Inspector.");
+                    foreach (var mapping in m_TankPrefabMappings)
+                    {
+                        if (mapping.typeIndex == typeIndex && mapping.prefab != null)
+                        {
+                            prefabToSpawn = mapping.prefab;
+                            foundMapping = true;
+                            break;
+                        }
+                    }
+                }
+
+                Debug.Log($"[GameManager] SPAWN REMOTE TANK: ts.tankId={ts.tankId}, ts.flags={ts.flags}, typeIndex={typeIndex}, foundMapping={foundMapping}, chosenPrefab={prefabToSpawn?.name}");
+
+                if (prefabToSpawn == null)
+                {
+                    Debug.LogError("[GameManager] Không tìm thấy Remote Tank Prefab phù hợp hoặc m_RemoteTankPrefab chưa được gán.");
                     return;
                 }
-                go = Instantiate(m_RemoteTankPrefab,
+                go = Instantiate(prefabToSpawn,
                     new Vector3(ts.x, ts.y, ts.z),
                     Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0));
+                go.SetActive(true);
                 _remoteTanks[ts.tankId] = go;
 
                 var remoteRb = go.GetComponent<Rigidbody>();
@@ -925,11 +993,9 @@ namespace Complete
             if (_totalPlayersSeen < 2) return;
 
             int alivePlayers   = 0;
-            bool myPlayerAlive = false;
             foreach (var ts in snap.Tanks)
             {
                 if (ts.IsAlive) alivePlayers++;
-                if (ts.tankId == m_MyPlayerId && ts.IsAlive) myPlayerAlive = true;
             }
         }
 
@@ -947,6 +1013,24 @@ namespace Complete
         {
             DisableTankControl();
             TankNetClient.Instance?.Disconnect();
+
+            // Hiển thị màn hình trung gian (Victory / You Died)
+            if (won && m_VictoryScreen != null) 
+                m_VictoryScreen.SetActive(true);
+            else if (!won && !draw && m_YouDiedScreen != null) 
+                m_YouDiedScreen.SetActive(true);
+
+            _skipEndDelay = false;
+            float waitTimer = 30f;
+            while (waitTimer > 0f && !_skipEndDelay)
+            {
+                waitTimer -= Time.deltaTime;
+                yield return null;
+            }
+
+            // Tắt màn hình trung gian trước khi bật bảng kết quả
+            if (m_VictoryScreen != null) m_VictoryScreen.SetActive(false);
+            if (m_YouDiedScreen != null) m_YouDiedScreen.SetActive(false);
 
             int durationSecs = Mathf.Max(1, (int)(Time.time - _matchStartTime));
 
@@ -1028,6 +1112,14 @@ namespace Complete
             SceneManager.LoadScene(
                 string.IsNullOrEmpty(lobbySceneName) ? "Lobby" : lobbySceneName
             );
+        }
+
+        /// <summary>
+        /// Được gọi bởi nút Skip trên màn hình Victory/You Died để xem bảng kết quả ngay lập tức.
+        /// </summary>
+        public void SkipEndDelay()
+        {
+            _skipEndDelay = true;
         }
     }
 }

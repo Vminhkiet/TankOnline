@@ -15,7 +15,7 @@ public:
 
     bool loadMap(const std::string& mapPath);
 
-    void addPlayer   (uint32_t playerId, const Vector3& spawnPos);
+    void addPlayer   (uint32_t playerId, const Vector3& spawnPos, const TankStats& stats = TankStats{});
     void removePlayer(uint32_t playerId);
 
     void processInput(uint32_t playerId, const ClientInput& input);
@@ -42,6 +42,8 @@ public:
     // Call once to disable auto-respawn (match mode: dead = eliminated)
     void disableRespawn() { _respawnOnDeath = false; }
 
+    const GameMap& getMap() const { return _map; }
+
 private:
     std::unordered_map<uint32_t, Tank>   _tanks;
     std::vector<Bullet>                   _bullets;
@@ -61,7 +63,7 @@ private:
 
     void syncColliders();
     void applyPhysicsResults(float deltaTime);
-    void spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw, float speed);
+    void spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw, float speed, int damage);
     // Returns height + id of walkable box contributing (0 = terrain only)
     float surfaceHeight(float x, float z, uint32_t* outBoxId = nullptr) const;
     static Vector3 defaultSpawn(uint32_t playerId);

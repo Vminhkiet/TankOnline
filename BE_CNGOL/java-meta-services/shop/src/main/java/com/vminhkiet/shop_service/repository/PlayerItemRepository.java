@@ -12,7 +12,8 @@ public interface PlayerItemRepository extends JpaRepository<PlayerInfo, Long> {
     
     // Tìm danh sách tất cả vật phẩm mà một người chơi đang sở hữu
     List<PlayerInfo> findByPlayerId(Long playerId);
-    
-    // Bạn có thể thêm hàm này để kiểm tra xem người chơi đã có vật phẩm đó chưa (để cộng dồn quantity)
-    // Optional<PlayerItem> findByPlayerIdAndItemId(Long playerId, Long itemId);
+
+    java.util.Optional<PlayerInfo> findByPlayerIdAndItem_Id(Long playerId, Long itemId);
+
+    java.util.Optional<PlayerInfo> findByPlayerIdAndIsDeployedTrue(Long playerId);
 }

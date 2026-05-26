@@ -117,6 +117,24 @@ namespace TankNet
             _udp.Client.ReceiveTimeout = 0; // non-blocking via thread
 
             _running = true;
+
+            // Send C2S_LOGIN with tank type index
+            int typeIndex = 0;
+            var gm = FindObjectOfType<Complete.GameManager>();
+            if (gm != null && gm.m_TankPrefabMappings != null && gm.m_TankPrefab != null)
+            {
+                foreach (var mapping in gm.m_TankPrefabMappings)
+                {
+                    if (mapping.prefab == gm.m_TankPrefab)
+                    {
+                        typeIndex = mapping.typeIndex;
+                        break;
+                    }
+                }
+            }
+            byte[] loginPkt = PacketBuilder.BuildLogin(MatchId, typeIndex, PlayerId);
+            try { _udp.Send(loginPkt, loginPkt.Length, _server); } catch { }
+
             _recvThread = new Thread(RecvLoop) { IsBackground = true };
             _recvThread.Start();
 
