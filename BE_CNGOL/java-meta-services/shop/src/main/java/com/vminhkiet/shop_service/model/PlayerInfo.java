@@ -27,4 +27,8 @@ public class PlayerInfo {
 
     private int quantity = 1;
     private LocalDateTime purchasedAt;
+
+    @Column(name = "is_deployed", nullable = false)
+    @Builder.Default
+    private Boolean isDeployed = false;
 }

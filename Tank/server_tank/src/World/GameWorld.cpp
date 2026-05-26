@@ -16,9 +16,10 @@ bool GameWorld::loadMap(const std::string& mapPath)
         return false;
     }
 
+    const auto& defaultCfg = _map.getTankConfig("");
     LOG_INFO("GameWorld: map loaded – {} boxes, {} capsules | tank({:.2f},{:.2f},{:.2f}) bullet_r={:.3f}",
              _physics._boxes.size(), _physics._capsules.size(),
-             _map.getTankConfig().extentX, _map.getTankConfig().extentY, _map.getTankConfig().extentZ,
+             defaultCfg.extentX, defaultCfg.extentY, defaultCfg.extentZ,
              _map.getBulletConfig().radius);
     return true;
 }
@@ -27,17 +28,17 @@ bool GameWorld::loadMap(const std::string& mapPath)
 // Player lifecycle
 // ════════════════════════════════════════════════════════════════════════════
 
-void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos)
+void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos, const TankStats& stats)
 {
-    _tanks.emplace(playerId, Tank(playerId, spawnPos));
-    const GameMap::TankConfig& cfg = _map.getTankConfig();
+    _tanks.emplace(playerId, Tank(playerId, spawnPos, stats));
+    const GameMap::TankConfig& cfg = _map.getTankConfig(stats.name);
 
     OBBCollider obb;
     obb.entityId = playerId;
     obb.isActive = true;
     obb.isStatic = false;
     obb.extents  = { cfg.extentX, cfg.extentY, cfg.extentZ };
-    obb.center   = { spawnPos.x, spawnPos.y + cfg.extentY, spawnPos.z };
+    obb.center   = { spawnPos.x + cfg.offsetX, spawnPos.y + cfg.offsetY, spawnPos.z + cfg.offsetZ };
     obb.axisX = {1.f, 0.f, 0.f};
     obb.axisY = {0.f, 1.f, 0.f};
     obb.axisZ = {0.f, 0.f, 1.f};
@@ -77,9 +78,6 @@ void GameWorld::processInput(uint32_t playerId, const ClientInput& input)
 void GameWorld::updateBullets(float deltaTime)
 {
     constexpr float BULLET_GRAVITY = 3.0f;
-    const GameMap::TankConfig& tankCfg = _map.getTankConfig();
-    float bulletHitX = tankCfg.extentX + _map.getBulletConfig().hitRadius;
-    float bulletHitZ = tankCfg.extentZ + _map.getBulletConfig().hitRadius;
 
     for (auto& b : _bullets) {
         if (!b.isActive) continue;
@@ -113,18 +111,26 @@ void GameWorld::updateBullets(float deltaTime)
 
             for (auto& [tid, tank] : _tanks) {
                 if (!tank.isAlive || tid == b.ownerTankId) continue;
-                float dx = b.position.x - tank.position.x;
-                float dz = b.position.z - tank.position.z;
+                const GameMap::TankConfig& tankCfg = _map.getTankConfig(tank.stats.name);
+                float bulletHitX = tankCfg.extentX + _map.getBulletConfig().hitRadius;
+                float bulletHitZ = tankCfg.extentZ + _map.getBulletConfig().hitRadius;
                 float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
+                
+                // Calculate OBB center in world space
+                float centerX = tank.position.x + tankCfg.offsetX * cy + tankCfg.offsetZ * sy;
+                float centerZ = tank.position.z - tankCfg.offsetX * sy + tankCfg.offsetZ * cy;
+                
+                float dx = b.position.x - centerX;
+                float dz = b.position.z - centerZ;
                 float lx =  dx * cy - dz * sy;
                 float lz =  dx * sy + dz * cy;
                 if (std::fabs(lx) > bulletHitX || std::fabs(lz) > bulletHitZ) continue;
                 bool wasAlive = tank.isAlive;
-                tank.takeDamage(Tank::BULLET_DAMAGE);
+                tank.takeDamage(b.damage);
                 
                 // Track damage for score and assist
-                _damageDealt[b.ownerTankId] += Tank::BULLET_DAMAGE;
-                _damageHistory[tid][b.ownerTankId] += Tank::BULLET_DAMAGE;
+                _damageDealt[b.ownerTankId] += b.damage;
+                _damageHistory[tid][b.ownerTankId] += b.damage;
                 
                 // Update combat time for anti-camp
                 _lastCombatTime[b.ownerTankId] = _elapsedTime;
@@ -132,7 +138,7 @@ void GameWorld::updateBullets(float deltaTime)
 
                 if (tank.isDead() && wasAlive) {
                     LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} KILLED (dealt {} dmg)",
-                             b.id, b.ownerTankId, tid, Tank::BULLET_DAMAGE);
+                             b.id, b.ownerTankId, tid, b.damage);
                     _kills[b.ownerTankId]++;
                     _deaths[tid]++;
                     
@@ -156,7 +162,7 @@ void GameWorld::updateBullets(float deltaTime)
                     _survivalPlacement[tid] = aliveCount + 1; // e.g. 5 alive + 1 just died = 6th place
                 } else {
                     LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} hp={} (dealt {} dmg)",
-                             b.id, b.ownerTankId, tid, tank.health, Tank::BULLET_DAMAGE);
+                             b.id, b.ownerTankId, tid, tank.health, b.damage);
                 }
                 b.isActive = false;
                 _physics.removeSphere(b.id);
@@ -228,11 +234,11 @@ void GameWorld::runPhysics(float deltaTime)
 
     // Respawn (non-match/training mode only)
     if (_respawnOnDeath) {
-        const GameMap::TankConfig& cfg = _map.getTankConfig();
         for (auto& [id, tank] : _tanks) {
             if (tank.isDead()) {
+                const GameMap::TankConfig& cfg = _map.getTankConfig(tank.stats.name);
                 tank.position = defaultSpawn(id);
-                tank.health   = Tank::MAX_HEALTH;
+                tank.health   = tank.stats.health;
                 tank.isAlive  = true;
                 tank.velocity = {};
                 OBBCollider obb;
@@ -240,7 +246,7 @@ void GameWorld::runPhysics(float deltaTime)
                 obb.isActive = true;
                 obb.isStatic = false;
                 obb.extents  = { cfg.extentX, cfg.extentY, cfg.extentZ };
-                obb.center   = { tank.position.x, tank.position.y + cfg.extentY, tank.position.z };
+                obb.center   = { tank.position.x + cfg.offsetX, tank.position.y + cfg.offsetY, tank.position.z + cfg.offsetZ };
                 obb.axisX = {1.f, 0.f, 0.f};
                 obb.axisY = {0.f, 1.f, 0.f};
                 obb.axisZ = {0.f, 0.f, 1.f};
@@ -264,16 +270,16 @@ void GameWorld::update(float deltaTime)
 
 void GameWorld::syncColliders()
 {
-    const GameMap::TankConfig& cfg = _map.getTankConfig();
     for (auto& [id, tank] : _tanks) {
         if (!tank.isAlive) continue;
+        const GameMap::TankConfig& cfg = _map.getTankConfig(tank.stats.name);
         // Rotate OBB axes with tank yaw: forward = {sin, 0, cos}, right = {cos, 0, -sin}
         float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
         Vector3 axisX{  cy, 0.f, -sy };
         Vector3 axisZ{  sy, 0.f,  cy };
-        Vector3 center{ tank.position.x,
-                        tank.position.y + cfg.extentY,
-                        tank.position.z };
+        Vector3 center{ tank.position.x + cfg.offsetX * cy + cfg.offsetZ * sy,
+                        tank.position.y + cfg.offsetY,
+                        tank.position.z - cfg.offsetX * sy + cfg.offsetZ * cy };
         _physics.updateDynamicBox(id, center, axisX, {0.f, 1.f, 0.f}, axisZ);
     }
 }
@@ -331,18 +337,46 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
     // Spawn bullets for tanks that fired this tick
     for (auto& [id, tank] : _tanks) {
         if (tank.wantsShoot && tank.isAlive) {
-            Vector3 muzzlePos = tank.position + Vector3{0.f, _map.getTankConfig().extentY * 2.f * 0.7f, 0.f};
-            spawnBullet(id, muzzlePos, tank.yaw, tank.wantsShootForce);
+            const GameMap::TankConfig& cfg = _map.getTankConfig(tank.stats.name);
+            float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
+            Vector3 center{ tank.position.x + cfg.offsetX * cy + cfg.offsetZ * sy,
+                            tank.position.y + cfg.offsetY,
+                            tank.position.z - cfg.offsetX * sy + cfg.offsetZ * cy };
+            // Muzzle is slightly in front and above center
+            Vector3 baseMuzzlePos = center + Vector3{0.f, cfg.extentY * 0.7f, 0.f};
+            
+            // Calculate the local Right direction of the tank in world space:
+            // Since forward is {sin(yaw), 0, cos(yaw)}, local right vector is {cos(yaw), 0, -sin(yaw)}.
+            Vector3 localRight = { cy, 0.f, -sy };
+
+            int bulletDamage = tank.stats.damage;
+            if (tank.stats.holdsToCharge) {
+                float ratio = tank.wantsShootForce / 30.0f;
+                if (ratio < 0.1f) ratio = 0.1f;
+                if (ratio > 1.0f) ratio = 1.0f;
+                bulletDamage = static_cast<int>(bulletDamage * ratio);
+            }
+
+            int count = tank.stats.barrelCount > 0 ? tank.stats.barrelCount : 1;
+            float spacing = tank.stats.barrelSpacing;
+
+            for (int i = 0; i < count; ++i) {
+                // Calculate lateral offset for multi-barrels
+                float offset = (i - (count - 1) / 2.0f) * spacing;
+                Vector3 muzzlePos = baseMuzzlePos + localRight * offset;
+                spawnBullet(id, muzzlePos, tank.yaw, tank.wantsShootForce, bulletDamage);
+            }
             tank.wantsShoot = false;
         }
     }
 }
 
-void GameWorld::spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw, float speed)
+void GameWorld::spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw, float speed, int damage)
 {
     Bullet b;
     b.id          = _nextBulletId++;
     b.ownerTankId = ownerTankId;
+    b.damage      = damage;
     b.position    = pos;
     b.velocity    = Vector3{ std::sin(yaw), 0.f, std::cos(yaw) } * speed;
     b.timeToLive  = Bullet::TTL;
@@ -360,10 +394,6 @@ void GameWorld::spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw,
              b.id, ownerTankId, pos.x, pos.y, pos.z, yaw, speed, Bullet::TTL);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Snapshot serialisation
-// Wire format: [uint16 tankCount][TankState...][uint16 bulletCount][BulletState...]
-// ════════════════════════════════════════════════════════════════════════════
 
 std::vector<uint8_t> GameWorld::getSnapshot() const
 {
@@ -379,6 +409,10 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
         t.yaw    = tank.yaw;
         t.health = static_cast<int16_t>(tank.health);
         t.flags  = tank.isAlive ? 1u : 0u;
+
+        // Pack tank type index into bits 2-7 of flags
+        uint8_t typeIndex = _map.getTankTypeIndex(tank.stats.name);
+        t.flags |= (typeIndex << 2);
         
         // Calculate dynamic match score
         int score = _matchScoreBase.count(id) ? _matchScoreBase.at(id) : 0;
@@ -407,9 +441,13 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
 
         // Check Bush overlap for stealth (flags bit 1)
         if (tank.isAlive) {
-            const auto& ext = _map.getTankConfig();
-            Vector3 tmin = { tank.position.x - ext.extentX, tank.position.y, tank.position.z - ext.extentZ };
-            Vector3 tmax = { tank.position.x + ext.extentX, tank.position.y + 2.0f * ext.extentY, tank.position.z + ext.extentZ };
+            const auto& cfg = _map.getTankConfig(tank.stats.name);
+            float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
+            Vector3 center{ tank.position.x + cfg.offsetX * cy + cfg.offsetZ * sy,
+                            tank.position.y + cfg.offsetY,
+                            tank.position.z - cfg.offsetX * sy + cfg.offsetZ * cy };
+            Vector3 tmin = { center.x - cfg.extentX, center.y - cfg.extentY, center.z - cfg.extentZ };
+            Vector3 tmax = { center.x + cfg.extentX, center.y + cfg.extentY, center.z + cfg.extentZ };
             
             for (const auto& b : _map.getBushes()) {
                 if (tmin.x <= b.max.x && tmax.x >= b.min.x &&

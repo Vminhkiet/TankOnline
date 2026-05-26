@@ -68,9 +68,12 @@ namespace Complete
                 numTargets++;
             }
 
+            // If there are no targets active (e.g. all tanks died), don't move the camera to the center.
+            if (numTargets == 0)
+                return;
+
             // If there are targets divide the sum of the positions by the number of them to find the average.
-            if (numTargets > 0)
-                averagePos /= numTargets;
+            averagePos /= numTargets;
 
             // Keep the same y value.
             averagePos.y = transform.position.y;

@@ -9,6 +9,7 @@ struct Bullet {
 
     uint32_t id          = 0;
     uint32_t ownerTankId = 0;
+    int      damage      = 25;
     Vector3  position;
     Vector3  velocity;      // world-space, magnitude == SPEED
     float    timeToLive   = TTL;

@@ -22,6 +22,12 @@ public class ItemMapper {
                 .category(item.getCategory() != null ? item.getCategory().toString() : null)
                 .available(item.getAvailble())
                 .status(Boolean.TRUE.equals(item.getAvailble()) ? "On Sale" : "Discontinued")
+                .damage(item.getDamage())
+                .armor(item.getArmor())
+                .speed(item.getSpeed())
+                .health(item.getHealth())
+                .fireRate(item.getFireRate())
+                .fireRange(item.getFireRange())
                 .build();
     }
 }

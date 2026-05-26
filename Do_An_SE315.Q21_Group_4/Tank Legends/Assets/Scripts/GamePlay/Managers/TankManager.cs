@@ -36,12 +36,6 @@ namespace Complete
             m_Shooting = m_Instance.GetComponent<TankShooting> ();
             m_CanvasGameObject = m_Instance.GetComponentInChildren<Canvas> ().gameObject;
 
-            // Lift the indicator canvas above the turret so bridge deck geometry cannot occlude it.
-            Transform canvasTf = m_CanvasGameObject.transform;
-            Vector3 lp = canvasTf.localPosition;
-            lp.y = 2.2f;
-            canvasTf.localPosition = lp;
-
             // Set the player numbers to be consistent across the scripts.
             m_Movement.m_PlayerNumber = m_PlayerNumber;
             m_Shooting.m_PlayerNumber = m_PlayerNumber;

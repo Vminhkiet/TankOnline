@@ -91,6 +91,33 @@ public class ShopController {
         return ResponseEntity.ok(shopService.getPurchasedItemIds(playerId));
     }
 
+    @PostMapping("/deploy/{itemId}")
+    public ResponseEntity<?> deployItem(
+            @RequestHeader(value = "X-User-Id", required = false) Long playerId,
+            @PathVariable Long itemId) {
+        if (playerId == null) {
+            return ResponseEntity.badRequest().body("Lỗi: Header X-User-Id bị thiếu hoặc sai tên!");
+        }
+
+        try {
+            shopService.deployItem(playerId, itemId);
+            return ResponseEntity.ok(Map.of("success", true, "message", "Đã deploy tank thành công!"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/deployed-tank")
+    public ResponseEntity<?> getDeployedTank(
+            @RequestHeader(value = "X-User-Id", required = false) Long playerId) {
+        if (playerId == null) {
+            return ResponseEntity.badRequest().body("Lỗi: Header X-User-Id bị thiếu hoặc sai tên!");
+        }
+
+        Long deployedTankId = shopService.getDeployedTankId(playerId);
+        return ResponseEntity.ok(Map.of("itemId", deployedTankId));
+    }
+
     @PostMapping("/admin/items")
     public ResponseEntity<ItemDTO> createItem(@RequestBody ItemDTO itemDTO) {
 

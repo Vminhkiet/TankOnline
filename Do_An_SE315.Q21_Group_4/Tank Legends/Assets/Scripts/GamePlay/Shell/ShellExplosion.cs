@@ -11,6 +11,7 @@ namespace Complete
         public float m_ExplosionForce = 1000f;              // The amount of force added to a tank at the centre of the explosion.
         public float m_MaxLifeTime = 2f;                    // The time in seconds before the shell is removed.
         public float m_ExplosionRadius = 5f;                // The maximum distance away from the explosion tanks can be and are still affected.
+        [HideInInspector] public GameObject m_Owner;        // The tank that fired this shell.
 
 
         private void Start ()
@@ -22,6 +23,10 @@ namespace Complete
 
         private void OnTriggerEnter (Collider other)
         {
+            // Ignore trigger colliders (like grass, bushes, zones, etc.)
+            if (other.isTrigger)
+                return;
+
             // In online mode damage is server-authoritative — skip local damage to avoid
             // health bar flickering before the next snapshot corrects the value.
             bool online = TankNet.TankNetClient.Instance != null;
@@ -39,6 +44,10 @@ namespace Complete
 
                     // If they don't have a rigidbody, go on to the next collider.
                     if (!targetRigidbody)
+                        continue;
+
+                    // Skip applying damage and force to the owner of this shell
+                    if (m_Owner != null && targetRigidbody.gameObject == m_Owner)
                         continue;
 
                     // Add an explosion force.

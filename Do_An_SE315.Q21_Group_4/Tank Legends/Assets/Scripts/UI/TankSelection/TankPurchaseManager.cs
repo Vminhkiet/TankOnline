@@ -12,20 +12,23 @@ using UnityEngine.UI;
 public class TankPurchaseManager : MonoBehaviour
 {
     [Serializable]
-    private class PurchaseItemRequest
+    [UnityEngine.Scripting.Preserve]
+    public class PurchaseItemRequest
     {
         public int itemId;
         public int quantity;
     }
 
     [Serializable]
-    private class PurchaseRequest
+    [UnityEngine.Scripting.Preserve]
+    public class PurchaseRequest
     {
         public PurchaseItemRequest[] items;
     }
 
     [Serializable]
-    private class PurchaseResponse
+    [UnityEngine.Scripting.Preserve]
+    public class PurchaseResponse
     {
         public bool success;
         public string message;
@@ -34,13 +37,16 @@ public class TankPurchaseManager : MonoBehaviour
     }
 
     [Serializable]
-    private class MyItemsResponseWrapper
+    [UnityEngine.Scripting.Preserve]
+    public class MyItemsResponseWrapper
     {
         public long[] itemIds;
     }
 
     private const string PurchasePath = "/api/shop/purchase";
     private const string MyItemsPath = "/api/shop/my-items";
+    private const string DeployPath = "/api/shop/deploy";
+    private const string DeployedTankPath = "/api/shop/deployed-tank";
     private const string PlayerIdKey = "profile_player_id";
 
     [Header("References")]
@@ -51,11 +57,13 @@ public class TankPurchaseManager : MonoBehaviour
     [SerializeField] private Button buyButton;
     [SerializeField] private TMP_Text buyButtonText;
     [SerializeField] private string buyingLabel = "Purchasing...";
-    [SerializeField] private string ownedLabel = "Owned";
+    [SerializeField] private string deployLabel = "Deploy";
+    [SerializeField] private string deployedLabel = "Deployed";
     [SerializeField] private TMP_Text statusText;
 
     private bool isPurchasing;
     private readonly System.Collections.Generic.HashSet<int> ownedItemIds = new System.Collections.Generic.HashSet<int>();
+    private long deployedItemId = -1;
     private bool ownershipLoadedFromServer;
     private string defaultBuyLabel = "Buy";
 
@@ -117,7 +125,55 @@ public class TankPurchaseManager : MonoBehaviour
         if (isPurchasing)
             return;
 
+        if (tankSelectionManager != null && tankSelectionManager.TryGetSelectedShopItem(out int itemId, out _, out _))
+        {
+            if (ownershipLoadedFromServer && ownedItemIds.Contains(itemId))
+            {
+                if (itemId != deployedItemId)
+                {
+                    StartCoroutine(DeploySelectedTankCoroutine(itemId));
+                }
+                return;
+            }
+        }
+
         StartCoroutine(PurchaseSelectedTankCoroutine());
+    }
+
+    private IEnumerator DeploySelectedTankCoroutine(int itemId)
+    {
+        long playerId = ResolvePlayerId();
+        if (playerId <= 0)
+        {
+            SetStatus("Thiếu playerId để deploy.");
+            yield break;
+        }
+
+        isPurchasing = true;
+        RefreshBuyState();
+        SetStatus("Đang deploy...");
+
+        string url = $"{DeployPath}/{itemId}";
+        using (UnityWebRequest req = GameApiClient.CreateRequest(url, UnityWebRequest.kHttpVerbPOST, "{}"))
+        {
+            req.SetRequestHeader("X-Player-Id", playerId.ToString());
+
+            GameApiClient.ApiCallResult result = default;
+            yield return GameApiClient.Send(req, r => result = r);
+
+            isPurchasing = false;
+
+            if (!result.Success)
+            {
+                SetStatus("Deploy thất bại: " + result.ErrorMessage);
+                RefreshBuyState();
+                yield break;
+            }
+
+            SetStatus("Deploy thành công.");
+            yield return LoadOwnedItemsCoroutine();
+            RefreshBuyState();
+        }
     }
 
     private IEnumerator PurchaseSelectedTankCoroutine()
@@ -222,9 +278,10 @@ public class TankPurchaseManager : MonoBehaviour
         bool isOwned = false;
         bool hasEnoughCoins = true;
         int price = 0;
+        int itemId = -1;
 
         if (tankSelectionManager != null &&
-            tankSelectionManager.TryGetSelectedShopItem(out int itemId, out price, out bool available))
+            tankSelectionManager.TryGetSelectedShopItem(out itemId, out price, out bool available))
         {
             isOwned = ownershipLoadedFromServer && ownedItemIds.Contains(itemId);
 
@@ -247,7 +304,16 @@ public class TankPurchaseManager : MonoBehaviour
             }
             else if (isOwned)
             {
-                buyButtonText.text = ownedLabel;
+                if (itemId == deployedItemId)
+                {
+                    buyButtonText.text = deployedLabel;
+                    if (buyButton != null) buyButton.interactable = false;
+                }
+                else
+                {
+                    buyButtonText.text = deployLabel;
+                    if (buyButton != null) buyButton.interactable = !isPurchasing;
+                }
             }
             // CRITICAL: DO NOT overwrite the button text with "Insufficient Coins" or default labels here!
             // The buy button text displays the DYNAMIC tank price updated by TankSelectionManager.
@@ -319,6 +385,7 @@ public class TankPurchaseManager : MonoBehaviour
                 yield break;
             }
 
+            bool parsedSuccessfully = false;
             try
             {
                 if (json.StartsWith("["))
@@ -330,17 +397,40 @@ public class TankPurchaseManager : MonoBehaviour
                         for (int i = 0; i < wrapper.itemIds.Length; i++)
                             ownedItemIds.Add((int)wrapper.itemIds[i]);
                     }
-
-                    ownershipLoadedFromServer = true;
-                    yield break;
+                    parsedSuccessfully = true;
                 }
-
-                SetStatus("Dữ liệu my-items không đúng định dạng.");
+                else
+                {
+                    SetStatus("Dữ liệu my-items không đúng định dạng.");
+                }
             }
             catch (Exception ex)
             {
                 SetStatus("Lỗi parse my-items: " + ex.Message);
             }
+
+            if (!parsedSuccessfully)
+                yield break;
+
+            // Fetch deployed tank
+            using (UnityWebRequest depReq = GameApiClient.CreateRequest(DeployedTankPath, UnityWebRequest.kHttpVerbGET))
+            {
+                depReq.SetRequestHeader("X-Player-Id", playerId.ToString());
+                GameApiClient.ApiCallResult depResult = default;
+                yield return GameApiClient.Send(depReq, r => depResult = r);
+
+                if (depResult.Success && !string.IsNullOrEmpty(depResult.Body))
+                {
+                    try
+                    {
+                        var jsonNode = JsonUtility.FromJson<DeployResponseDummy>(depResult.Body);
+                        if (jsonNode != null) deployedItemId = jsonNode.itemId;
+                    }
+                    catch { }
+                }
+            }
+
+            ownershipLoadedFromServer = true;
         }
     }
 
@@ -354,5 +444,12 @@ public class TankPurchaseManager : MonoBehaviour
     {
         if (statusText != null)
             statusText.text = string.Empty;
+    }
+
+    [Serializable]
+    [UnityEngine.Scripting.Preserve]
+    public class DeployResponseDummy
+    {
+        public long itemId;
     }
 }

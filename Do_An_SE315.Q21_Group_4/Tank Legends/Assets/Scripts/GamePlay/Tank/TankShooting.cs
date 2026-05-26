@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 using TankNet;
 
@@ -12,7 +12,9 @@ namespace Complete
     {
         public int m_PlayerNumber = 1;              // Used to identify the different players.
         public Rigidbody m_Shell;                   // Prefab of the shell.
-        public Transform m_FireTransform;           // A child of the tank where the shells are spawned.
+        public Transform m_FireTransform;           // A child of the tank where the shells are spawned (legacy fallback).
+        [Tooltip("Multiple barrel muzzle spawn points. If empty, falls back to m_FireTransform.")]
+        public Transform[] m_FireTransforms;        // Multiple barrel muzzles.
         public Slider m_AimSlider;                  // A child of the tank that displays the current launch force.
         public AudioSource m_ShootingAudio;         // Reference to the audio source used to play the shooting audio. NB: different to the movement audio source.
         public AudioClip m_ChargingClip;            // Audio that plays when each shot is charging up.
@@ -21,18 +23,67 @@ namespace Complete
         public float m_MaxLaunchForce = 30f;        // The force given to the shell if the fire button is held for the max charge time.
         public float m_MaxChargeTime = 0.75f;       // How long the shell can charge for before it is fired at max force.
 
+        [Header("Turret and Shooting Direction")]
+        public Transform m_TankHead;                // The turret / head object of the tank.
+
+        [Header("Movement Freeze Option")]
+        public bool m_CanMoveWhileShooting = true;  // If false, the tank will freeze after shooting.
+        public float m_MovementFreezeDuration = 0.5f; // The duration of the freeze in seconds.
+
+        [Header("Fire Rate / Cooldown")]
+        [Tooltip("Number of shots per second")]
+        public float m_FireRate = 1.5f;             // Number of shots per second.
+
+        [Header("UI Display")]
+        public bool m_ShowAimSlider = false;        // Toggle to show/hide the launch force aim slider.
+
+        [Header("Shooting Style")]
+        public bool m_HoldToCharge = false;         // If true, holding the fire button/joystick charges up the shot. If false, it fires instantly at max rate.
+
+
+        private TankAnimation m_TankAnimation;      // Reference to the external TankAnimation component.
 
         private string m_FireButton;                // The input axis that is used for launching shells.
         private float m_CurrentLaunchForce;         // The force that will be given to the shell when the fire button is released.
         private float m_ChargeSpeed;                // How fast the launch force increases, based on the max charge time.
         private bool m_Fired;                       // Whether or not the shell has been launched with this button press.
+        private TankMovement m_Movement;
+        private float m_FireCooldownTimer = 0f;     // Cooldown tracking timer.
+        private Quaternion m_TurretToMuzzleOffset;  // Cache the rotation offset between turret bone and muzzle.
+
+
+        private void Awake()
+        {
+            m_Movement = GetComponent<TankMovement>();
+            m_TankAnimation = GetComponent<TankAnimation>();
+
+            // Fallback to m_FireTransform if the array is empty
+            if (m_FireTransforms == null || m_FireTransforms.Length == 0)
+            {
+                if (m_FireTransform != null)
+                {
+                    m_FireTransforms = new Transform[] { m_FireTransform };
+                }
+            }
+
+            if (m_TankHead != null && m_FireTransforms != null && m_FireTransforms.Length > 0)
+            {
+                // Capture the exact rotation offset from the turret bone to the first muzzle in default state
+                m_TurretToMuzzleOffset = Quaternion.Inverse(m_TankHead.rotation) * m_FireTransforms[0].rotation;
+            }
+        }
 
 
         private void OnEnable()
         {
             // When the tank is turned on, reset the launch force and the UI
             m_CurrentLaunchForce = m_MinLaunchForce;
-            m_AimSlider.value = m_MinLaunchForce;
+            if (m_AimSlider != null)
+            {
+                m_AimSlider.value = m_MinLaunchForce;
+                m_AimSlider.gameObject.SetActive(m_ShowAimSlider);
+            }
+            m_FireCooldownTimer = 0f;
         }
 
 
@@ -43,6 +94,11 @@ namespace Complete
 
             // The rate that the launch force charges up is the range of possible forces by the max charge time.
             m_ChargeSpeed = (m_MaxLaunchForce - m_MinLaunchForce) / m_MaxChargeTime;
+
+            if (m_AimSlider != null)
+            {
+                m_AimSlider.gameObject.SetActive(m_ShowAimSlider);
+            }
         }
 
 
@@ -61,40 +117,123 @@ namespace Complete
                 fireUp = Input.GetButtonUp (m_FireButton);
             }
 
-            // The slider should have a default value of the minimum launch force.
-            m_AimSlider.value = m_MinLaunchForce;
-
-            // If the max force has been exceeded and the shell hasn't yet been launched...
-            if (m_CurrentLaunchForce >= m_MaxLaunchForce && !m_Fired)
+            bool isTryingToFire = fireHeld || fireDown;
+            if (m_TankAnimation != null)
             {
-                // ... use the max force and launch the shell.
-                m_CurrentLaunchForce = m_MaxLaunchForce;
-                Fire ();
+                m_TankAnimation.SetShooting(isTryingToFire);
             }
-            // Otherwise, if the fire button has just started being pressed...
-            else if (fireDown)
-            {
-                // ... reset the fired flag and reset the launch force.
-                m_Fired = false;
-                m_CurrentLaunchForce = m_MinLaunchForce;
 
-                // Change the clip to the charging clip and start it playing.
-                m_ShootingAudio.clip = m_ChargingClip;
-                m_ShootingAudio.Play ();
-            }
-            // Otherwise, if the fire button is being held and the shell hasn't been launched yet...
-            else if (fireHeld && !m_Fired)
+            if (!m_CanMoveWhileShooting && m_Movement != null)
             {
-                // Increment the launch force and update the slider.
-                m_CurrentLaunchForce += m_ChargeSpeed * Time.deltaTime;
+                m_Movement.m_IsInputFrozen = isTryingToFire;
+            }
 
-                m_AimSlider.value = m_CurrentLaunchForce;
-            }
-            // Otherwise, if the fire button is released and the shell hasn't been launched yet...
-            else if (fireUp && !m_Fired)
+            // Head rotation based on shooting direction
+            Vector3 shootDir = Vector3.zero;
+            bool hasTargetDir = false;
+
+            if (InputManager.Instance != null && InputManager.Instance.IsMobileMode)
             {
-                // ... launch the shell.
-                Fire ();
+                hasTargetDir = InputManager.Instance.TryGetMobileFireDirection(out shootDir, out _);
+            }
+            else
+            {
+                // On PC, we can aim using the mouse cursor when aiming (holding fire or just hovering)
+                if (Camera.main != null)
+                {
+                    Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                    if (Physics.Raycast(ray, out RaycastHit hit, 100f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    {
+                        shootDir = hit.point - transform.position;
+                        shootDir.y = 0f;
+                        shootDir.Normalize();
+                        hasTargetDir = true;
+                    }
+                }
+            }
+
+            if (m_TankHead != null && m_FireTransform != null)
+            {
+                Vector3 targetDir = transform.forward;
+                if (hasTargetDir)
+                {
+                    targetDir = shootDir;
+                }
+
+                // The target rotation for the muzzle (pointing at target, standing up along tank's deck)
+                Quaternion targetMuzzleRot = Quaternion.LookRotation(targetDir, transform.up);
+
+                // Back-calculate the required rotation for the turret bone using the cached offset
+                Quaternion targetTurretRot = targetMuzzleRot * Quaternion.Inverse(m_TurretToMuzzleOffset);
+
+                // Smoothly rotate the turret bone in world space
+                m_TankHead.rotation = Quaternion.RotateTowards(m_TankHead.rotation, targetTurretRot, 500f * Time.deltaTime);
+            }
+
+            if (m_HoldToCharge)
+            {
+                // --- Hold to Charge Logic ---
+                // The slider displays current charge force
+                if (m_AimSlider != null)
+                {
+                    m_AimSlider.value = m_CurrentLaunchForce;
+                }
+
+                // If the max force has been exceeded and the shell hasn't yet been launched...
+                if (m_CurrentLaunchForce >= m_MaxLaunchForce && !m_Fired)
+                {
+                    m_CurrentLaunchForce = m_MaxLaunchForce;
+                    Fire ();
+                }
+                // Otherwise, if the fire button has just started being pressed...
+                else if (fireDown)
+                {
+                    m_Fired = false;
+                    m_CurrentLaunchForce = m_MinLaunchForce;
+
+                    if (m_ShootingAudio != null && m_ChargingClip != null)
+                    {
+                        m_ShootingAudio.clip = m_ChargingClip;
+                        m_ShootingAudio.Play ();
+                    }
+                }
+                // Otherwise, if the fire button is being held and the shell hasn't been launched yet...
+                else if (fireHeld && !m_Fired)
+                {
+                    m_CurrentLaunchForce += m_ChargeSpeed * Time.deltaTime;
+                    if (m_AimSlider != null)
+                    {
+                        m_AimSlider.value = m_CurrentLaunchForce;
+                    }
+                }
+                // Otherwise, if the fire button is released and the shell hasn't been launched yet...
+                else if (fireUp && !m_Fired)
+                {
+                    Fire ();
+                }
+            }
+            else
+            {
+                // --- Instant Auto Fire Logic ---
+                if (m_AimSlider != null)
+                {
+                    m_AimSlider.value = m_MaxLaunchForce;
+                }
+
+                // Update cooldown timer
+                if (m_FireCooldownTimer > 0f)
+                {
+                    m_FireCooldownTimer -= Time.deltaTime;
+                }
+
+                // Shoot continuously if the fire button/joystick is held
+                isTryingToFire = fireHeld || fireDown;
+                if (isTryingToFire && m_FireCooldownTimer <= 0f)
+                {
+                    m_CurrentLaunchForce = m_MaxLaunchForce;
+                    Fire();
+                    m_FireCooldownTimer = 1f / m_FireRate;
+                }
             }
         }
 
@@ -104,22 +243,51 @@ namespace Complete
             // Set the fired flag so only Fire is only called once.
             m_Fired = true;
 
+            if (!m_CanMoveWhileShooting && m_Movement != null)
+            {
+                m_Movement.FreezeMovement(m_MovementFreezeDuration);
+            }
 
             var net = TankNetClient.Instance;
             if (net != null && net.IsConnected)
                 net.RequestShoot(m_CurrentLaunchForce);
 
-            Rigidbody shellInstance =
-                Instantiate (m_Shell, m_FireTransform.position, m_FireTransform.rotation) as Rigidbody;
+            // Spawn shells from all muzzles
+            if (m_FireTransforms != null && m_FireTransforms.Length > 0)
+            {
+                for (int i = 0; i < m_FireTransforms.Length; i++)
+                {
+                    Transform muzzle = m_FireTransforms[i];
+                    if (muzzle == null) continue;
 
-            Vector3 fireDir = m_FireTransform.forward;
-            fireDir.y = 0f;
-            fireDir.Normalize();
-            shellInstance.velocity = m_CurrentLaunchForce * fireDir;
+                    Rigidbody shellInstance =
+                        Instantiate (m_Shell, muzzle.position, muzzle.rotation) as Rigidbody;
+
+                    // Pass owner and scale damage by charge ratio if hold-to-charge is active
+                    ShellExplosion shell = shellInstance.GetComponent<ShellExplosion>();
+                    if (shell != null)
+                    {
+                        shell.m_Owner = gameObject;
+                        if (m_HoldToCharge)
+                        {
+                            float chargeRatio = m_CurrentLaunchForce / m_MaxLaunchForce;
+                            shell.m_MaxDamage *= chargeRatio;
+                        }
+                    }
+
+                    Vector3 fireDir = muzzle.forward;
+                    fireDir.y = 0f;
+                    fireDir.Normalize();
+                    shellInstance.velocity = m_CurrentLaunchForce * fireDir;
+                }
+            }
 
             // Change the clip to the firing clip and play it.
-            m_ShootingAudio.clip = m_FireClip;
-            m_ShootingAudio.Play ();
+            if (m_ShootingAudio != null && m_FireClip != null)
+            {
+                m_ShootingAudio.clip = m_FireClip;
+                m_ShootingAudio.Play ();
+            }
 
             // Reset the launch force.  This is a precaution in case of missing button events.
             m_CurrentLaunchForce = m_MinLaunchForce;

@@ -5,6 +5,7 @@ using TMPro;
 using System.Collections;
 
 [System.Serializable]
+[UnityEngine.Scripting.Preserve]
 public class MatchmakingResponseData
 {
     public uint matchId;
@@ -12,6 +13,13 @@ public class MatchmakingResponseData
     public int serverPort;
     public uint playerId;
     public string token;
+}
+
+[System.Serializable]
+[UnityEngine.Scripting.Preserve]
+public class DeployedTankData
+{
+    public long itemId;
 }
 
 public class MatchmakingUIManager : MonoBehaviour
@@ -133,6 +141,38 @@ public class MatchmakingUIManager : MonoBehaviour
             isSearching = false;
             if (findMatchPanel != null) findMatchPanel.SetActive(false);
             yield break;
+        }
+
+        long deployedItemId = -1;
+        string cachedPlayerId = PlayerPrefs.GetString("profile_player_id", "");
+        using (UnityWebRequest req = GameApiClient.CreateRequest("/api/shop/deployed-tank", "GET"))
+        {
+            if (!string.IsNullOrEmpty(cachedPlayerId))
+            {
+                req.SetRequestHeader("X-Player-Id", cachedPlayerId);
+            }
+            
+            GameApiClient.ApiCallResult res = default;
+            yield return GameApiClient.Send(req, r => res = r);
+            if (res.Success && !string.IsNullOrEmpty(res.Body))
+            {
+                try {
+                    var node = JsonUtility.FromJson<DeployedTankData>(res.Body);
+                    if (node != null) deployedItemId = node.itemId;
+                } catch {}
+            }
+        }
+        
+        var tsm = FindObjectOfType<TankSelectionManager>(true);
+        if (tsm != null)
+        {
+            var def = tsm.GetTankByItemId(deployedItemId);
+            if (def != null) GlobalMatchState.LocalTankPrefab = def.GameplayPrefab;
+            Debug.Log($"[Matchmaking] Deployed Tank ID: {deployedItemId}, Prefab: {(def != null ? def.GameplayPrefab.name : "null")}");
+        }
+        else
+        {
+            Debug.LogError("[Matchmaking] Could not find TankSelectionManager even in inactive objects!");
         }
 
         _activeRequest = GameApiClient.CreateRequest(matchmakingPath, "POST");

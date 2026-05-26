@@ -16,4 +16,11 @@ public class ItemDTO {
     private String category;
     private Boolean available; 
     private String status;
+
+    private Integer damage;
+    private Integer armor;
+    private Integer speed;
+    private Integer health;
+    private Integer fireRate;
+    private Integer fireRange;
 }

@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +17,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 import com.vminhkiet.matchmaking_service.model.Match;
 import com.vminhkiet.matchmaking_service.model.Player;
@@ -38,6 +43,8 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
 
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
+
+    private RestTemplate restTemplate = new RestTemplate();
 
     private static final String MATCH_CREATE_TOPIC = "match.create";
 
@@ -168,22 +175,62 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
             // Integer.parseInt("player1") → NumberFormatException → bị filter → players=[] rỗng
             // → server nhận empty playerIds → resolvePlayer luôn fail → không spawn tank.
             //
-            // Fix: dùng sequential slot ID [1, 2, ..., N] cho game server.
-            // Server chỉ cần int để quản lý session trong match, không cần trùng với DB userId.
-            // Client nhận localPlayerId từ snapshot header → tự cập nhật m_MyPlayerId đúng.
-            // userIds map (slot→username) được gửi kèm để server đính kèm vào match.result.
             List<Integer> playerIntIds = new ArrayList<>();
             Map<String, String> userIdMap = new HashMap<>();
+            Map<String, Object> tanksMap = new HashMap<>();
+            
             for (int i = 0; i < playerStrIds.size(); i++) {
-                int slotId = i + 1;          // slot 0 → playerId 1, slot 1 → playerId 2, ...
+                int slotId = i + 1;          // slot 0 -> playerId 1, slot 1 -> playerId 2, ...
                 playerIntIds.add(slotId);
-                userIdMap.put(String.valueOf(slotId), playerStrIds.get(i));
+                String userId = playerStrIds.get(i);
+                userIdMap.put(String.valueOf(slotId), userId);
+
+                // Lấy thông tin xe tăng đã deploy của user này
+                try {
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.set("X-User-Id", userId);
+                    HttpEntity<String> entity = new HttpEntity<>(headers);
+                    
+                    // Lấy ID xe tăng
+                    ResponseEntity<String> deployedRes = restTemplate.exchange(
+                            "http://localhost:8088/api/shop/deployed-tank",
+                            HttpMethod.GET, entity, String.class);
+                            
+                    if (deployedRes.getStatusCode().is2xxSuccessful() && deployedRes.getBody() != null) {
+                        Map<String, Object> deployedBody = new ObjectMapper().readValue(deployedRes.getBody(), new TypeReference<Map<String,Object>>(){});
+                        if (deployedBody.containsKey("itemId")) {
+                            Object itemId = deployedBody.get("itemId");
+                            
+                            // Lấy chi tiết xe tăng
+                            ResponseEntity<String> itemRes = restTemplate.getForEntity(
+                                    "http://localhost:8088/api/shop/items/" + itemId, String.class);
+                            
+                            if (itemRes.getStatusCode().is2xxSuccessful() && itemRes.getBody() != null) {
+                                Map<String, Object> itemBody = new ObjectMapper().readValue(itemRes.getBody(), new TypeReference<Map<String,Object>>(){});
+                                
+                                Map<String, Object> tankStats = new HashMap<>();
+                                tankStats.put("name", itemBody.getOrDefault("name", "BULLDOG"));
+                                tankStats.put("damage", itemBody.getOrDefault("damage", 7));
+                                tankStats.put("armor", itemBody.getOrDefault("armor", 4));
+                                tankStats.put("speed", itemBody.getOrDefault("speed", 6));
+                                tankStats.put("health", itemBody.getOrDefault("health", 100));
+                                tankStats.put("fireRate", itemBody.getOrDefault("fireRate", 4));
+                                tankStats.put("fireRange", itemBody.getOrDefault("fireRange", 6));
+                                
+                                tanksMap.put(String.valueOf(slotId), tankStats);
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("Failed to fetch tank stats for userId={}: {}", userId, ex.getMessage());
+                }
             }
 
             Map<String, Object> bodyMap = new HashMap<>();
             bodyMap.put("matchId",     (int) matchId);
             bodyMap.put("players",     playerIntIds);
             bodyMap.put("userIds",     userIdMap);   // {1:"player1", 2:"player2"} cho match.result
+            bodyMap.put("tanks",       tanksMap);    // Thêm tanks stats
             bodyMap.put("mapName",     "world");
             bodyMap.put("maxDuration", 180);
 

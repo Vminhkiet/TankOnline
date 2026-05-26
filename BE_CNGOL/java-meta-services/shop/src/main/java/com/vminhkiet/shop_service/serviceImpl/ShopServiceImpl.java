@@ -249,11 +249,69 @@ public class ShopServiceImpl implements GameService {
         }
 
         @Override
+        @Transactional
         public List<Long> getPurchasedItemIds(Long playerId) {
-                return playerItemRepository.findByPlayerId(playerId).stream()
+                List<PlayerInfo> inventory = playerItemRepository.findByPlayerId(playerId);
+
+                // Auto-grant BULLDOG for new players
+                if (inventory.isEmpty()) {
+                        Item bulldog = itemRepository.findByAvailbleTrue().stream()
+                                .filter(i -> "BULLDOG".equalsIgnoreCase(i.getName()))
+                                .findFirst()
+                                .orElse(null);
+                        if (bulldog != null) {
+                                PlayerInfo newPlayerItem = PlayerInfo.builder()
+                                                .playerId(playerId)
+                                                .item(bulldog)
+                                                .quantity(1)
+                                                .purchasedAt(LocalDateTime.now())
+                                                .isDeployed(true)
+                                                .build();
+                                playerItemRepository.save(newPlayerItem);
+                                inventory.add(newPlayerItem);
+                        }
+                }
+
+                return inventory.stream()
                                 .map(playerInfo -> playerInfo.getItem() != null ? playerInfo.getItem().getId() : null)
                                 .filter(java.util.Objects::nonNull)
                                 .distinct()
                                 .collect(Collectors.toList());
+        }
+
+        @Override
+        @Transactional
+        public void deployItem(Long playerId, Long itemId) {
+                List<PlayerInfo> inventory = playerItemRepository.findByPlayerId(playerId);
+                
+                boolean ownsItem = false;
+                for (PlayerInfo info : inventory) {
+                        if (info.getItem() != null && info.getItem().getId().equals(itemId)) {
+                                ownsItem = true;
+                                break;
+                        }
+                }
+
+                if (!ownsItem) {
+                        throw new RuntimeException("Bạn chưa sở hữu tank này!");
+                }
+
+                for (PlayerInfo info : inventory) {
+                        if (info.getItem() != null && "TANK".equalsIgnoreCase(info.getItem().getCategory())) {
+                                info.setIsDeployed(info.getItem().getId().equals(itemId));
+                                playerItemRepository.save(info);
+                        }
+                }
+        }
+
+        @Override
+        @Transactional
+        public Long getDeployedTankId(Long playerId) {
+                // Ensure auto-grant is triggered if empty
+                getPurchasedItemIds(playerId);
+
+                return playerItemRepository.findByPlayerIdAndIsDeployedTrue(playerId)
+                        .map(info -> info.getItem() != null ? info.getItem().getId() : null)
+                        .orElse(-1L);
         }
 }

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 
 namespace Complete
@@ -12,6 +12,11 @@ namespace Complete
         public Color m_ZeroHealthColor = Color.red;         // The color the health bar will be when on no health.
         public GameObject m_ExplosionPrefab;                // A prefab that will be instantiated in Awake, then used whenever the tank dies.
         
+        [Header("Death Options")]
+        public bool m_HasDieAnimation = false;              // If true, plays Animator death. If false, spawns busted tank.
+        public GameObject m_BustedTankPrefab;               // Prefab of the busted/destroyed tank model.
+        
+        private TankAnimation m_TankAnimation;      // Reference to the external TankAnimation component.
         
         private AudioSource m_ExplosionAudio;               // The audio source to play when the tank explodes.
         private ParticleSystem m_ExplosionParticles;        // The particle system the will play when the tank is destroyed.
@@ -29,6 +34,8 @@ namespace Complete
 
             // Disable the prefab so it can be activated when it's required.
             m_ExplosionParticles.gameObject.SetActive (false);
+            
+            m_TankAnimation = GetComponent<TankAnimation>();
         }
 
 
@@ -84,18 +91,40 @@ namespace Complete
             // Set the flag so that this function is only called once.
             m_Dead = true;
 
-            // Move the instantiated explosion prefab to the tank's position and turn it on.
-            m_ExplosionParticles.transform.position = transform.position;
-            m_ExplosionParticles.gameObject.SetActive (true);
+            if (m_HasDieAnimation)
+            {
+                // Nếu có animation chết thì chỉ gọi PlayDie
+                if (m_TankAnimation != null)
+                {
+                    m_TankAnimation.PlayDie();
+                }
 
-            // Play the particle system of the tank exploding.
-            m_ExplosionParticles.Play ();
+                // Vô hiệu hóa script di chuyển và bắn để xe tăng không thao tác được nữa khi đang chạy anim
+                var movement = GetComponent<TankMovement>();
+                if (movement != null) movement.enabled = false;
+                
+                var shooting = GetComponent<TankShooting>();
+                if (shooting != null) shooting.enabled = false;
+                
+                // Ghi chú: Cần dùng Animation Event hoặc script khác để gọi gameObject.SetActive(false) khi anim chạy xong.
+            }
+            else
+            {
+                // Nếu không có animation, chạy hiệu ứng nổ như cũ
+                m_ExplosionParticles.transform.position = transform.position;
+                m_ExplosionParticles.gameObject.SetActive (true);
+                m_ExplosionParticles.Play ();
+                m_ExplosionAudio.Play();
 
-            // Play the tank explosion sound effect.
-            m_ExplosionAudio.Play();
+                // Spawn mô hình xe tăng vỡ vụn tại vị trí hiện tại
+                if (m_BustedTankPrefab != null)
+                {
+                    Instantiate(m_BustedTankPrefab, transform.position, transform.rotation);
+                }
 
-            // Turn the tank off.
-            gameObject.SetActive (false);
+                // Tắt xe tăng ngay lập tức
+                gameObject.SetActive (false);
+            }
         }
     }
 }

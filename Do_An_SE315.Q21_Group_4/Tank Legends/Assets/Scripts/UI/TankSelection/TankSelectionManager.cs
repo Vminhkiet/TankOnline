@@ -109,7 +109,8 @@ public class TankSelectionManager : MonoBehaviour
     }
 
     [System.Serializable]
-    private class ShopItemDTO
+    [UnityEngine.Scripting.Preserve]
+    public class ShopItemDTO
     {
         public int id;
         public string name;
@@ -121,13 +122,15 @@ public class TankSelectionManager : MonoBehaviour
     }
 
     [System.Serializable]
-    private class ShopItemArrayWrapper
+    [UnityEngine.Scripting.Preserve]
+    public class ShopItemArrayWrapper
     {
         public ShopItemDTO[] array;
     }
 
     [System.Serializable]
-    private class ShopVersionResponse
+    [UnityEngine.Scripting.Preserve]
+    public class ShopVersionResponse
     {
         public long version;
     }
@@ -257,7 +260,6 @@ public class TankSelectionManager : MonoBehaviour
     private void UpdateAvailableTanks(ShopItemDTO[] apiItems)
     {
         TankSelectionButton[] allButtons = FindObjectsOfType<TankSelectionButton>(true);
-        List<TankDefinitionSO> newAvailableTanks = new List<TankDefinitionSO>();
         shopItemsByName.Clear();
 
         foreach (var apiItem in apiItems)
@@ -280,19 +282,7 @@ public class TankSelectionManager : MonoBehaviour
                 }
 
                 button.gameObject.SetActive(isAvailable);
-                
-                if (isAvailable && !newAvailableTanks.Contains(button.TankData))
-                {
-                    newAvailableTanks.Add(button.TankData);
-                }
             }
-        }
-
-        availableTanks = newAvailableTanks.ToArray();
-        
-        if (defaultTank != null && !newAvailableTanks.Contains(defaultTank))
-        {
-            defaultTank = newAvailableTanks.Count > 0 ? newAvailableTanks[0] : null;
         }
     }
 
@@ -351,6 +341,45 @@ public class TankSelectionManager : MonoBehaviour
         }
 
         return null;
+    }
+
+    public TankDefinitionSO GetTankByItemId(long itemId)
+    {
+        Debug.Log($"[GetTankByItemId] Requested itemId: {itemId}");
+
+        if (shopItemsByName.Count == 0)
+        {
+            Debug.Log("[GetTankByItemId] shopItemsByName is empty! Attempting to load from cache...");
+            TryLoadCachedShopItems();
+        }
+
+        if (itemId <= 0 || availableTanks == null) 
+        {
+            Debug.Log($"[GetTankByItemId] Failed: itemId <= 0 ({itemId}) OR availableTanks == null ({(availableTanks == null)})");
+            return defaultTank;
+        }
+
+        Debug.Log($"[GetTankByItemId] shopItemsByName.Count = {shopItemsByName.Count}, availableTanks.Length = {availableTanks.Length}");
+
+        foreach (var kvp in shopItemsByName)
+        {
+            if (kvp.Value.id == itemId)
+            {
+                Debug.Log($"[GetTankByItemId] Found match in shopItemsByName: Key='{kvp.Key}', id={kvp.Value.id}");
+                foreach (var tank in availableTanks)
+                {
+                    if (tank != null && tank.TankName.Equals(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.Log($"[GetTankByItemId] Found matching TankDefinitionSO: {tank.TankName}");
+                        return tank;
+                    }
+                }
+                Debug.LogWarning($"[GetTankByItemId] itemId {itemId} found in shopItemsByName with name '{kvp.Key}', BUT no matching TankDefinitionSO found in availableTanks!");
+            }
+        }
+        
+        Debug.LogWarning($"[GetTankByItemId] itemId {itemId} NOT found in shopItemsByName OR loop finished without returning.");
+        return defaultTank;
     }
 
     private void SpawnPreview(TankDefinitionSO tankData)

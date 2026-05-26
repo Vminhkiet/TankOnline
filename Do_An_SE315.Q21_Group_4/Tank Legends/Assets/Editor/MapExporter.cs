@@ -52,7 +52,7 @@ public class MapExporter
             bushes    = bushes,
             heightmaps = heightmaps,
             spawns    = spawns,
-            tank      = BuildTankConfig(),
+            tanks     = BuildTanksConfig(),
             bullet    = BuildBulletConfig()
         };
 
@@ -335,22 +335,48 @@ public class MapExporter
     // =========================
     // TANK / BULLET CONFIG
     // =========================
-    static TankConfigData BuildTankConfig()
+    static List<TankConfigData> BuildTanksConfig()
     {
-        GameObject tank = GameObject.FindWithTag("Tank");
-        var box = tank != null ? tank.GetComponentInChildren<BoxCollider>(true) : null;
-        if (box == null)
+        List<TankConfigData> list = new List<TankConfigData>();
+        
+        string[] guids = AssetDatabase.FindAssets("t:TankDefinitionSO");
+        foreach (string guid in guids)
         {
-            Debug.LogWarning("[MapExporter] No GameObject tagged 'Tank' with BoxCollider found – using defaults.");
-            return new TankConfigData { collider_extents = new Vec3Data(0.9f, 1.0f, 1.2f) };
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            TankDefinitionSO def = AssetDatabase.LoadAssetAtPath<TankDefinitionSO>(path);
+            if (def != null && def.GameplayPrefab != null)
+            {
+                var box = def.GameplayPrefab.GetComponentInChildren<BoxCollider>(true);
+                if (box != null)
+                {
+                    Vector3 s = box.size, sc = box.transform.lossyScale;
+                    float ex = s.x * Mathf.Abs(sc.x) * 0.5f;
+                    float ey = s.y * Mathf.Abs(sc.y) * 0.5f;
+                    float ez = s.z * Mathf.Abs(sc.z) * 0.5f;
+                    
+                    // Compute center offset relative to the root prefab
+                    Vector3 worldCenter = box.transform.TransformPoint(box.center);
+                    Vector3 localCenter = def.GameplayPrefab.transform.InverseTransformPoint(worldCenter);
+                    
+                    list.Add(new TankConfigData 
+                    { 
+                        name = def.TankName, 
+                        collider_extents = new Vec3Data(ex, ey, ez),
+                        collider_offset = new Vec3Data(localCenter.x, localCenter.y, localCenter.z)
+                    });
+                    
+                    Debug.Log($"[MapExporter] Exported Tank {def.TankName} extents: ({ex:F4}, {ey:F4}, {ez:F4}) offset: ({localCenter.x:F4}, {localCenter.y:F4}, {localCenter.z:F4})");
+                }
+            }
         }
-
-        Vector3 s = box.size, sc = box.transform.lossyScale;
-        float ex = s.x * Mathf.Abs(sc.x) * 0.5f;
-        float ey = s.y * Mathf.Abs(sc.y) * 0.5f;
-        float ez = s.z * Mathf.Abs(sc.z) * 0.5f;
-        Debug.Log($"[MapExporter] Tank collider extents: ({ex:F4}, {ey:F4}, {ez:F4})");
-        return new TankConfigData { collider_extents = new Vec3Data(ex, ey, ez) };
+        
+        if (list.Count == 0)
+        {
+            Debug.LogWarning("[MapExporter] No tanks found in AssetDatabase! Exporting default.");
+            list.Add(new TankConfigData { name = "default", collider_extents = new Vec3Data(0.9f, 1.0f, 1.2f), collider_offset = new Vec3Data(0, 1.0f, 0) });
+        }
+        
+        return list;
     }
 
     static BulletConfigData BuildBulletConfig()
@@ -381,7 +407,7 @@ public class MapExporter
         public List<ColliderData> bushes;
         public List<HeightmapData> heightmaps;
         public List<SpawnData> spawns;
-        public TankConfigData   tank;
+        public List<TankConfigData> tanks;
         public BulletConfigData bullet;
     }
 
@@ -393,7 +419,11 @@ public class MapExporter
     }
 
     [System.Serializable]
-    public class TankConfigData { public Vec3Data collider_extents; }
+    public class TankConfigData { 
+        public string name;
+        public Vec3Data collider_extents; 
+        public Vec3Data collider_offset;
+    }
 
     [System.Serializable]
     public class BulletConfigData { public float collider_radius; }

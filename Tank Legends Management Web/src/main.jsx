@@ -721,14 +721,38 @@ function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('tanklegends');
   const [role, setRole] = useState('admin');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
-    onLogin({
-      username: username.trim() || 'operator',
-      role,
-      signedInAt: new Date().toISOString()
-    });
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.jwt) {
+          onLogin({
+            username: username.trim() || 'operator',
+            role,
+            jwt: data.jwt,
+            signedInAt: new Date().toISOString()
+          });
+          return;
+        }
+      }
+      setError('Login failed. Check credentials.');
+    } catch (err) {
+      setError('Connection error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -778,9 +802,10 @@ function LoginScreen({ onLogin }) {
               ))}
             </div>
           </div>
-          <button className="login-submit" type="submit">
+          {error && <p style={{ color: '#f87171', margin: '0' }}>{error}</p>}
+          <button className="login-submit" type="submit" disabled={loading}>
             <Play size={17} />
-            Enter dashboard
+            {loading ? 'Authenticating...' : 'Enter dashboard'}
           </button>
         </form>
       </section>
@@ -1021,45 +1046,18 @@ function GiftCodeManagementPanel({ pushCommand, session }) {
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(null);
   const [editForm, setEditForm] = useState({});
-  const [jwt, setJwt] = useState('');
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-  const [loginError, setLoginError] = useState('');
 
-  const handleAdminLogin = async () => {
-    try {
-      setLoginError('');
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginForm)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.jwt) {
-          setJwt(data.jwt);
-          pushCommand('Admin JWT acquired for Gift Code management');
-          return data.jwt;
-        }
-      }
-      setLoginError('Login failed. Check credentials.');
-    } catch (err) {
-      setLoginError('Connection error: ' + err.message);
-    }
-    return null;
-  };
-
-  const authHeaders = (token) => ({
+  const authHeaders = () => ({
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token || jwt}`
+    'Authorization': `Bearer ${session.jwt}`
   });
 
-  const fetchCodes = async (token) => {
-    const t = token || jwt;
-    if (!t) return;
+  const fetchCodes = async () => {
+    if (!session || !session.jwt) return;
     try {
       setLoading(true);
       const res = await fetch(`${API_BASE}/api/profile/admin/giftcode`, {
-        headers: authHeaders(t)
+        headers: authHeaders()
       });
       if (res.ok) {
         setCodes(await res.json());
@@ -1072,6 +1070,10 @@ function GiftCodeManagementPanel({ pushCommand, session }) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchCodes();
+  }, [session]);
 
   const handleCreate = async () => {
     try {
@@ -1136,28 +1138,6 @@ function GiftCodeManagementPanel({ pushCommand, session }) {
     try { return new Date(iso).toLocaleString(); }
     catch { return iso; }
   };
-
-  // Not yet logged in for admin API
-  if (!jwt) {
-    return (
-      <>
-        <PanelHeader icon={Gift} title="Gift Code Management" action="Admin login required" />
-        <div className="store-edit-form" style={{ margin: '1rem 0' }}>
-          <p style={{ marginBottom: '0.75rem', color: 'var(--text-dim)' }}>
-            Authenticate with an admin account to manage gift codes.
-          </p>
-          <div className="form-grid">
-            <label>Username <input value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} placeholder="admin" /></label>
-            <label>Password <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} placeholder="password" /></label>
-          </div>
-          {loginError && <p style={{ color: '#f87171', marginTop: '0.5rem' }}>{loginError}</p>}
-          <div className="form-actions" style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-            <button className="primary" onClick={async () => { const t = await handleAdminLogin(); if (t) fetchCodes(t); }}>Login & Load Codes</button>
-          </div>
-        </div>
-      </>
-    );
-  }
 
   return (
     <>

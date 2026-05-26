@@ -22,6 +22,8 @@ namespace Complete
         [Tooltip("If true, uses custom kinematic wall slide. If false, uses Unity's default dynamic rigidbody colliders.")]
         public bool m_UseCustomOnlinePhysics = true;
 
+        private TankAnimation m_TankAnimation;      // Reference to the external TankAnimation component.
+
         private string m_MovementAxisName;          // The name of the input axis for moving forward and back.
         private string m_TurnAxisName;              // The name of the input axis for turning.
         private Rigidbody m_Rigidbody;              // Reference used to move the tank.
@@ -33,6 +35,7 @@ namespace Complete
         private float m_FlippedTimer;
         private float m_OriginalPitch;              // The pitch of the audio source at the start of the scene.
         private ParticleSystem[] m_particleSystems; // References to all the particles systems used by the Tanks
+        [HideInInspector] public bool m_IsInputFrozen = false;
 
         private Vector3 m_CachedColliderCenter = new Vector3(0, 0.85f, 0);
         private Vector3 m_CachedColliderExtents = new Vector3(0.75f, 0.85f, 0.9f);
@@ -43,6 +46,7 @@ namespace Complete
         {
             m_Rigidbody = GetComponent<Rigidbody>();
             m_Collider = GetComponent<Collider>();
+            m_TankAnimation = GetComponent<TankAnimation>();
             if (m_Collider is BoxCollider box)
             {
                 m_CachedColliderCenter = box.center;
@@ -92,6 +96,13 @@ namespace Complete
         }
 
 
+        private float m_MovementFreezeTimer = 0f;
+
+        public void FreezeMovement(float duration)
+        {
+            m_MovementFreezeTimer = duration;
+        }
+
         private void Start()
         {
             // The axes names are based on player number.
@@ -105,6 +116,11 @@ namespace Complete
 
         private void Update()
         {
+            if (m_MovementFreezeTimer > 0f)
+            {
+                m_MovementFreezeTimer -= Time.deltaTime;
+            }
+
             if (InputManager.Instance != null)
             {
                 InputManager.Instance.GetTankMoveInput(m_PlayerNumber, out m_MovementInputValue, out m_TurnInputValue);
@@ -122,6 +138,21 @@ namespace Complete
                 m_UseMobileDirectionalMove = false;
                 m_MovementInputValue = Input.GetAxis(m_MovementAxisName);
                 m_TurnInputValue = Input.GetAxis(m_TurnAxisName);
+            }
+
+            // Apply freeze override if timer is active or input is explicitly frozen
+            if (m_MovementFreezeTimer > 0f || m_IsInputFrozen)
+            {
+                m_MovementInputValue = 0f;
+                m_TurnInputValue = 0f;
+                m_UseMobileDirectionalMove = false;
+                m_MobileMoveDirection = Vector3.zero;
+            }
+
+            if (m_TankAnimation != null)
+            {
+                bool isMoving = Mathf.Abs(m_MovementInputValue) > 0.1f || Mathf.Abs(m_TurnInputValue) > 0.1f;
+                m_TankAnimation.SetMoving(isMoving);
             }
 
             EngineAudio();
@@ -169,8 +200,15 @@ namespace Complete
                 }
 
                 int mx, mz;
-                if (m_UseMobileDirectionalMove)
+                if (m_MovementFreezeTimer > 0f)
+                {
+                    mx = 0;
+                    mz = 0;
+                }
+                else if (m_UseMobileDirectionalMove)
+                {
                     GetMobileDiscreteMove(out mx, out mz);
+                }
                 else
                 {
                     // GetAxisRaw: snaps to 0 on key release (no Input Manager smoothing).
@@ -185,6 +223,12 @@ namespace Complete
 
             // --- offline: mobile / keyboard + PhysX movement ---
             if (AutoRightTank())
+            {
+                SendOnlineMoveDiscrete(0, 0);
+                return;
+            }
+
+            if (m_MovementFreezeTimer > 0f)
             {
                 SendOnlineMoveDiscrete(0, 0);
                 return;
