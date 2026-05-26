@@ -176,7 +176,16 @@ namespace Complete
             {
                 if (kvp.Value == null) continue;
                 if (_remoteSnaps.TryGetValue(kvp.Key, out var buf))
+                {
+                    Vector3 oldPos = kvp.Value.transform.position;
                     ApplyInterp(buf, kvp.Value.transform, renderTime);
+                    Vector3 newPos = kvp.Value.transform.position;
+
+                    // Sync animation chạy bằng cách đo khoảng cách dịch chuyển
+                    bool isMoving = Vector3.Distance(oldPos, newPos) > 0.001f;
+                    var anim = kvp.Value.GetComponent<TankAnimation>();
+                    if (anim != null) anim.SetMoving(isMoving);
+                }
             }
 
             // Update match timer UI
@@ -683,6 +692,13 @@ namespace Complete
                     if (col != null) col.enabled = false;
 
                     _remoteBullets[bs.bulletId] = go;
+
+                    // Đồng bộ animation bắn cho xe tăng remote khi đạn của nó xuất hiện
+                    if (_remoteTanks.TryGetValue(bs.ownerId, out var shooterTank) && shooterTank != null)
+                    {
+                        var anim = shooterTank.GetComponent<TankAnimation>();
+                        if (anim != null) anim.PlayRemoteShoot();
+                    }
                 }
 
                 go.transform.position = pos;

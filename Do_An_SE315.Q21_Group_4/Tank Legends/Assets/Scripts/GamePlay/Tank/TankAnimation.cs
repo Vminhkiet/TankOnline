@@ -14,6 +14,7 @@ namespace Complete
 
         private bool m_IsMoving = false;
         private bool m_IsShooting = false;
+        private float m_RemoteShootTimer = 0f;
 
         public void SetMoving(bool isMoving)
         {
@@ -29,6 +30,28 @@ namespace Complete
 
             m_IsShooting = isShooting;
             m_Animator.SetBool(m_AnimShootParam, m_IsShooting);
+        }
+
+        public void PlayRemoteShoot()
+        {
+            if (m_Animator == null) return;
+            
+            m_IsShooting = true;
+            m_Animator.SetBool(m_AnimShootParam, true);
+            m_RemoteShootTimer = 0.3f; // Giữ animation bắn trong 0.3 giây
+        }
+
+        private void Update()
+        {
+            if (m_RemoteShootTimer > 0f)
+            {
+                m_RemoteShootTimer -= Time.deltaTime;
+                if (m_RemoteShootTimer <= 0f)
+                {
+                    m_IsShooting = false;
+                    if (m_Animator != null) m_Animator.SetBool(m_AnimShootParam, false);
+                }
+            }
         }
 
         public void PlayDie()
