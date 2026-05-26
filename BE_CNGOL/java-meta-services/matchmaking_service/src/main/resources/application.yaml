@@ -35,6 +35,6 @@ management:
 
 tank:
   server:
-    host: auto   # Automatically detect LAN IP using outbound UDP socket
+    host: 10.11.1.68   # Windows WiFi IP — mobile clients connect here for UDP game server
     udp-port: 8080
     mgmt-port: 9090
