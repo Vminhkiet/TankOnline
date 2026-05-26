@@ -698,10 +698,30 @@ namespace Complete
                     {
                         var anim = shooterTank.GetComponent<TankAnimation>();
                         if (anim != null) anim.PlayRemoteShoot();
+
+                        var shooting = shooterTank.GetComponent<TankShooting>();
+                        if (shooting != null)
+                        {
+                            Vector3 bulletDir = pos - shooterTank.transform.position;
+                            bulletDir.y = 0f;
+                            if (bulletDir.sqrMagnitude > 0.001f)
+                            {
+                                go.transform.rotation = Quaternion.LookRotation(bulletDir.normalized);
+                            }
+                            shooting.PlayRemoteShoot(bulletDir);
+                        }
                     }
                 }
 
+                // Cập nhật vị trí và xoay đầu đạn theo hướng bay
+                Vector3 oldPos = go.transform.position;
                 go.transform.position = pos;
+                
+                Vector3 moveDir = pos - oldPos;
+                if (moveDir.sqrMagnitude > 0.0001f)
+                {
+                    go.transform.rotation = Quaternion.LookRotation(moveDir.normalized);
+                }
             }
 
             // Remove bullets the server no longer reports (hit something or expired)
@@ -892,7 +912,7 @@ namespace Complete
                 // Remote tank is driven purely by snapshots — disable all local input components
                 // so they don't read keyboard input or send packets to the server.
                 var remoteShooting = go.GetComponent<TankShooting>();
-                if (remoteShooting != null) remoteShooting.enabled = false;
+                if (remoteShooting != null) remoteShooting.m_IsLocalPlayer = false;
                 var remoteMovement = go.GetComponent<TankMovement>();
                 if (remoteMovement != null) remoteMovement.enabled = false;
 

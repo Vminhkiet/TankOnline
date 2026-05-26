@@ -168,11 +168,11 @@ namespace TankNet
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
         }
 
-        public void RequestShoot(float force = 20f)
+        public void RequestShoot(float force, float turretYaw, byte barrelCount)
         {
             if (!_running) return;
             // Send immediately so server bullet spawns in sync with local prediction shell
-            byte[] pkt = PacketBuilder.BuildShoot(MatchId, (int)force, PlayerId, _seq++);
+            byte[] pkt = PacketBuilder.BuildShoot(MatchId, (int)force, turretYaw, barrelCount, PlayerId, _seq++);
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
             // Do NOT set _pendingShoot — SendTick would double-send and fire a second bullet
         }
@@ -193,8 +193,9 @@ namespace TankNet
 
                 if (_pendingShoot)
                 {
-                    byte[] shoot = PacketBuilder.BuildShoot(MatchId, (int)_pendingShootForce, PlayerId, _seq++);
-                    _udp.Send(shoot, shoot.Length, _server);
+                    // Fallback using 0 yaw if pending shoot is somehow used (it shouldn't be used typically)
+                    byte[] shoot = PacketBuilder.BuildShoot(MatchId, (int)_pendingShootForce, 0f, 1, PlayerId, _seq++);
+                    try { _udp.Send(shoot, shoot.Length, _server); } catch { }
                     _pendingShoot = false;
                 }
             }

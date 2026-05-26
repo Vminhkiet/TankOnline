@@ -217,6 +217,7 @@ public class ProfileUIManager : MonoBehaviour
             rankSprite = silverSprite;
         }
 
+
         if (rankNameText != null)
             rankNameText.text = rankName;
 

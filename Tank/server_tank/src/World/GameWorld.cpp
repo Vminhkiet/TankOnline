@@ -342,12 +342,12 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
             Vector3 center{ tank.position.x + cfg.offsetX * cy + cfg.offsetZ * sy,
                             tank.position.y + cfg.offsetY,
                             tank.position.z - cfg.offsetX * sy + cfg.offsetZ * cy };
-            // Muzzle is slightly in front and above center
-            Vector3 baseMuzzlePos = center + Vector3{0.f, cfg.extentY * 0.7f, 0.f};
+            // Muzzle is slightly in front and above center, shifted forward to the barrel tip
+            Vector3 localForward = { std::sin(tank.wantsShootYaw), 0.f, std::cos(tank.wantsShootYaw) };
+            Vector3 baseMuzzlePos = center + Vector3{0.f, cfg.extentY * 0.7f, 0.f} + localForward * (cfg.extentZ + 0.8f);
             
-            // Calculate the local Right direction of the tank in world space:
-            // Since forward is {sin(yaw), 0, cos(yaw)}, local right vector is {cos(yaw), 0, -sin(yaw)}.
-            Vector3 localRight = { cy, 0.f, -sy };
+            // Calculate the local Right direction of the turret in world space:
+            Vector3 localRight = { std::cos(tank.wantsShootYaw), 0.f, -std::sin(tank.wantsShootYaw) };
 
             int bulletDamage = tank.stats.damage;
             if (tank.stats.holdsToCharge) {
@@ -357,14 +357,14 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
                 bulletDamage = static_cast<int>(bulletDamage * ratio);
             }
 
-            int count = tank.stats.barrelCount > 0 ? tank.stats.barrelCount : 1;
-            float spacing = tank.stats.barrelSpacing;
+            int count = tank.wantsShootBarrels > 0 ? tank.wantsShootBarrels : 1;
+            float spacing = tank.stats.barrelSpacing > 0 ? tank.stats.barrelSpacing : 0.4f;
 
             for (int i = 0; i < count; ++i) {
                 // Calculate lateral offset for multi-barrels
                 float offset = (i - (count - 1) / 2.0f) * spacing;
                 Vector3 muzzlePos = baseMuzzlePos + localRight * offset;
-                spawnBullet(id, muzzlePos, tank.yaw, tank.wantsShootForce, bulletDamage);
+                spawnBullet(id, muzzlePos, tank.wantsShootYaw, tank.wantsShootForce, bulletDamage);
             }
             tank.wantsShoot = false;
         }

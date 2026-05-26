@@ -41,6 +41,7 @@ struct ClientInput {
     bool    shoot       = false;
     uint8_t seq         = 0;
     float   launchForce = 20.f;   // bullet speed (m/s) when shoot=true
+    uint8_t barrelCount = 1;      // number of barrels
 };
 
 struct PacketMovement {
@@ -67,10 +68,20 @@ struct PacketMovement {
 
 struct PacketShoot {
     uint8_t launchForce = 20;  // integer m/s in [FORCE_MIN, FORCE_MAX]
+    float   turretYaw   = 0.f;
+    uint8_t barrelCount = 1;
 
     template<typename Stream>
     bool Serialize(Stream& stream) {
         serialize_int(stream, launchForce, NetConst::FORCE_MIN, NetConst::FORCE_MAX);
+        
+        int32_t yawDegInt = static_cast<int32_t>(turretYaw * 180.f / 3.14159265f);
+        serialize_int(stream, yawDegInt, -180, 180);
+        if constexpr (Stream::IsReading) {
+            turretYaw = static_cast<float>(yawDegInt) * 3.14159265f / 180.f;
+        }
+
+        serialize_int(stream, barrelCount, 1, 10);
         return true;
     }
 
@@ -78,6 +89,8 @@ struct PacketShoot {
         ClientInput ci{};
         ci.shoot       = true;
         ci.launchForce = static_cast<float>(launchForce);
+        ci.turretYaw   = turretYaw;
+        ci.barrelCount = barrelCount;
         return ci;
     }
 };

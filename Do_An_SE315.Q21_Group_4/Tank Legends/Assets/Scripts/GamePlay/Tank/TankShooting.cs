@@ -40,8 +40,11 @@ namespace Complete
         [Header("Shooting Style")]
         public bool m_HoldToCharge = false;         // If true, holding the fire button/joystick charges up the shot. If false, it fires instantly at max rate.
 
+        public bool m_IsLocalPlayer = true;         // Flag to distinguish between local and remote tanks
 
         private TankAnimation m_TankAnimation;      // Reference to the external TankAnimation component.
+        private Vector3 m_RemoteTargetDir;          // Target direction for remote turret
+        private float m_RemoteAimTimer = 0f;        // Timer for remote aiming
 
         private string m_FireButton;                // The input axis that is used for launching shells.
         private float m_CurrentLaunchForce;         // The force that will be given to the shell when the fire button is released.
@@ -81,7 +84,7 @@ namespace Complete
             if (m_AimSlider != null)
             {
                 m_AimSlider.value = m_MinLaunchForce;
-                m_AimSlider.gameObject.SetActive(m_ShowAimSlider);
+                m_AimSlider.gameObject.SetActive(m_ShowAimSlider && m_IsLocalPlayer);
             }
             m_FireCooldownTimer = 0f;
         }
@@ -97,13 +100,32 @@ namespace Complete
 
             if (m_AimSlider != null)
             {
-                m_AimSlider.gameObject.SetActive(m_ShowAimSlider);
+                m_AimSlider.gameObject.SetActive(m_ShowAimSlider && m_IsLocalPlayer);
             }
         }
 
 
         private void Update ()
         {
+            if (!m_IsLocalPlayer)
+            {
+                if (m_TankHead != null && m_FireTransform != null)
+                {
+                    Vector3 targetDir = transform.forward;
+                    if (m_RemoteAimTimer > 0f)
+                    {
+                        targetDir = m_RemoteTargetDir;
+                        m_RemoteAimTimer -= Time.deltaTime;
+                    }
+
+                    // Smoothly rotate the turret bone in world space
+                    Quaternion targetMuzzleRot = Quaternion.LookRotation(targetDir, transform.up);
+                    Quaternion targetTurretRot = targetMuzzleRot * Quaternion.Inverse(m_TurretToMuzzleOffset);
+                    m_TankHead.rotation = Quaternion.RotateTowards(m_TankHead.rotation, targetTurretRot, 500f * Time.deltaTime);
+                }
+                return;
+            }
+
             bool fireDown;
             bool fireHeld;
             bool fireUp;
@@ -250,7 +272,20 @@ namespace Complete
 
             var net = TankNetClient.Instance;
             if (net != null && net.IsConnected)
-                net.RequestShoot(m_CurrentLaunchForce);
+            {
+                float turretYaw = transform.eulerAngles.y * Mathf.Deg2Rad;
+                if (m_FireTransforms != null && m_FireTransforms.Length > 0 && m_FireTransforms[0] != null)
+                {
+                    turretYaw = m_FireTransforms[0].eulerAngles.y * Mathf.Deg2Rad;
+                }
+                else if (m_TankHead != null)
+                {
+                    turretYaw = m_TankHead.eulerAngles.y * Mathf.Deg2Rad;
+                }
+                
+                byte barrelCount = (byte)(m_FireTransforms != null && m_FireTransforms.Length > 0 ? m_FireTransforms.Length : 1);
+                net.RequestShoot(m_CurrentLaunchForce, turretYaw, barrelCount);
+            }
 
             // Spawn shells from all muzzles
             if (m_FireTransforms != null && m_FireTransforms.Length > 0)
@@ -291,6 +326,25 @@ namespace Complete
 
             // Reset the launch force.  This is a precaution in case of missing button events.
             m_CurrentLaunchForce = m_MinLaunchForce;
+        }
+
+        public void PlayRemoteShoot(Vector3 bulletForward)
+        {
+            if (m_TankHead != null && bulletForward.sqrMagnitude > 0.01f)
+            {
+                m_RemoteTargetDir = bulletForward.normalized;
+                m_RemoteAimTimer = 1.0f; // Aim for 1 second, then return to forward
+            }
+
+            // Play shooting audio (if not already playing to prevent double audio for multi-barrel shots)
+            if (m_ShootingAudio != null && m_FireClip != null)
+            {
+                if (!m_ShootingAudio.isPlaying || m_ShootingAudio.time > 0.1f)
+                {
+                    m_ShootingAudio.clip = m_FireClip;
+                    m_ShootingAudio.Play();
+                }
+            }
         }
     }
 }

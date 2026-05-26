@@ -155,14 +155,21 @@ namespace TankNet
             return w.ToBytes();
         }
 
-        public static byte[] BuildShoot(uint matchId, int launchForce = 20,
-                                        uint playerId = 0, byte seq = 0)
+        public static byte[] BuildShoot(uint matchId, int launchForce, float turretYaw = 0f, byte barrelCount = 1, uint playerId = 0, byte seq = 0)
         {
             var w = new BitWriter(8);
-            WriteHeader(w, Opcode.C2S_SHOOT, matchId, 8, playerId, seq);
+            WriteHeader(w, Opcode.C2S_SHOOT, matchId, 12, playerId, seq);
             int force = System.Math.Max(NetConst.FORCE_MIN,
                         System.Math.Min(NetConst.FORCE_MAX, launchForce));
             w.WriteInt(force, NetConst.FORCE_MIN, NetConst.FORCE_MAX);
+            
+            int yawDegInt = UnityEngine.Mathf.RoundToInt(turretYaw * 180f / UnityEngine.Mathf.PI);
+            yawDegInt = (yawDegInt % 360 + 360) % 360;
+            if (yawDegInt > 180) yawDegInt -= 360;
+            yawDegInt = UnityEngine.Mathf.Clamp(yawDegInt, -180, 180);
+            w.WriteInt(yawDegInt, -180, 180);
+
+            w.WriteInt(UnityEngine.Mathf.Clamp(barrelCount, 1, 10), 1, 10);
             return w.ToBytes();
         }
     }

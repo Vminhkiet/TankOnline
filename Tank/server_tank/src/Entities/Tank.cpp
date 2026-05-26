@@ -13,8 +13,10 @@ void Tank::processInput(const ClientInput& input)
     if (!isAlive) return;
     lastInput = input;
     if (input.shoot) {
-        wantsShoot      = true;
-        wantsShootForce = input.launchForce;
+        wantsShoot        = true;
+        wantsShootForce   = input.launchForce;
+        wantsShootYaw     = input.turretYaw;
+        wantsShootBarrels = input.barrelCount;
         if (!stats.canMoveWhileShooting) {
             shootFreezeTimer = 0.5f; // matches Unity's freeze duration
         }
