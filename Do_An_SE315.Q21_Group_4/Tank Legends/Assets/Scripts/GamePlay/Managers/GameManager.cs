@@ -55,6 +55,24 @@ namespace Complete
 
         [Header("Match HUD")]
         public TextMeshProUGUI matchTimerText;
+        public UnityEngine.UI.Image specialAbilityIcon;
+        public TextMeshProUGUI pingText;
+
+        private void UpdateHUDForLocalTank(GameObject localTank)
+        {
+            if (specialAbilityIcon == null || localTank == null) return;
+            var tankHealth = localTank.GetComponent<Complete.TankHealth>();
+            if (tankHealth != null && tankHealth.m_Definition != null)
+            {
+                var icon = tankHealth.m_Definition.SpecialAbility.Icon;
+                specialAbilityIcon.sprite = icon;
+                specialAbilityIcon.enabled = (icon != null);
+            }
+            else
+            {
+                specialAbilityIcon.enabled = false;
+            }
+        }
 
         // ── Match tracking (online) ───────────────────────────────────────────
         private float   _matchStartTime;
@@ -197,6 +215,22 @@ namespace Complete
                 int seconds   = totalSecs % 60;
                 matchTimerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
             }
+
+            // Update Ping UI
+            if (m_OnlineMode && pingText != null && TankNetClient.Instance != null)
+            {
+                int pingTime = TankNetClient.Instance.PingMs;
+                if (pingTime >= 0)
+                {
+                    pingText.text = $"Ping: {pingTime} ms";
+                    pingText.color = pingTime < 100 ? Color.green : (pingTime < 200 ? Color.yellow : Color.red);
+                }
+                else
+                {
+                    pingText.text = "Ping: -- ms";
+                    pingText.color = Color.white;
+                }
+            }
         }
 
         private static void ApplyInterp(List<SnapEntry> buf, Transform tr, float renderTime)
@@ -279,6 +313,11 @@ namespace Complete
                 m_Tanks[i].m_Instance.SetActive(true);
                 m_Tanks[i].m_PlayerNumber = i + 1;
                 m_Tanks[i].Setup();
+            }
+
+            if (!m_OnlineMode && m_Tanks.Length > 0 && m_Tanks[0].m_Instance != null)
+            {
+                UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
             }
         }
 
@@ -387,6 +426,7 @@ namespace Complete
             // Camera follow local tank
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
 
+            UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
         }
 
 

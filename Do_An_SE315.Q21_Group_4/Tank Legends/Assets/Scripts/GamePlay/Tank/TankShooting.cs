@@ -10,6 +10,10 @@ namespace Complete
     /// </summary>
     public class TankShooting : MonoBehaviour
     {
+        [Header("Tank Definition Link")]
+        [Tooltip("Optional TankDefinition ScriptableObject to dynamically override fire rate and bullet damage.")]
+        public TankDefinitionSO m_Definition;
+
         public int m_PlayerNumber = 1;              // Used to identify the different players.
         public Rigidbody m_Shell;                   // Prefab of the shell.
         public Transform m_FireTransform;           // A child of the tank where the shells are spawned (legacy fallback).
@@ -79,6 +83,11 @@ namespace Complete
 
         private void OnEnable()
         {
+            if (m_Definition != null)
+            {
+                m_FireRate = m_Definition.RealStats.FireRate;
+            }
+
             // When the tank is turned on, reset the launch force and the UI
             m_CurrentLaunchForce = m_MinLaunchForce;
             if (m_AimSlider != null)
@@ -303,6 +312,10 @@ namespace Complete
                     if (shell != null)
                     {
                         shell.m_Owner = gameObject;
+                        if (m_Definition != null)
+                        {
+                            shell.m_MaxDamage = m_Definition.RealStats.Damage;
+                        }
                         if (m_HoldToCharge)
                         {
                             float chargeRatio = m_CurrentLaunchForce / m_MaxLaunchForce;

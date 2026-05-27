@@ -69,4 +69,5 @@ private:
 
     void handleMove (GameCommand& cmd);
     void handleShoot(GameCommand& cmd);
+    void handlePing(GameCommand& cmd);
 };

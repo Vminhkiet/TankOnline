@@ -163,4 +163,22 @@ struct EventShootPacket {
     float    hitX = 0.f, hitY = 0.f, hitZ = 0.f;
 };
 
+// C2S_PING = 1003
+struct PacketPing {
+    uint32_t clientTimeMs = 0;
+
+    template<typename Stream>
+    bool Serialize(Stream& stream) {
+        serialize_int(stream, clientTimeMs, 0, 0xFFFFFFFF);
+        return true;
+    }
+};
+
+// S2C_PONG = 2007
+struct PacketPong {
+    uint32_t matchId      = 0;
+    uint16_t opcode       = 0;   // Opcode::S2C_PONG
+    uint32_t clientTimeMs = 0;
+};
+
 #pragma pack(pop)

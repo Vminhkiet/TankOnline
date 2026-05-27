@@ -40,6 +40,9 @@ namespace TankNet
 
         [Header("Input")]
         public float SendRateHz = 20f;
+        public int PingMs { get; private set; } = -1;
+
+        private float _lastPingTime;
 
         private UdpClient  _udp;
         private IPEndPoint _server;
@@ -77,12 +80,17 @@ namespace TankNet
                 Disconnect();
             }
 
-#if UNITY_EDITOR || UNITY_STANDALONE_WIN
-            if (host.StartsWith("10.") || host.StartsWith("192.168.") || host.StartsWith("172."))
+            // Sử dụng địa chỉ IP theo cấu hình của TestConnectionToggler (thông qua GameApiClient)
+            try
             {
-                host = "127.0.0.1";
+                var uri = new System.Uri(GameApiClient.BaseUrl);
+                host = uri.Host;
             }
-#endif
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[TankNet] Could not parse GameApiClient.BaseUrl: {ex.Message}");
+            }
+
             if (host == "auto" || host.ToLower() == "localhost")
             {
                 host = "127.0.0.1";
@@ -186,6 +194,14 @@ namespace TankNet
 
             try 
             {
+                if (Time.time - _lastPingTime > 1f)
+                {
+                    _lastPingTime = Time.time;
+                    uint clientTime = (uint)System.Environment.TickCount;
+                    byte[] pingPkt = PacketBuilder.BuildPing(MatchId, clientTime, PlayerId);
+                    try { _udp.Send(pingPkt, pingPkt.Length, _server); } catch { }
+                }
+
                 byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, PlayerId, _seq++);
                 int sent = _udp.Send(pkt, pkt.Length, _server);
                 
@@ -229,6 +245,19 @@ namespace TankNet
 
                         var snap = ParseSnapshot(data, hdr);
                         UnityMainThread.Post(() => OnSnapshot?.Invoke(snap));
+                        continue;
+                    }
+
+
+
+                    if ((Opcode)opcode == Opcode.S2C_PONG)
+                    {
+                        if (data.Length < Marshal.SizeOf<PongHeader>()) continue;
+                        var hdr = BytesToStruct<PongHeader>(data, 0);
+                        if (hdr.matchId != MatchId) continue;
+
+                        uint nowMs = (uint)System.Environment.TickCount;
+                        PingMs = (int)(nowMs - hdr.clientTimeMs);
                         continue;
                     }
 

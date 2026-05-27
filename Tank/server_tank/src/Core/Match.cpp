@@ -45,6 +45,8 @@ void Match::registerHandlers() {
         [this](GameCommand& cmd) { handleMove(cmd); });
     _dispatcher.registerHandler(Opcode::C2S_SHOOT,
         [this](GameCommand& cmd) { handleShoot(cmd); });
+    _dispatcher.registerHandler(Opcode::C2S_PING,
+        [this](GameCommand& cmd) { handlePing(cmd); });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -241,6 +243,25 @@ void Match::tick(float dt) {
                  static_cast<int>(outcome), result.winnerId, result.durationSecs);
         _onEnd(result);
     }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
+void Match::handlePing(GameCommand& cmd) {
+    if (cmd.rawBuffer.empty()) return;
+    ReadStream rs(reinterpret_cast<const uint32_t*>(cmd.rawBuffer.data()), static_cast<int>(cmd.rawBuffer.size()));
+    PacketHeader hdr;
+    if (!hdr.Serialize(rs)) return;
+
+    PacketPing ping;
+    if (!ping.Serialize(rs)) return;
+
+    PacketPong pong;
+    pong.matchId = _config.matchId;
+    pong.opcode = static_cast<uint16_t>(Opcode::S2C_PONG);
+    pong.clientTimeMs = ping.clientTimeMs;
+
+    _network.send(cmd.sender, reinterpret_cast<const uint8_t*>(&pong), sizeof(PacketPong));
 }
 
 // ────────────────────────────────────────────────────────────────────────────

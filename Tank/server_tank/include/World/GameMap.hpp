@@ -24,6 +24,13 @@ public:
         int weaponType = 0; // 0 = Projectile, 1 = Hitscan
         Vector3 turretOffset; // Offset of turret relative to root
         std::vector<Vector3> barrelOffsets; // Local to turret
+
+        // Real gameplay stats (loaded from world.json, exported by MapExporter)
+        float maxHealth     = 100.f;
+        float movementSpeed = 12.f;
+        float fireRate      = 1.5f;
+        float damage        = 20.f;
+        float fireRange     = 30.f;
     };
 
     struct BulletConfig {

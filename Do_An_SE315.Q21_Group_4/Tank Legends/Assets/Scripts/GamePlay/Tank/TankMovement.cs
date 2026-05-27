@@ -5,6 +5,10 @@ namespace Complete
 {
     public class TankMovement : MonoBehaviour
     {
+        [Header("Tank Definition Link")]
+        [Tooltip("Optional TankDefinition ScriptableObject to dynamically override movement speed.")]
+        public TankDefinitionSO m_Definition;
+
         public int m_PlayerNumber = 1;              // Used to identify which tank belongs to which player.  This is set by this tank's manager.
         public float m_Speed = 12f;                 // How fast the tank moves forward and back.
         public float m_TurnSpeed = 180f;            // How fast the tank turns in degrees per second.
@@ -59,6 +63,11 @@ namespace Complete
 
         private void OnEnable()
         {
+            if (m_Definition != null)
+            {
+                m_Speed = m_Definition.RealStats.MovementSpeed;
+            }
+
             bool online = TankNetClient.Instance != null;
             
             bool useKinematic = online && m_UseCustomOnlinePhysics;

@@ -399,7 +399,12 @@ public class MapExporter
                         collider_offset = new Vec3Data(localCenter.x, localCenter.y, localCenter.z),
                         weapon_type = (int)def.WeaponType,
                         turret_offset = new Vec3Data(turretOffsetVal.x, turretOffsetVal.y, turretOffsetVal.z),
-                        barrel_offsets = barrelOffsets
+                        barrel_offsets = barrelOffsets,
+                        max_health = def.RealStats.MaxHealth,
+                        movement_speed = def.RealStats.MovementSpeed,
+                        fire_rate = def.RealStats.FireRate,
+                        damage = def.RealStats.Damage,
+                        fire_range = def.RealStats.FireRange
                     });
                     
                     Debug.Log($"[MapExporter] Exported Tank {def.TankName} extents: ({ex:F4}, {ey:F4}, {ez:F4}) offset: ({localCenter.x:F4}, {localCenter.y:F4}, {localCenter.z:F4}) barrels: {barrelOffsets.Count}");
@@ -463,6 +468,11 @@ public class MapExporter
         public int weapon_type; // 0 = Projectile, 1 = Hitscan
         public Vec3Data turret_offset;
         public List<Vec3Data> barrel_offsets;
+        public float max_health;
+        public float movement_speed;
+        public float fire_rate;
+        public float damage;
+        public float fire_range;
     }
 
     [System.Serializable]

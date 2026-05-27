@@ -5,6 +5,10 @@ namespace Complete
 {
     public class TankHealth : MonoBehaviour
     {
+        [Header("Tank Definition Link")]
+        [Tooltip("Optional TankDefinition ScriptableObject to dynamically override starting health and segmented bar.")]
+        public TankDefinitionSO m_Definition;
+
         public float m_StartingHealth = 100f;               // The amount of health each tank starts with.
         public Color m_FullHealthColor = Color.green;       // The color the health bar will be when on full health.
         public Color m_ZeroHealthColor = Color.red;         // The color the health bar will be when on no health.
@@ -60,6 +64,11 @@ namespace Complete
 
         private void OnEnable()
         {
+            if (m_Definition != null)
+            {
+                m_StartingHealth = m_Definition.RealStats.MaxHealth;
+            }
+
             // When the tank is enabled, reset the tank's health and whether or not it's dead.
             m_CurrentHealth = m_StartingHealth;
             m_Dead = false;

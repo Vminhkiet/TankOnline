@@ -30,8 +30,16 @@ bool GameWorld::loadMap(const std::string& mapPath)
 
 void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos, const TankStats& stats)
 {
-    _tanks.emplace(playerId, Tank(playerId, spawnPos, stats));
+    // Override TankStats defaults with real gameplay stats from world.json (TankConfig)
+    TankStats finalStats = stats;
     const GameMap::TankConfig& cfg = _map.getTankConfig(stats.name);
+    finalStats.health    = static_cast<int>(cfg.maxHealth);
+    finalStats.speed     = cfg.movementSpeed;
+    finalStats.damage    = static_cast<int>(cfg.damage);
+    finalStats.fireRate  = cfg.fireRate;
+    finalStats.fireRange = cfg.fireRange;
+
+    _tanks.emplace(playerId, Tank(playerId, spawnPos, finalStats));
 
     OBBCollider obb;
     obb.entityId = playerId;
@@ -44,11 +52,12 @@ void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos, const Tank
     obb.axisZ = {0.f, 0.f, 1.f};
     _physics.addDynamicBox(obb);
 
-    LOG_INFO("GameWorld: player {} spawned at ({:.1f},{:.1f},{:.1f})",
-             playerId, spawnPos.x, spawnPos.y, spawnPos.z);
+    LOG_INFO("GameWorld: player {} spawned at ({:.1f},{:.1f},{:.1f}) tank={} hp={} spd={:.1f} dmg={} fr={:.1f}",
+             playerId, spawnPos.x, spawnPos.y, spawnPos.z,
+             finalStats.name, finalStats.health, finalStats.speed, finalStats.damage, finalStats.fireRate);
              
-    // Initialize tracking for this player
-    _maxHealth[playerId] = 100;
+    // Initialize tracking for this player using the real max health
+    _maxHealth[playerId] = finalStats.health;
     _lastCombatTime[playerId] = 0.0f; // Will be properly initialized in first update
     _matchScoreBase[playerId] = 0;
 }

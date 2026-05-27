@@ -5,13 +5,19 @@ namespace TankNet
 {
     public enum Opcode : ushort
     {
-        C2S_LOGIN    = 1000,
-        C2S_MOVE     = 1001,
-        C2S_SHOOT       = 1002,
-        S2C_SNAPSHOT    = 2000,
+        C2S_LOGIN        = 1000,
+        C2S_MOVE         = 1001,
+        C2S_SHOOT        = 1002,
+        C2S_PING         = 1003,
+
+        S2C_SNAPSHOT     = 2000,
+        S2C_STATE_SYNC   = 2001,
+        S2C_EVENT_SPAWN  = 2002,
+        S2C_EVENT_HIT    = 2003,
         S2C_MATCH_END    = 2004,
         S2C_FORCE_LOGOUT = 2005,
         S2C_EVENT_SHOOT  = 2006,
+        S2C_PONG         = 2007,
     }
 
     // Must match server NetworkConstants.h exactly
@@ -97,6 +103,14 @@ namespace TankNet
         public short  rpReward;
         public byte   placement;
         public byte   playerCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct PongHeader
+    {
+        public uint   matchId;
+        public ushort opcode;       // = 2007
+        public uint   clientTimeMs;
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -186,6 +200,14 @@ namespace TankNet
             w.WriteInt(yawDegInt, -180, 180);
 
             w.WriteInt(UnityEngine.Mathf.Clamp(barrelCount, 1, 10), 1, 10);
+            return w.ToBytes();
+        }
+
+        public static byte[] BuildPing(uint matchId, uint clientTimeMs, uint playerId = 0)
+        {
+            var w = new BitWriter(12);
+            WriteHeader(w, Opcode.C2S_PING, matchId, 16, playerId, 0, 0); // 16 bytes limit
+            w.WriteInt((int)clientTimeMs, 0, unchecked((int)0xFFFFFFFF));
             return w.ToBytes();
         }
     }
