@@ -57,6 +57,19 @@ namespace Complete
         private TankMovement m_Movement;
         private float m_FireCooldownTimer = 0f;     // Cooldown tracking timer.
         private Quaternion m_TurretToMuzzleOffset;  // Cache the rotation offset between turret bone and muzzle.
+        private float m_HitscanVisualTimer = 0f;    // Timer to turn off hitscan visuals for remote tanks.
+
+        private void SetHitscanVisualsActive(bool active)
+        {
+            if (m_FireTransforms == null) return;
+            for (int i = 0; i < m_FireTransforms.Length; i++)
+            {
+                if (m_FireTransforms[i] != null && m_FireTransforms[i].gameObject.activeSelf != active)
+                {
+                    m_FireTransforms[i].gameObject.SetActive(active);
+                }
+            }
+        }
 
 
         private void Awake()
@@ -111,6 +124,12 @@ namespace Complete
             {
                 m_AimSlider.gameObject.SetActive(m_ShowAimSlider && m_IsLocalPlayer);
             }
+
+            bool isHitscan = m_Definition != null && m_Definition.WeaponType == WeaponType.Hitscan;
+            if (isHitscan)
+            {
+                SetHitscanVisualsActive(false);
+            }
         }
 
 
@@ -132,6 +151,15 @@ namespace Complete
                     Quaternion targetTurretRot = targetMuzzleRot * Quaternion.Inverse(m_TurretToMuzzleOffset);
                     m_TankHead.rotation = Quaternion.RotateTowards(m_TankHead.rotation, targetTurretRot, 500f * Time.deltaTime);
                 }
+
+                if (m_HitscanVisualTimer > 0f)
+                {
+                    m_HitscanVisualTimer -= Time.deltaTime;
+                    if (m_HitscanVisualTimer <= 0f)
+                    {
+                        SetHitscanVisualsActive(false);
+                    }
+                }
                 return;
             }
 
@@ -152,6 +180,12 @@ namespace Complete
             if (m_TankAnimation != null)
             {
                 m_TankAnimation.SetShooting(isTryingToFire);
+            }
+
+            bool isHitscan = m_Definition != null && m_Definition.WeaponType == WeaponType.Hitscan;
+            if (isHitscan)
+            {
+                SetHitscanVisualsActive(isTryingToFire);
             }
 
             if (!m_CanMoveWhileShooting && m_Movement != null)
@@ -296,8 +330,9 @@ namespace Complete
                 net.RequestShoot(m_CurrentLaunchForce, turretYaw, barrelCount);
             }
 
-            // Spawn shells from all muzzles
-            if (m_FireTransforms != null && m_FireTransforms.Length > 0)
+            // Spawn shells from all muzzles (only if NOT hitscan)
+            bool isHitscan = m_Definition != null && m_Definition.WeaponType == WeaponType.Hitscan;
+            if (!isHitscan && m_FireTransforms != null && m_FireTransforms.Length > 0)
             {
                 for (int i = 0; i < m_FireTransforms.Length; i++)
                 {
@@ -384,33 +419,11 @@ namespace Complete
                 }
             }
 
-            // For hitscan weapons (weaponType == 1), spawn cosmetic shell locally since the server doesn't spawn a Bullet entity
-            if (weaponType == 1 && m_Shell != null && m_FireTransforms != null && barrelIndex < m_FireTransforms.Length)
+            // For hitscan weapons (weaponType == 1), enable visuals temporarily instead of spawning shell
+            if (weaponType == 1)
             {
-                Transform muzzle = m_FireTransforms[barrelIndex];
-                if (muzzle != null)
-                {
-                    Rigidbody shellInstance = Instantiate(m_Shell, muzzle.position, muzzle.rotation) as Rigidbody;
-
-                    // Disable local damage and collision for remote cosmetic shell
-                    ShellExplosion shell = shellInstance.GetComponent<ShellExplosion>();
-                    if (shell != null)
-                    {
-                        shell.enabled = false;
-                    }
-                    Collider col = shellInstance.GetComponent<Collider>();
-                    if (col != null)
-                    {
-                        col.enabled = false;
-                    }
-
-                    Vector3 fireDir = muzzle.forward;
-                    fireDir.y = 0f;
-                    fireDir.Normalize();
-                    shellInstance.velocity = m_MaxLaunchForce * fireDir;
-
-                    Destroy(shellInstance.gameObject, 2.0f);
-                }
+                SetHitscanVisualsActive(true);
+                m_HitscanVisualTimer = 0.2f; // Turn off after 200ms
             }
         }
     }
