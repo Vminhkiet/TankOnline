@@ -46,6 +46,12 @@ namespace Complete
 
         private static readonly RaycastHit[] s_HitBuffer = new RaycastHit[8];
 
+        [HideInInspector] public bool m_HasNetworkCorrection = false;
+        [HideInInspector] public Vector3 m_NetworkTargetPosition;
+        [HideInInspector] public Quaternion m_NetworkTargetRotation;
+        [HideInInspector] public bool m_HasNetworkTargetY = false;
+        [HideInInspector] public float m_NetworkTargetY;
+
         private void Awake()
         {
             m_Rigidbody = GetComponent<Rigidbody>();
@@ -73,6 +79,7 @@ namespace Complete
             bool useKinematic = online && m_UseCustomOnlinePhysics;
             m_Rigidbody.isKinematic = useKinematic;
             m_Rigidbody.useGravity = !useKinematic;
+            m_Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
 
             // Also reset the input values.
             m_MovementInputValue = 0f;
@@ -220,9 +227,9 @@ namespace Complete
                 }
                 else
                 {
-                    // GetAxisRaw: snaps to 0 on key release (no Input Manager smoothing).
-                    mx = (int)Input.GetAxisRaw(m_TurnAxisName);
-                    mz = (int)Input.GetAxisRaw(m_MovementAxisName);
+                    // Use the smoothed values from Update()
+                    mx = DiscreteFromAxis(m_TurnInputValue);
+                    mz = DiscreteFromAxis(m_MovementInputValue);
                 }
 
                 ApplyOnlineKinematicStep(ref mx, ref mz);
@@ -256,33 +263,67 @@ namespace Complete
         }
 
 
-        /// <summary>Online kinematic step: discrete turn + forward with wall slide + terrain height (was TankMovementOnline).</summary>
         private void ApplyOnlineKinematicStep(ref int mx, ref int mz)
         {
+            Vector3 pos = m_Rigidbody.position;
+
+            // 1. Sync Y from server (terrain height — client doesn't simulate this)
+            if (m_HasNetworkTargetY)
+            {
+                pos.y = m_NetworkTargetY;
+                m_HasNetworkTargetY = false;
+            }
+
+            // 2. Soft lerp rotation towards server if not actively turning
+            if (m_HasNetworkCorrection && mx == 0)
+            {
+                float angleErr = Quaternion.Angle(m_Rigidbody.rotation, m_NetworkTargetRotation);
+                if (angleErr > 1f)
+                {
+                    m_Rigidbody.MoveRotation(Quaternion.RotateTowards(
+                        m_Rigidbody.rotation, m_NetworkTargetRotation, 15f * Time.fixedDeltaTime));
+                }
+            }
+
+            // 3. Apply player turn input
             if (mx != 0)
             {
                 m_Rigidbody.MoveRotation(m_Rigidbody.rotation *
                     Quaternion.Euler(0f, mx * m_TurnSpeed * Time.fixedDeltaTime, 0f));
             }
 
+            // 4. Apply player movement
             if (mz != 0)
             {
                 Vector3 move = transform.forward * mz * m_Speed * Time.fixedDeltaTime;
                 move = ResolveWallSlide(move);
                 if (move.sqrMagnitude > 0.0001f)
                 {
-                    Vector3 newPos = m_Rigidbody.position + move;
-                    float sampledY = SampleTerrainHeight(newPos);
+                    pos += move;
+                    float sampledY = SampleTerrainHeight(pos);
                     // Match server STEP_HEIGHT = 0.3f
-                    if (sampledY > newPos.y && sampledY - newPos.y <= 0.85f)
-                        newPos.y = sampledY;
-                    else if (sampledY < newPos.y)
-                        newPos.y = sampledY; // Allow falling down
-                    m_Rigidbody.MovePosition(newPos);
+                    if (sampledY > pos.y && sampledY - pos.y <= 0.85f)
+                        pos.y = sampledY;
+                    else if (sampledY < pos.y)
+                        pos.y = sampledY; // Allow falling down
                 }
                 else
                     mz = 0; // fully blocked — server should not move either
             }
+
+            // 5. Soft lerp XZ position towards server if drifted too far
+            if (m_HasNetworkCorrection)
+            {
+                Vector2 xzErr = new Vector2(pos.x - m_NetworkTargetPosition.x, pos.z - m_NetworkTargetPosition.z);
+                if (xzErr.magnitude > 1.5f) // SOFT_THRESHOLD
+                {
+                    Vector3 target = new Vector3(m_NetworkTargetPosition.x, pos.y, m_NetworkTargetPosition.z);
+                    pos = Vector3.MoveTowards(pos, target, 5.0f * Time.fixedDeltaTime);
+                }
+            }
+
+            // 6. Single MovePosition call — keeps Rigidbody Interpolation intact
+            m_Rigidbody.MovePosition(pos);
         }
 
         private void GetMobileDiscreteMove(out int mx, out int mz)
@@ -468,7 +509,7 @@ namespace Complete
         {
             var net = TankNetClient.Instance;
             if (net != null && net.IsConnected)
-                net.SendMoveNow(moveX, moveZ);
+                net.SetMove(moveX, moveZ);
         }
 
         private void SendOnlineMoveFromMobile()

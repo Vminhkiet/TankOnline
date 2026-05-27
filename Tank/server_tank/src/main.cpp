@@ -9,6 +9,8 @@
 #include <string>
 #include <cstdlib>
 #include <timeapi.h>   // timeBeginPeriod / timeEndPeriod (winmm)
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 #include "Kafka/KafkaConsumer.hpp"
 #include <nlohmann/json.hpp>
@@ -21,6 +23,67 @@ static std::string getEnv(const char* key, const char* def) {
 
 static std::atomic<bool> g_running{true};
 static void onSignal(int) { g_running = false; }
+
+// ── UDP Broadcast Discovery Listener ────────────────────────────────────────
+// Listens on DISCOVERY_PORT for "TANK_DISCOVER" broadcasts from LAN clients.
+// Replies with "TANK_SERVER:{gamePort}" so clients can auto-detect server IP.
+static constexpr int DISCOVERY_PORT = 8888;
+static constexpr const char* DISCOVER_MSG = "TANK_DISCOVER";
+
+static void discoveryThread(int gamePort) {
+    SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock == INVALID_SOCKET) {
+        LOG_ERR("[Discovery] Failed to create socket: {}", WSAGetLastError());
+        return;
+    }
+
+    // Allow address reuse
+    int optval = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval));
+
+    // Enable broadcast
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char*)&optval, sizeof(optval));
+
+    sockaddr_in bindAddr{};
+    bindAddr.sin_family      = AF_INET;
+    bindAddr.sin_port        = htons(DISCOVERY_PORT);
+    bindAddr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, (sockaddr*)&bindAddr, sizeof(bindAddr)) == SOCKET_ERROR) {
+        LOG_ERR("[Discovery] Failed to bind port {}: {}", DISCOVERY_PORT, WSAGetLastError());
+        closesocket(sock);
+        return;
+    }
+
+    LOG_INFO("[Discovery] Listening on UDP port {} for LAN broadcast", DISCOVERY_PORT);
+
+    // Set receive timeout so we can check g_running periodically
+    DWORD timeout = 1000; // 1 second
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+
+    char buf[256];
+    while (g_running) {
+        sockaddr_in clientAddr{};
+        int addrLen = sizeof(clientAddr);
+        int n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (sockaddr*)&clientAddr, &addrLen);
+
+        if (n <= 0) continue; // timeout or error
+        buf[n] = '\0';
+
+        if (std::string(buf, n) == DISCOVER_MSG) {
+            char clientIp[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &clientAddr.sin_addr, clientIp, sizeof(clientIp));
+            LOG_INFO("[Discovery] Received TANK_DISCOVER from {}:{}", clientIp, ntohs(clientAddr.sin_port));
+
+            std::string reply = "TANK_SERVER:" + std::to_string(gamePort);
+            sendto(sock, reply.c_str(), (int)reply.size(), 0,
+                   (sockaddr*)&clientAddr, sizeof(clientAddr));
+        }
+    }
+
+    closesocket(sock);
+    LOG_INFO("[Discovery] Stopped");
+}
 
 int main() {
     // Reduce Windows multimedia timer resolution from default 15 ms to 1 ms.
@@ -66,6 +129,10 @@ int main() {
         LOG_ERR("main: failed to bind UDP port {}", udpPort);
         return 1;
     }
+
+    // Start LAN discovery broadcast listener
+    std::thread discThread(discoveryThread, udpPort);
+    discThread.detach();
 
     // ── Match manager ────────────────────────────────────────────────────────
     MatchManager manager(*netPtr);

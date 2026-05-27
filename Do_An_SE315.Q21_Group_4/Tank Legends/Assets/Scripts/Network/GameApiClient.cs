@@ -13,17 +13,38 @@ public static class GameApiClient
     #region TEST_CONNECTION_MODE (Dễ dàng xóa region này khi release game)
     // Cấu hình các cổng kết nối test
     private const string LocalhostUrl = "http://localhost:8080";
-    private const string LanUrl = "http://10.89.58.219:8080";
-    public const string ConnectionModePrefKey = "test_connection_mode"; // "localhost" hoặc "lan"
+    private const string LanUrl = "Chưa tìm server"; // fallback thủ công
+    public const string ConnectionModePrefKey = "test_connection_mode"; // "localhost", "lan", hoặc "lan_auto"
+
+    private static string _cachedAutoUrl;
 
     public static string BaseUrl
     {
         get
         {
-            // Đọc mode từ PlayerPrefs, nếu chưa set thì mặc định là localhost
-            string mode = PlayerPrefs.GetString(ConnectionModePrefKey, "localhost");
+            // Đọc mode từ PlayerPrefs, nếu chưa set thì mặc định là lan_auto
+            string mode = PlayerPrefs.GetString(ConnectionModePrefKey, "lan_auto");
+
+            if (mode == "lan_auto")
+            {
+                // Dùng IP đã được ServerDiscovery tìm thấy
+                if (!string.IsNullOrEmpty(ServerDiscovery.DiscoveredIp))
+                {
+                    _cachedAutoUrl = $"http://{ServerDiscovery.DiscoveredIp}:{ServerDiscovery.DiscoveredPort}";
+                    return _cachedAutoUrl;
+                }
+
+                // Nếu chưa tìm thấy nhưng đã có cache từ lần trước
+                if (!string.IsNullOrEmpty(_cachedAutoUrl))
+                    return _cachedAutoUrl;
+
+                // Fallback: chưa tìm thấy server → dùng localhost
+                return LocalhostUrl;
+            }
+
             if (mode == "lan")
                 return LanUrl;
+
             return LocalhostUrl;
         }
     }

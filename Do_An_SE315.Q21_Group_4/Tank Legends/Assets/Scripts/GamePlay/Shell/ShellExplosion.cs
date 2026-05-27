@@ -23,10 +23,6 @@ namespace Complete
 
         private void OnTriggerEnter (Collider other)
         {
-            // Ignore trigger colliders (like grass, bushes, zones, etc.)
-            if (other.isTrigger)
-                return;
-
             // In online mode damage is server-authoritative — skip local damage to avoid
             // health bar flickering before the next snapshot corrects the value.
             bool online = TankNet.TankNetClient.Instance != null;
