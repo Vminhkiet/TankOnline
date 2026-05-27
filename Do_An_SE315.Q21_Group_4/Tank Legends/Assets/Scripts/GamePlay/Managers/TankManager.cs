@@ -46,11 +46,14 @@ namespace Complete
             // Get all of the renderers of the tank.
             MeshRenderer[] renderers = m_Instance.GetComponentsInChildren<MeshRenderer> ();
 
-            // Go through all the renderers...
+            // Go through all the renderers and tint them using a PropertyBlock
+            // (avoids cloning materials, which would break TankStealth dissolve caching).
+            var mpb = new MaterialPropertyBlock();
             for (int i = 0; i < renderers.Length; i++)
             {
-                // ... set their material color to the color specific to this tank.
-                renderers[i].material.color = m_PlayerColor;
+                renderers[i].GetPropertyBlock(mpb);
+                mpb.SetColor("_Color", m_PlayerColor);
+                renderers[i].SetPropertyBlock(mpb);
             }
         }
 

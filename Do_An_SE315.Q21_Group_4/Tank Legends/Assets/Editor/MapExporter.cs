@@ -354,18 +354,60 @@ public class MapExporter
                     float ey = s.y * Mathf.Abs(sc.y) * 0.5f;
                     float ez = s.z * Mathf.Abs(sc.z) * 0.5f;
                     
-                    // Compute center offset relative to the root prefab
+                    // Compute center offset relative to the root prefab (rotation-only, ignore scale)
                     Vector3 worldCenter = box.transform.TransformPoint(box.center);
-                    Vector3 localCenter = def.GameplayPrefab.transform.InverseTransformPoint(worldCenter);
+                    Vector3 diff = worldCenter - def.GameplayPrefab.transform.position;
+                    Quaternion unrotate = Quaternion.Euler(0, -def.GameplayPrefab.transform.eulerAngles.y, 0);
+                    Vector3 localCenter = unrotate * diff;
                     
+                    Vector3 turretOffsetVal = Vector3.zero;
+                    List<Vec3Data> barrelOffsets = new List<Vec3Data>();
+                    var shooting = def.GameplayPrefab.GetComponent<Complete.TankShooting>();
+                    if (shooting != null)
+                    {
+                        float hullYaw = def.GameplayPrefab.transform.eulerAngles.y;
+                        Quaternion unrotateHull = Quaternion.Euler(0, -hullYaw, 0);
+
+                        if (shooting.m_TankHead != null)
+                        {
+                            Vector3 worldDiff = shooting.m_TankHead.position - def.GameplayPrefab.transform.position;
+                            Vector3 p = unrotateHull * worldDiff;
+                            turretOffsetVal = new Vector3(p.x, p.y, p.z);
+                        }
+                        
+                        if (shooting.m_FireTransforms != null && shooting.m_FireTransforms.Length > 0)
+                        {
+                            float refYaw = shooting.m_FireTransforms[0].eulerAngles.y;
+                            Quaternion unrotateMuzzle = Quaternion.Euler(0, -refYaw, 0);
+                            Vector3 turretPivot = shooting.m_TankHead != null ? shooting.m_TankHead.position : def.GameplayPrefab.transform.position;
+
+                            foreach (var t in shooting.m_FireTransforms)
+                            {
+                                Vector3 barrelDiff = t.position - turretPivot;
+                                Vector3 localPos = unrotateMuzzle * barrelDiff;
+                                barrelOffsets.Add(new Vec3Data(localPos.x, localPos.y, localPos.z));
+                            }
+                        }
+                    }
+                    if (barrelOffsets.Count == 0)
+                        barrelOffsets.Add(new Vec3Data(0f, 1.0f, 2.5f)); // Fallback
+
                     list.Add(new TankConfigData 
                     { 
                         name = def.TankName, 
                         collider_extents = new Vec3Data(ex, ey, ez),
-                        collider_offset = new Vec3Data(localCenter.x, localCenter.y, localCenter.z)
+                        collider_offset = new Vec3Data(localCenter.x, localCenter.y, localCenter.z),
+                        weapon_type = (int)def.WeaponType,
+                        turret_offset = new Vec3Data(turretOffsetVal.x, turretOffsetVal.y, turretOffsetVal.z),
+                        barrel_offsets = barrelOffsets,
+                        max_health = def.RealStats.MaxHealth,
+                        movement_speed = def.RealStats.MovementSpeed,
+                        fire_rate = def.RealStats.FireRate,
+                        damage = def.RealStats.Damage,
+                        fire_range = def.RealStats.FireRange
                     });
                     
-                    Debug.Log($"[MapExporter] Exported Tank {def.TankName} extents: ({ex:F4}, {ey:F4}, {ez:F4}) offset: ({localCenter.x:F4}, {localCenter.y:F4}, {localCenter.z:F4})");
+                    Debug.Log($"[MapExporter] Exported Tank {def.TankName} extents: ({ex:F4}, {ey:F4}, {ez:F4}) offset: ({localCenter.x:F4}, {localCenter.y:F4}, {localCenter.z:F4}) barrels: {barrelOffsets.Count}");
                 }
             }
         }
@@ -423,6 +465,14 @@ public class MapExporter
         public string name;
         public Vec3Data collider_extents; 
         public Vec3Data collider_offset;
+        public int weapon_type; // 0 = Projectile, 1 = Hitscan
+        public Vec3Data turret_offset;
+        public List<Vec3Data> barrel_offsets;
+        public float max_health;
+        public float movement_speed;
+        public float fire_rate;
+        public float damage;
+        public float fire_range;
     }
 
     [System.Serializable]

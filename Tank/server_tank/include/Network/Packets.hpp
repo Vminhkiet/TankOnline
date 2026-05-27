@@ -41,6 +41,7 @@ struct ClientInput {
     bool    shoot       = false;
     uint8_t seq         = 0;
     float   launchForce = 20.f;   // bullet speed (m/s) when shoot=true
+    uint8_t barrelCount = 1;      // number of barrels
 };
 
 struct PacketMovement {
@@ -67,10 +68,20 @@ struct PacketMovement {
 
 struct PacketShoot {
     uint8_t launchForce = 20;  // integer m/s in [FORCE_MIN, FORCE_MAX]
+    float   turretYaw   = 0.f;
+    uint8_t barrelCount = 1;
 
     template<typename Stream>
     bool Serialize(Stream& stream) {
         serialize_int(stream, launchForce, NetConst::FORCE_MIN, NetConst::FORCE_MAX);
+        
+        int32_t yawDegInt = static_cast<int32_t>(turretYaw * 180.f / 3.14159265f);
+        serialize_int(stream, yawDegInt, -180, 180);
+        if constexpr (Stream::IsReading) {
+            turretYaw = static_cast<float>(yawDegInt) * 3.14159265f / 180.f;
+        }
+
+        serialize_int(stream, barrelCount, 1, 10);
         return true;
     }
 
@@ -78,6 +89,8 @@ struct PacketShoot {
         ClientInput ci{};
         ci.shoot       = true;
         ci.launchForce = static_cast<float>(launchForce);
+        ci.turretYaw   = turretYaw;
+        ci.barrelCount = barrelCount;
         return ci;
     }
 };
@@ -136,6 +149,36 @@ struct ForceLogoutPacket {
     uint16_t code         = 1003;
     uint16_t messageLen   = 0;   // bytes of UTF-8 message appended after header
     uint32_t disconnectAfterMs = 10000; // client should show reason before forced disconnect
+};
+
+// S2C_EVENT_SHOOT = 2006
+struct EventShootPacket {
+    uint32_t matchId      = 0;
+    uint16_t opcode       = 0;   // Opcode::S2C_EVENT_SHOOT
+    uint32_t shooterId    = 0;
+    uint8_t  weaponType   = 0;   // 0 = Projectile, 1 = Hitscan
+    uint8_t  barrelCount  = 1;
+    float    turretYaw    = 0.f;
+    uint32_t hitTankId    = 0;   // 0 if no hit or projectile
+    float    hitX = 0.f, hitY = 0.f, hitZ = 0.f;
+};
+
+// C2S_PING = 1003
+struct PacketPing {
+    uint32_t clientTimeMs = 0;
+
+    template<typename Stream>
+    bool Serialize(Stream& stream) {
+        serialize_int(stream, clientTimeMs, 0, 0xFFFFFFFF);
+        return true;
+    }
+};
+
+// S2C_PONG = 2007
+struct PacketPong {
+    uint32_t matchId      = 0;
+    uint16_t opcode       = 0;   // Opcode::S2C_PONG
+    uint32_t clientTimeMs = 0;
 };
 
 #pragma pack(pop)

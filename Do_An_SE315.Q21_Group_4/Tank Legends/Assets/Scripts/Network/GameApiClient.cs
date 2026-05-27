@@ -13,7 +13,7 @@ public static class GameApiClient
     #region TEST_CONNECTION_MODE (Dễ dàng xóa region này khi release game)
     // Cấu hình các cổng kết nối test
     private const string LocalhostUrl = "http://localhost:8080";
-    private const string LanUrl = "http://10.83.136.219:8080";
+    private const string LanUrl = "http://10.89.58.219:8080";
     public const string ConnectionModePrefKey = "test_connection_mode"; // "localhost" hoặc "lan"
 
     public static string BaseUrl

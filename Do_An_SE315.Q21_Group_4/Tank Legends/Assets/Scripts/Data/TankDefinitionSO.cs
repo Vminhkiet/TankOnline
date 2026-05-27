@@ -23,9 +23,13 @@ public class TankDefinitionSO : ScriptableObject
 
     [Header("Combat Stats")]
     [SerializeField] private TankStats stats;
+    [SerializeField] private WeaponType weaponType = WeaponType.Projectile;
 
     [Header("Special Ability")]
     [SerializeField] private TankSpecialAbility specialAbility;
+
+    [Header("Real Gameplay Stats")]
+    [SerializeField] private RealGameplayStats realStats;
 
     public string TankName => string.IsNullOrWhiteSpace(tankName) ? name : tankName;
     public string Description => description;
@@ -36,7 +40,9 @@ public class TankDefinitionSO : ScriptableObject
     public Vector3 PreviewLocalEulerAngles => previewLocalEulerAngles;
     public Vector3 PreviewLocalScale => previewLocalScale == Vector3.zero ? Vector3.one : previewLocalScale;
     public TankStats Stats => stats;
+    public WeaponType WeaponType => weaponType;
     public TankSpecialAbility SpecialAbility => specialAbility;
+    public RealGameplayStats RealStats => realStats;
 
 #if UNITY_EDITOR
     private void OnValidate()
@@ -98,6 +104,31 @@ public struct TankStats
 }
 
 [Serializable]
+public struct RealGameplayStats
+{
+    [Tooltip("Lượng máu tối đa của Tank (VD: 100, 150, 200)")]
+    [SerializeField] private float maxHealth;
+    
+    [Tooltip("Tốc độ di chuyển thực tế (VD: 12)")]
+    [SerializeField] private float movementSpeed;
+    
+    [Tooltip("Tốc độ bắn thực tế - số phát/giây (VD: 1.5)")]
+    [SerializeField] private float fireRate;
+    
+    [Tooltip("Sát thương tối đa của đạn tại tâm vụ nổ (VD: 20, 40)")]
+    [SerializeField] private float damage;
+    
+    [Tooltip("Tầm bắn thực tế của súng (VD: 30)")]
+    [SerializeField] private float fireRange;
+
+    public float MaxHealth => maxHealth == 0f ? 100f : maxHealth;
+    public float MovementSpeed => movementSpeed == 0f ? 12f : movementSpeed;
+    public float FireRate => fireRate == 0f ? 1.5f : fireRate;
+    public float Damage => damage == 0f ? 20f : damage;
+    public float FireRange => fireRange == 0f ? 30f : fireRange;
+}
+
+[Serializable]
 public struct TankSpecialAbility
 {
     [SerializeField] private string abilityName;
@@ -118,4 +149,10 @@ public enum TankStatType
     FireRate,
     [InspectorName("Fire Range")]
     FireRange
+}
+
+public enum WeaponType
+{
+    Projectile,
+    Hitscan
 }

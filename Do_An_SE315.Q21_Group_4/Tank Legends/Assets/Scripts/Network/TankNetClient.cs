@@ -29,6 +29,7 @@ namespace TankNet
 
         public event Action<SnapshotData> OnSnapshot;
         public event Action<MatchEndData> OnMatchEnd;
+        public event Action<EventShootPacket> OnEventShoot;
         public event Action<ushort, string, uint> OnForceLogout; // (code, message, disconnectAfterMs)
 
         [Header("Network")]
@@ -39,6 +40,9 @@ namespace TankNet
 
         [Header("Input")]
         public float SendRateHz = 20f;
+        public int PingMs { get; private set; } = -1;
+
+        private float _lastPingTime;
 
         private UdpClient  _udp;
         private IPEndPoint _server;
@@ -76,12 +80,17 @@ namespace TankNet
                 Disconnect();
             }
 
-#if UNITY_EDITOR || UNITY_STANDALONE_WIN
-            if (host.StartsWith("10.") || host.StartsWith("192.168.") || host.StartsWith("172."))
+            // Sử dụng địa chỉ IP theo cấu hình của TestConnectionToggler (thông qua GameApiClient)
+            try
             {
-                host = "127.0.0.1";
+                var uri = new System.Uri(GameApiClient.BaseUrl);
+                host = uri.Host;
             }
-#endif
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[TankNet] Could not parse GameApiClient.BaseUrl: {ex.Message}");
+            }
+
             if (host == "auto" || host.ToLower() == "localhost")
             {
                 host = "127.0.0.1";
@@ -168,11 +177,11 @@ namespace TankNet
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
         }
 
-        public void RequestShoot(float force = 20f)
+        public void RequestShoot(float force, float turretYaw, byte barrelCount)
         {
             if (!_running) return;
             // Send immediately so server bullet spawns in sync with local prediction shell
-            byte[] pkt = PacketBuilder.BuildShoot(MatchId, (int)force, PlayerId, _seq++);
+            byte[] pkt = PacketBuilder.BuildShoot(MatchId, (int)force, turretYaw, barrelCount, PlayerId, _seq++);
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
             // Do NOT set _pendingShoot — SendTick would double-send and fire a second bullet
         }
@@ -185,6 +194,14 @@ namespace TankNet
 
             try 
             {
+                if (Time.time - _lastPingTime > 1f)
+                {
+                    _lastPingTime = Time.time;
+                    uint clientTime = (uint)System.Environment.TickCount;
+                    byte[] pingPkt = PacketBuilder.BuildPing(MatchId, clientTime, PlayerId);
+                    try { _udp.Send(pingPkt, pingPkt.Length, _server); } catch { }
+                }
+
                 byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, PlayerId, _seq++);
                 int sent = _udp.Send(pkt, pkt.Length, _server);
                 
@@ -193,8 +210,9 @@ namespace TankNet
 
                 if (_pendingShoot)
                 {
-                    byte[] shoot = PacketBuilder.BuildShoot(MatchId, (int)_pendingShootForce, PlayerId, _seq++);
-                    _udp.Send(shoot, shoot.Length, _server);
+                    // Fallback using 0 yaw if pending shoot is somehow used (it shouldn't be used typically)
+                    byte[] shoot = PacketBuilder.BuildShoot(MatchId, (int)_pendingShootForce, 0f, 1, PlayerId, _seq++);
+                    try { _udp.Send(shoot, shoot.Length, _server); } catch { }
                     _pendingShoot = false;
                 }
             }
@@ -227,6 +245,29 @@ namespace TankNet
 
                         var snap = ParseSnapshot(data, hdr);
                         UnityMainThread.Post(() => OnSnapshot?.Invoke(snap));
+                        continue;
+                    }
+
+
+
+                    if ((Opcode)opcode == Opcode.S2C_PONG)
+                    {
+                        if (data.Length < Marshal.SizeOf<PongHeader>()) continue;
+                        var hdr = BytesToStruct<PongHeader>(data, 0);
+                        if (hdr.matchId != MatchId) continue;
+
+                        uint nowMs = (uint)System.Environment.TickCount;
+                        PingMs = (int)(nowMs - hdr.clientTimeMs);
+                        continue;
+                    }
+
+                    if ((Opcode)opcode == Opcode.S2C_EVENT_SHOOT)
+                    {
+                        if (data.Length < Marshal.SizeOf<EventShootPacket>()) continue;
+                        var pkt = BytesToStruct<EventShootPacket>(data, 0);
+                        if (pkt.matchId != MatchId) continue;
+
+                        UnityMainThread.Post(() => OnEventShoot?.Invoke(pkt));
                         continue;
                     }
 

@@ -55,6 +55,24 @@ namespace Complete
 
         [Header("Match HUD")]
         public TextMeshProUGUI matchTimerText;
+        public UnityEngine.UI.Image specialAbilityIcon;
+        public TextMeshProUGUI pingText;
+
+        private void UpdateHUDForLocalTank(GameObject localTank)
+        {
+            if (specialAbilityIcon == null || localTank == null) return;
+            var tankHealth = localTank.GetComponent<Complete.TankHealth>();
+            if (tankHealth != null && tankHealth.m_Definition != null)
+            {
+                var icon = tankHealth.m_Definition.SpecialAbility.Icon;
+                specialAbilityIcon.sprite = icon;
+                specialAbilityIcon.enabled = (icon != null);
+            }
+            else
+            {
+                specialAbilityIcon.enabled = false;
+            }
+        }
 
         // ── Match tracking (online) ───────────────────────────────────────────
         private float   _matchStartTime;
@@ -155,6 +173,7 @@ namespace Complete
                     TankNetClient.Instance.OnSnapshot    += HandleSnapshot;
                     TankNetClient.Instance.OnMatchEnd    += HandleMatchEnd;
                     TankNetClient.Instance.OnForceLogout += HandleForceLogout;
+                    TankNetClient.Instance.OnEventShoot  += HandleEventShoot;
 
                     TankNetClient.Instance.Connect(m_ServerHost, m_ServerPort, m_MatchId, m_MyPlayerId);
                 }
@@ -196,6 +215,22 @@ namespace Complete
                 int seconds   = totalSecs % 60;
                 matchTimerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
             }
+
+            // Update Ping UI
+            if (m_OnlineMode && pingText != null && TankNetClient.Instance != null)
+            {
+                int pingTime = TankNetClient.Instance.PingMs;
+                if (pingTime >= 0)
+                {
+                    pingText.text = $"Ping: {pingTime} ms";
+                    pingText.color = pingTime < 100 ? Color.green : (pingTime < 200 ? Color.yellow : Color.red);
+                }
+                else
+                {
+                    pingText.text = "Ping: -- ms";
+                    pingText.color = Color.white;
+                }
+            }
         }
 
         private static void ApplyInterp(List<SnapEntry> buf, Transform tr, float renderTime)
@@ -234,6 +269,7 @@ namespace Complete
                 TankNetClient.Instance.OnSnapshot    -= HandleSnapshot;
                 TankNetClient.Instance.OnMatchEnd    -= HandleMatchEnd;
                 TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
+                TankNetClient.Instance.OnEventShoot  -= HandleEventShoot;
                 TankNetClient.Instance.Disconnect();
             }
 
@@ -277,6 +313,11 @@ namespace Complete
                 m_Tanks[i].m_Instance.SetActive(true);
                 m_Tanks[i].m_PlayerNumber = i + 1;
                 m_Tanks[i].Setup();
+            }
+
+            if (!m_OnlineMode && m_Tanks.Length > 0 && m_Tanks[0].m_Instance != null)
+            {
+                UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
             }
         }
 
@@ -350,7 +391,6 @@ namespace Complete
             // Unpack the tank type index from flags (bits 2-7)
             int typeIndex = (ts.flags >> 2) & 0x3F;
             GameObject prefabToSpawn = m_TankPrefab; // fallback to default local tank prefab
-            bool foundMapping = false;
 
             if (m_TankPrefabMappings != null)
             {
@@ -359,13 +399,10 @@ namespace Complete
                     if (mapping.typeIndex == typeIndex && mapping.prefab != null)
                     {
                         prefabToSpawn = mapping.prefab;
-                        foundMapping = true;
                         break;
                     }
                 }
             }
-
-            Debug.Log($"[GameManager] SPAWN LOCAL TANK: ts.flags={ts.flags}, typeIndex={typeIndex}, foundMapping={foundMapping}, chosenPrefab={prefabToSpawn.name}");
 
             m_Tanks[0].m_Instance    = Instantiate(prefabToSpawn, pos, rot) as GameObject;
             m_Tanks[0].m_Instance.SetActive(true);
@@ -389,7 +426,7 @@ namespace Complete
             // Camera follow local tank
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
 
-            Debug.Log($"[GameManager] local tank spawned tại server pos {pos}");
+            UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
         }
 
 
@@ -634,6 +671,23 @@ namespace Complete
             _serverTimeRemaining = snap.TimeRemaining;
         }
 
+        private void HandleEventShoot(EventShootPacket pkt)
+        {
+            if (pkt.shooterId == m_MyPlayerId) return; // We already spawned our own bullet visually
+
+            if (_remoteTanks.TryGetValue(pkt.shooterId, out var go))
+            {
+                var shooting = go.GetComponent<Complete.TankShooting>();
+                if (shooting != null)
+                {
+                    for (int i = 0; i < pkt.barrelCount; i++)
+                    {
+                        shooting.RemoteFire(pkt.turretYaw, i, pkt.weaponType);
+                    }
+                }
+            }
+        }
+
         // Cached bullet prefab: m_RemoteBulletPrefab if assigned, otherwise auto-detected
         // from TankShooting.m_Shell so no manual inspector step is required.
         private GameObject _bulletPrefabCache;
@@ -685,7 +739,7 @@ namespace Complete
 
                     // Server is authoritative — disable local physics and damage
                     var rb = go.GetComponent<Rigidbody>();
-                    if (rb != null) { rb.isKinematic = true; rb.velocity = Vector3.zero; }
+                    if (rb != null) { rb.isKinematic = true; }
                     var explosion = go.GetComponent<ShellExplosion>();
                     if (explosion != null) explosion.enabled = false;
                     var col = go.GetComponent<Collider>();
@@ -698,10 +752,30 @@ namespace Complete
                     {
                         var anim = shooterTank.GetComponent<TankAnimation>();
                         if (anim != null) anim.PlayRemoteShoot();
+
+                        var shooting = shooterTank.GetComponent<TankShooting>();
+                        if (shooting != null)
+                        {
+                            Vector3 bulletDir = pos - shooterTank.transform.position;
+                            bulletDir.y = 0f;
+                            if (bulletDir.sqrMagnitude > 0.001f)
+                            {
+                                go.transform.rotation = Quaternion.LookRotation(bulletDir.normalized);
+                            }
+                            shooting.PlayRemoteShoot(bulletDir);
+                        }
                     }
                 }
 
+                // Cập nhật vị trí và xoay đầu đạn theo hướng bay
+                Vector3 oldPos = go.transform.position;
                 go.transform.position = pos;
+                
+                Vector3 moveDir = pos - oldPos;
+                if (moveDir.sqrMagnitude > 0.0001f)
+                {
+                    go.transform.rotation = Quaternion.LookRotation(moveDir.normalized);
+                }
             }
 
             // Remove bullets the server no longer reports (hit something or expired)
@@ -816,8 +890,11 @@ namespace Complete
                 if (rb != null)
                 {
                     rb.position = serverPos;
-                    rb.velocity = Vector3.zero;
-                    rb.angularVelocity = Vector3.zero;
+                    if (!rb.isKinematic)
+                    {
+                        rb.velocity = Vector3.zero;
+                        rb.angularVelocity = Vector3.zero;
+                    }
                 }
                 else go.transform.position = serverPos;
                 go.transform.rotation = serverRot;
@@ -852,8 +929,6 @@ namespace Complete
                 // Unpack the tank type index from flags (bits 2-7)
                 int typeIndex = (ts.flags >> 2) & 0x3F;
                 GameObject prefabToSpawn = m_RemoteTankPrefab;
-                bool foundMapping = false;
-
                 if (m_TankPrefabMappings != null)
                 {
                     foreach (var mapping in m_TankPrefabMappings)
@@ -861,19 +936,11 @@ namespace Complete
                         if (mapping.typeIndex == typeIndex && mapping.prefab != null)
                         {
                             prefabToSpawn = mapping.prefab;
-                            foundMapping = true;
                             break;
                         }
                     }
                 }
 
-                Debug.Log($"[GameManager] SPAWN REMOTE TANK: ts.tankId={ts.tankId}, ts.flags={ts.flags}, typeIndex={typeIndex}, foundMapping={foundMapping}, chosenPrefab={prefabToSpawn?.name}");
-
-                if (prefabToSpawn == null)
-                {
-                    Debug.LogError("[GameManager] Không tìm thấy Remote Tank Prefab phù hợp hoặc m_RemoteTankPrefab chưa được gán.");
-                    return;
-                }
                 go = Instantiate(prefabToSpawn,
                     new Vector3(ts.x, ts.y, ts.z),
                     Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0));
@@ -892,7 +959,7 @@ namespace Complete
                 // Remote tank is driven purely by snapshots — disable all local input components
                 // so they don't read keyboard input or send packets to the server.
                 var remoteShooting = go.GetComponent<TankShooting>();
-                if (remoteShooting != null) remoteShooting.enabled = false;
+                if (remoteShooting != null) remoteShooting.m_IsLocalPlayer = false;
                 var remoteMovement = go.GetComponent<TankMovement>();
                 if (remoteMovement != null) remoteMovement.enabled = false;
 
@@ -923,7 +990,10 @@ namespace Complete
 
                 // Forward server InBush flag to remote TankStealth
                 var stealth = go.GetComponent<TankStealth>();
-                if (stealth != null) stealth.ServerInBush = ts.IsInBush;
+                if (stealth != null)
+                {
+                    stealth.ServerInBush = ts.IsInBush;
+                }
 
                 if (!_remoteSnaps.ContainsKey(ts.tankId))
                     _remoteSnaps[ts.tankId] = new List<SnapEntry>();

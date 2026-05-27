@@ -92,6 +92,31 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
                     cfg.offsetY = cfg.extentY;
                     cfg.offsetZ = 0.f;
                 }
+                if (t.contains("weapon_type")) {
+                    cfg.weaponType = t["weapon_type"].get<int>();
+                }
+                if (t.contains("turret_offset")) {
+                    cfg.turretOffset = {
+                        t["turret_offset"]["x"].get<float>(),
+                        t["turret_offset"]["y"].get<float>(),
+                        t["turret_offset"]["z"].get<float>()
+                    };
+                }
+                if (t.contains("barrel_offsets")) {
+                    for (const auto& bo : t["barrel_offsets"]) {
+                        cfg.barrelOffsets.push_back({
+                            bo["x"].get<float>(),
+                            bo["y"].get<float>(),
+                            bo["z"].get<float>()
+                        });
+                    }
+                }
+                // Real gameplay stats from TankDefinitionSO.RealGameplayStats
+                if (t.contains("max_health"))      cfg.maxHealth     = t["max_health"].get<float>();
+                if (t.contains("movement_speed"))   cfg.movementSpeed = t["movement_speed"].get<float>();
+                if (t.contains("fire_rate"))        cfg.fireRate      = t["fire_rate"].get<float>();
+                if (t.contains("damage"))           cfg.damage        = t["damage"].get<float>();
+                if (t.contains("fire_range"))       cfg.fireRange     = t["fire_range"].get<float>();
                 _tankConfigs[name] = cfg;
             }
         }
@@ -111,6 +136,25 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
                 cfg.offsetX = 0.f;
                 cfg.offsetY = cfg.extentY;
                 cfg.offsetZ = 0.f;
+            }
+            if (t.contains("weapon_type")) {
+                cfg.weaponType = t["weapon_type"].get<int>();
+            }
+            if (t.contains("turret_offset")) {
+                cfg.turretOffset = {
+                    t["turret_offset"]["x"].get<float>(),
+                    t["turret_offset"]["y"].get<float>(),
+                    t["turret_offset"]["z"].get<float>()
+                };
+            }
+            if (t.contains("barrel_offsets")) {
+                for (const auto& bo : t["barrel_offsets"]) {
+                    cfg.barrelOffsets.push_back({
+                        bo["x"].get<float>(),
+                        bo["y"].get<float>(),
+                        bo["z"].get<float>()
+                    });
+                }
             }
             _tankConfigs["BULLDOG"] = cfg;
         }

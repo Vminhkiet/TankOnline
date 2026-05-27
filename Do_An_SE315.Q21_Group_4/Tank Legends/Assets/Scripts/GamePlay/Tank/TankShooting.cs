@@ -10,6 +10,10 @@ namespace Complete
     /// </summary>
     public class TankShooting : MonoBehaviour
     {
+        [Header("Tank Definition Link")]
+        [Tooltip("Optional TankDefinition ScriptableObject to dynamically override fire rate and bullet damage.")]
+        public TankDefinitionSO m_Definition;
+
         public int m_PlayerNumber = 1;              // Used to identify the different players.
         public Rigidbody m_Shell;                   // Prefab of the shell.
         public Transform m_FireTransform;           // A child of the tank where the shells are spawned (legacy fallback).
@@ -40,8 +44,11 @@ namespace Complete
         [Header("Shooting Style")]
         public bool m_HoldToCharge = false;         // If true, holding the fire button/joystick charges up the shot. If false, it fires instantly at max rate.
 
+        public bool m_IsLocalPlayer = true;         // Flag to distinguish between local and remote tanks
 
         private TankAnimation m_TankAnimation;      // Reference to the external TankAnimation component.
+        private Vector3 m_RemoteTargetDir;          // Target direction for remote turret
+        private float m_RemoteAimTimer = 0f;        // Timer for remote aiming
 
         private string m_FireButton;                // The input axis that is used for launching shells.
         private float m_CurrentLaunchForce;         // The force that will be given to the shell when the fire button is released.
@@ -76,12 +83,17 @@ namespace Complete
 
         private void OnEnable()
         {
+            if (m_Definition != null)
+            {
+                m_FireRate = m_Definition.RealStats.FireRate;
+            }
+
             // When the tank is turned on, reset the launch force and the UI
             m_CurrentLaunchForce = m_MinLaunchForce;
             if (m_AimSlider != null)
             {
                 m_AimSlider.value = m_MinLaunchForce;
-                m_AimSlider.gameObject.SetActive(m_ShowAimSlider);
+                m_AimSlider.gameObject.SetActive(m_ShowAimSlider && m_IsLocalPlayer);
             }
             m_FireCooldownTimer = 0f;
         }
@@ -97,13 +109,32 @@ namespace Complete
 
             if (m_AimSlider != null)
             {
-                m_AimSlider.gameObject.SetActive(m_ShowAimSlider);
+                m_AimSlider.gameObject.SetActive(m_ShowAimSlider && m_IsLocalPlayer);
             }
         }
 
 
         private void Update ()
         {
+            if (!m_IsLocalPlayer)
+            {
+                if (m_TankHead != null && m_FireTransform != null)
+                {
+                    Vector3 targetDir = transform.forward;
+                    if (m_RemoteAimTimer > 0f)
+                    {
+                        targetDir = m_RemoteTargetDir;
+                        m_RemoteAimTimer -= Time.deltaTime;
+                    }
+
+                    // Smoothly rotate the turret bone in world space
+                    Quaternion targetMuzzleRot = Quaternion.LookRotation(targetDir, transform.up);
+                    Quaternion targetTurretRot = targetMuzzleRot * Quaternion.Inverse(m_TurretToMuzzleOffset);
+                    m_TankHead.rotation = Quaternion.RotateTowards(m_TankHead.rotation, targetTurretRot, 500f * Time.deltaTime);
+                }
+                return;
+            }
+
             bool fireDown;
             bool fireHeld;
             bool fireUp;
@@ -250,7 +281,20 @@ namespace Complete
 
             var net = TankNetClient.Instance;
             if (net != null && net.IsConnected)
-                net.RequestShoot(m_CurrentLaunchForce);
+            {
+                float turretYaw = transform.eulerAngles.y * Mathf.Deg2Rad;
+                if (m_FireTransforms != null && m_FireTransforms.Length > 0 && m_FireTransforms[0] != null)
+                {
+                    turretYaw = m_FireTransforms[0].eulerAngles.y * Mathf.Deg2Rad;
+                }
+                else if (m_TankHead != null)
+                {
+                    turretYaw = m_TankHead.eulerAngles.y * Mathf.Deg2Rad;
+                }
+                
+                byte barrelCount = (byte)(m_FireTransforms != null && m_FireTransforms.Length > 0 ? m_FireTransforms.Length : 1);
+                net.RequestShoot(m_CurrentLaunchForce, turretYaw, barrelCount);
+            }
 
             // Spawn shells from all muzzles
             if (m_FireTransforms != null && m_FireTransforms.Length > 0)
@@ -268,6 +312,10 @@ namespace Complete
                     if (shell != null)
                     {
                         shell.m_Owner = gameObject;
+                        if (m_Definition != null)
+                        {
+                            shell.m_MaxDamage = m_Definition.RealStats.Damage;
+                        }
                         if (m_HoldToCharge)
                         {
                             float chargeRatio = m_CurrentLaunchForce / m_MaxLaunchForce;
@@ -291,6 +339,79 @@ namespace Complete
 
             // Reset the launch force.  This is a precaution in case of missing button events.
             m_CurrentLaunchForce = m_MinLaunchForce;
+        }
+
+        public void PlayRemoteShoot(Vector3 bulletForward)
+        {
+            // Note: We no longer set m_RemoteTargetDir here because bulletForward 
+            // calculated from (spawnPos - tankCenter) is incorrect for multi-barrel tanks.
+            // m_RemoteTargetDir is now perfectly set in RemoteFire using the exact yaw.
+
+            // Play shooting audio (if not already playing to prevent double audio for multi-barrel shots)
+            if (m_ShootingAudio != null && m_FireClip != null)
+            {
+                if (!m_ShootingAudio.isPlaying || m_ShootingAudio.time > 0.1f)
+                {
+                    m_ShootingAudio.clip = m_FireClip;
+                    m_ShootingAudio.Play();
+                }
+            }
+        }
+        public void RemoteFire(float yaw, int barrelIndex, byte weaponType = 0)
+        {
+            if (m_TankHead != null)
+            {
+                m_RemoteTargetDir = new Vector3(Mathf.Sin(yaw), 0, Mathf.Cos(yaw));
+                m_RemoteAimTimer = 1.0f;
+            }
+
+            if (m_ShootingAudio != null && m_FireClip != null)
+            {
+                if (!m_ShootingAudio.isPlaying || m_ShootingAudio.time > 0.1f)
+                {
+                    m_ShootingAudio.clip = m_FireClip;
+                    m_ShootingAudio.Play();
+                }
+            }
+
+            // Play the recoil/shoot animation for remote tanks (only for hitscan, since projectiles handle it in GameManager.UpdateRemoteBullets)
+            if (weaponType == 1)
+            {
+                var anim = GetComponent<TankAnimation>();
+                if (anim != null)
+                {
+                    anim.PlayRemoteShoot();
+                }
+            }
+
+            // For hitscan weapons (weaponType == 1), spawn cosmetic shell locally since the server doesn't spawn a Bullet entity
+            if (weaponType == 1 && m_Shell != null && m_FireTransforms != null && barrelIndex < m_FireTransforms.Length)
+            {
+                Transform muzzle = m_FireTransforms[barrelIndex];
+                if (muzzle != null)
+                {
+                    Rigidbody shellInstance = Instantiate(m_Shell, muzzle.position, muzzle.rotation) as Rigidbody;
+
+                    // Disable local damage and collision for remote cosmetic shell
+                    ShellExplosion shell = shellInstance.GetComponent<ShellExplosion>();
+                    if (shell != null)
+                    {
+                        shell.enabled = false;
+                    }
+                    Collider col = shellInstance.GetComponent<Collider>();
+                    if (col != null)
+                    {
+                        col.enabled = false;
+                    }
+
+                    Vector3 fireDir = muzzle.forward;
+                    fireDir.y = 0f;
+                    fireDir.Normalize();
+                    shellInstance.velocity = m_MaxLaunchForce * fireDir;
+
+                    Destroy(shellInstance.gameObject, 2.0f);
+                }
+            }
         }
     }
 }

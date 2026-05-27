@@ -19,6 +19,8 @@ public:
     bool     isAlive  = true;
     bool     wantsShoot      = false; // set true by processInput when shoot pressed
     float    wantsShootForce = 20.f;  // bullet speed (m/s) for next shot
+    float    wantsShootYaw   = 0.f;   // actual aiming yaw of the turret
+    uint8_t  wantsShootBarrels = 1;   // number of barrels
     float    shootFreezeTimer = 0.f;  // timer tracking freeze duration
 
     ClientInput lastInput; // last received input — reapplied every tick

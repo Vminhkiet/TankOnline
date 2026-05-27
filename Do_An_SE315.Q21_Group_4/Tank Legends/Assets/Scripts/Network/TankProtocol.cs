@@ -5,12 +5,19 @@ namespace TankNet
 {
     public enum Opcode : ushort
     {
-        C2S_LOGIN    = 1000,
-        C2S_MOVE     = 1001,
-        C2S_SHOOT       = 1002,
-        S2C_SNAPSHOT    = 2000,
+        C2S_LOGIN        = 1000,
+        C2S_MOVE         = 1001,
+        C2S_SHOOT        = 1002,
+        C2S_PING         = 1003,
+
+        S2C_SNAPSHOT     = 2000,
+        S2C_STATE_SYNC   = 2001,
+        S2C_EVENT_SPAWN  = 2002,
+        S2C_EVENT_HIT    = 2003,
         S2C_MATCH_END    = 2004,
         S2C_FORCE_LOGOUT = 2005,
+        S2C_EVENT_SHOOT  = 2006,
+        S2C_PONG         = 2007,
     }
 
     // Must match server NetworkConstants.h exactly
@@ -98,6 +105,29 @@ namespace TankNet
         public byte   playerCount;
     }
 
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct PongHeader
+    {
+        public uint   matchId;
+        public ushort opcode;       // = 2007
+        public uint   clientTimeMs;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct EventShootPacket
+    {
+        public uint   matchId;
+        public ushort opcode;       // = 2006
+        public uint   shooterId;
+        public byte   weaponType;   // 0 = Projectile, 1 = Hitscan
+        public byte   barrelCount;
+        public float  turretYaw;
+        public uint   hitTankId;    // 0 if no hit or projectile
+        public float  hitX;
+        public float  hitY;
+        public float  hitZ;
+    }
+
     [StructLayout(LayoutKind.Sequential, Pack = 1, CharSet = CharSet.Ansi)]
     public struct MatchEndPlayer
     {
@@ -155,14 +185,29 @@ namespace TankNet
             return w.ToBytes();
         }
 
-        public static byte[] BuildShoot(uint matchId, int launchForce = 20,
-                                        uint playerId = 0, byte seq = 0)
+        public static byte[] BuildShoot(uint matchId, int launchForce, float turretYaw = 0f, byte barrelCount = 1, uint playerId = 0, byte seq = 0)
         {
             var w = new BitWriter(8);
-            WriteHeader(w, Opcode.C2S_SHOOT, matchId, 8, playerId, seq);
+            WriteHeader(w, Opcode.C2S_SHOOT, matchId, 12, playerId, seq);
             int force = System.Math.Max(NetConst.FORCE_MIN,
                         System.Math.Min(NetConst.FORCE_MAX, launchForce));
             w.WriteInt(force, NetConst.FORCE_MIN, NetConst.FORCE_MAX);
+            
+            int yawDegInt = UnityEngine.Mathf.RoundToInt(turretYaw * 180f / UnityEngine.Mathf.PI);
+            yawDegInt = (yawDegInt % 360 + 360) % 360;
+            if (yawDegInt > 180) yawDegInt -= 360;
+            yawDegInt = UnityEngine.Mathf.Clamp(yawDegInt, -180, 180);
+            w.WriteInt(yawDegInt, -180, 180);
+
+            w.WriteInt(UnityEngine.Mathf.Clamp(barrelCount, 1, 10), 1, 10);
+            return w.ToBytes();
+        }
+
+        public static byte[] BuildPing(uint matchId, uint clientTimeMs, uint playerId = 0)
+        {
+            var w = new BitWriter(12);
+            WriteHeader(w, Opcode.C2S_PING, matchId, 16, playerId, 0, 0); // 16 bytes limit
+            w.WriteInt((int)clientTimeMs, 0, unchecked((int)0xFFFFFFFF));
             return w.ToBytes();
         }
     }
