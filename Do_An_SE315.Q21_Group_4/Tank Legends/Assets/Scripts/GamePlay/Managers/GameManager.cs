@@ -201,7 +201,7 @@ namespace Complete
                     Vector3 newPos = kvp.Value.transform.position;
 
                     // Sync animation chạy bằng cách đo khoảng cách dịch chuyển
-                    bool isMoving = Vector3.Distance(oldPos, newPos) > 0.001f;
+                    bool isMoving = Vector3.Distance(oldPos, newPos) > 0.01f;
                     var anim = kvp.Value.GetComponent<TankAnimation>();
                     if (anim != null) anim.SetMoving(isMoving);
                 }
@@ -853,18 +853,12 @@ namespace Complete
             bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
             var rb0 = go.GetComponent<Rigidbody>();
 
-            // Always sync Y if using custom online physics (client has no terrain height simulation).
-            if (customPhysics)
+            // Sync Y: truyền Y mục tiêu cho TankMovement để áp dụng trong FixedUpdate
+            // (KHÔNG ghi đè rb.position trực tiếp ở Update — sẽ phá vỡ Rigidbody Interpolation)
+            if (customPhysics && tm != null)
             {
-                if (rb0 != null)
-                {
-                    var p = rb0.position; p.y = serverPos.y; rb0.position = p;
-                }
-                else
-                {
-                    var pos = go.transform.position; pos.y = serverPos.y;
-                    go.transform.position = pos;
-                }
+                tm.m_NetworkTargetY = serverPos.y;
+                tm.m_HasNetworkTargetY = true;
             }
 
             // XZ error = khoảng cách giữa client prediction và server position.
@@ -879,9 +873,26 @@ namespace Complete
             const float HARD_THRESHOLD = 4.0f;
             const float LERP_SPEED     = 5.0f;  // units/s correction khi lỗi vừa
 
+            // Bù trừ độ trễ Ping (Latency compensation) cho vị trí
+            float pingSec = TankNetClient.Instance != null && TankNetClient.Instance.PingMs > 0 
+                            ? TankNetClient.Instance.PingMs / 1000f : 0f;
+            
+            Vector3 expectedServerPos = serverPos;
+            if (tm != null && pingSec > 0f)
+            {
+                // Ước tính vị trí thực sự của server hiện tại dựa trên input đang giữ
+                float mz = Input.GetAxis("Vertical" + m_Tanks[0].m_PlayerNumber);
+                if (Mathf.Abs(mz) > 0.1f) mz = mz > 0 ? 1 : -1;
+                else mz = 0;
+                expectedServerPos += go.transform.forward * mz * tm.m_Speed * (pingSec / 2f);
+            }
+
             float xzErr = new Vector2(
-                go.transform.position.x - serverPos.x,
-                go.transform.position.z - serverPos.z).magnitude;
+                go.transform.position.x - expectedServerPos.x,
+                go.transform.position.z - expectedServerPos.z).magnitude;
+
+            // Xử lý góc quay: nội suy nhẹ về góc quay của Server (Server là nguồn chân lý)
+            float angleErr = Quaternion.Angle(go.transform.rotation, serverRot);
 
             if (xzErr > HARD_THRESHOLD)
             {
@@ -889,7 +900,7 @@ namespace Complete
                 var rb = go.GetComponent<Rigidbody>();
                 if (rb != null)
                 {
-                    rb.position = serverPos;
+                    rb.position = serverPos; // Hard snap thì dùng position luôn cũng được
                     if (!rb.isKinematic)
                     {
                         rb.velocity = Vector3.zero;
@@ -898,18 +909,22 @@ namespace Complete
                 }
                 else go.transform.position = serverPos;
                 go.transform.rotation = serverRot;
+                
+                if (tm != null) tm.m_HasNetworkCorrection = false;
             }
-            else if (xzErr > SOFT_THRESHOLD)
+            else if (xzErr > SOFT_THRESHOLD || angleErr > 1f)
             {
-                // Lỗi vừa: drift từ latency/timer spike — lerp nhẹ, không gây teleport
-                var rb = go.GetComponent<Rigidbody>();
-                float step = LERP_SPEED * Time.deltaTime;
-                Vector3 corrected = Vector3.MoveTowards(
-                    go.transform.position,
-                    new Vector3(serverPos.x, go.transform.position.y, serverPos.z),
-                    step);
-                if (rb != null) rb.position = corrected;
-                else go.transform.position = corrected;
+                // Truyền vị trí/góc quay kỳ vọng cho TankMovement để nó tự nội suy mượt trong FixedUpdate
+                if (tm != null)
+                {
+                    tm.m_HasNetworkCorrection = true;
+                    tm.m_NetworkTargetPosition = expectedServerPos;
+                    tm.m_NetworkTargetRotation = serverRot;
+                }
+            }
+            else
+            {
+                if (tm != null) tm.m_HasNetworkCorrection = false;
             }
 
             // Sync health bar and trigger death sequence when server reports dead
@@ -948,7 +963,12 @@ namespace Complete
                 _remoteTanks[ts.tankId] = go;
 
                 var remoteRb = go.GetComponent<Rigidbody>();
-                if (remoteRb != null) { remoteRb.isKinematic = true; remoteRb.useGravity = false; }
+                if (remoteRb != null) 
+                { 
+                    remoteRb.isKinematic = true; 
+                    remoteRb.useGravity = false;
+                    remoteRb.interpolation = RigidbodyInterpolation.None;
+                }
 
                 AddBulletHitTrigger(go);
                 

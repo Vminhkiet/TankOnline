@@ -25,29 +25,48 @@ public class TestConnectionToggler : MonoBehaviour
             buttonLabelText = GetComponentInChildren<TMP_Text>();
     }
 
+    private bool isSearching = false;
+
     private void Start()
     {
         UpdateUI();
     }
 
+    private void Update()
+    {
+        if (isSearching && !ServerDiscovery.IsSearching)
+        {
+            isSearching = false;
+            UpdateUI();
+            Debug.Log($"[Test Mode] Auto-discovery finished. Cổng kết nối hiện tại: {GameApiClient.BaseUrl}");
+        }
+    }
+
     private void ToggleConnection()
     {
+        if (isSearching) return; // Đang tìm thì không cho ấn liên tục
+
         // Đọc mode hiện tại
-        string currentMode = PlayerPrefs.GetString(GameApiClient.ConnectionModePrefKey, "localhost");
+        string currentMode = PlayerPrefs.GetString(GameApiClient.ConnectionModePrefKey, "lan_auto");
         
-        // Đổi chế độ
-        string newMode = (currentMode == "lan") ? "localhost" : "lan";
+        // Đổi chế độ: nếu đang là lan_auto hoặc lan thủ công, về localhost. Ngược lại lên lan_auto.
+        string newMode = (currentMode == "lan_auto" || currentMode == "lan") ? "localhost" : "lan_auto";
         
         // Lưu lại cấu hình mới
         PlayerPrefs.SetString(GameApiClient.ConnectionModePrefKey, newMode);
         PlayerPrefs.Save();
 
+        if (newMode == "lan_auto")
+        {
+            isSearching = true;
+            ServerDiscovery.DiscoverAsync();
+        }
+
         // Cập nhật giao diện
         UpdateUI();
 
         // Ghi log để tester biết
-        string currentUrl = GameApiClient.BaseUrl;
-        Debug.Log($"[Test Mode] Đã đổi cổng kết nối thành: {newMode.ToUpper()} ({currentUrl})");
+        Debug.Log($"[Test Mode] Đã đổi mode thành: {newMode.ToUpper()}");
     }
 
     private void UpdateUI()
@@ -55,10 +74,19 @@ public class TestConnectionToggler : MonoBehaviour
         if (buttonLabelText == null)
             return;
 
-        string currentMode = PlayerPrefs.GetString(GameApiClient.ConnectionModePrefKey, "localhost");
-        string displayModeName = (currentMode == "lan") ? "LAN" : "LOCALHOST";
+        string currentMode = PlayerPrefs.GetString(GameApiClient.ConnectionModePrefKey, "lan_auto");
+        
+        if (isSearching)
+        {
+            buttonLabelText.text = $"{prefixLabel}TÌM SERVER...";
+            buttonLabelText.color = Color.yellow;
+            return;
+        }
+
+        string displayModeName = (currentMode == "lan_auto" || currentMode == "lan") ? "LAN (AUTO)" : "LOCALHOST";
         string currentUrl = GameApiClient.BaseUrl;
         
+        buttonLabelText.color = Color.white;
         buttonLabelText.text = $"{prefixLabel}{displayModeName}\n({currentUrl})";
     }
 
