@@ -132,6 +132,7 @@ void NetworkManager::handleReader(IoContext* ctx, DWORD lengthBuf) {
     cmd.matchId  = hdr.matchId;
     cmd.op       = hdr.opcode;
     cmd.rawBuffer.assign(ctx->buffer, ctx->buffer + lengthBuf);
+    cmd.recvTime = t_parse_start;
 
     postReceive(ctx);
 

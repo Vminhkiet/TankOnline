@@ -23,6 +23,11 @@ namespace Complete
 
         private void OnTriggerEnter (Collider other)
         {
+            // Prevent the shell from exploding if it hits the tank that fired it
+            if (m_Owner != null && (other.gameObject == m_Owner || other.transform.IsChildOf(m_Owner.transform)))
+            {
+                return;
+            }
             // In online mode damage is server-authoritative — skip local damage to avoid
             // health bar flickering before the next snapshot corrects the value.
             bool online = TankNet.TankNetClient.Instance != null;

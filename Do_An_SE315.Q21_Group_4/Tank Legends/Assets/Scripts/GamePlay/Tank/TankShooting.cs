@@ -62,11 +62,28 @@ namespace Complete
         private void SetHitscanVisualsActive(bool active)
         {
             if (m_FireTransforms == null) return;
+            bool stateChanged = false;
             for (int i = 0; i < m_FireTransforms.Length; i++)
             {
                 if (m_FireTransforms[i] != null && m_FireTransforms[i].gameObject.activeSelf != active)
                 {
                     m_FireTransforms[i].gameObject.SetActive(active);
+                    stateChanged = true;
+                }
+            }
+
+            if (stateChanged && m_ShootingAudio != null && m_FireClip != null)
+            {
+                if (active)
+                {
+                    m_ShootingAudio.clip = m_FireClip;
+                    m_ShootingAudio.loop = true;
+                    if (!m_ShootingAudio.isPlaying) m_ShootingAudio.Play();
+                }
+                else
+                {
+                    m_ShootingAudio.loop = false;
+                    m_ShootingAudio.Stop();
                 }
             }
         }
@@ -137,21 +154,6 @@ namespace Complete
         {
             if (!m_IsLocalPlayer)
             {
-                if (m_TankHead != null && m_FireTransform != null)
-                {
-                    Vector3 targetDir = transform.forward;
-                    if (m_RemoteAimTimer > 0f)
-                    {
-                        targetDir = m_RemoteTargetDir;
-                        m_RemoteAimTimer -= Time.deltaTime;
-                    }
-
-                    // Smoothly rotate the turret bone in world space
-                    Quaternion targetMuzzleRot = Quaternion.LookRotation(targetDir, transform.up);
-                    Quaternion targetTurretRot = targetMuzzleRot * Quaternion.Inverse(m_TurretToMuzzleOffset);
-                    m_TankHead.rotation = Quaternion.RotateTowards(m_TankHead.rotation, targetTurretRot, 500f * Time.deltaTime);
-                }
-
                 if (m_HitscanVisualTimer > 0f)
                 {
                     m_HitscanVisualTimer -= Time.deltaTime;
@@ -365,8 +367,8 @@ namespace Complete
                 }
             }
 
-            // Change the clip to the firing clip and play it.
-            if (m_ShootingAudio != null && m_FireClip != null)
+            // Change the clip to the firing clip and play it (for non-hitscan weapons).
+            if (!isHitscan && m_ShootingAudio != null && m_FireClip != null)
             {
                 m_ShootingAudio.clip = m_FireClip;
                 m_ShootingAudio.Play ();
@@ -400,7 +402,7 @@ namespace Complete
                 m_RemoteAimTimer = 1.0f;
             }
 
-            if (m_ShootingAudio != null && m_FireClip != null)
+            if (weaponType != 1 && m_ShootingAudio != null && m_FireClip != null)
             {
                 if (!m_ShootingAudio.isPlaying || m_ShootingAudio.time > 0.1f)
                 {
@@ -423,7 +425,34 @@ namespace Complete
             if (weaponType == 1)
             {
                 SetHitscanVisualsActive(true);
-                m_HitscanVisualTimer = 0.2f; // Turn off after 200ms
+                // Dynamically bridge the gap between continuous fire packets (+0.15s buffer for latency jitter)
+                float expectedGap = (m_FireRate > 0f) ? (1f / m_FireRate) : 0.2f;
+                m_HitscanVisualTimer = expectedGap + 0.15f; 
+            }
+        }
+
+        public float GetCurrentTurretYaw()
+        {
+            float turretYaw = transform.eulerAngles.y * Mathf.Deg2Rad;
+            if (m_FireTransforms != null && m_FireTransforms.Length > 0 && m_FireTransforms[0] != null)
+            {
+                turretYaw = m_FireTransforms[0].eulerAngles.y * Mathf.Deg2Rad;
+            }
+            else if (m_TankHead != null)
+            {
+                turretYaw = m_TankHead.eulerAngles.y * Mathf.Deg2Rad;
+            }
+            return turretYaw;
+        }
+
+        public void SetRemoteTurretYaw(float yaw)
+        {
+            if (m_TankHead != null)
+            {
+                Vector3 targetDir = new Vector3(Mathf.Sin(yaw), 0, Mathf.Cos(yaw));
+                Quaternion targetMuzzleRot = Quaternion.LookRotation(targetDir, transform.up);
+                Quaternion targetTurretRot = targetMuzzleRot * Quaternion.Inverse(m_TurretToMuzzleOffset);
+                m_TankHead.rotation = targetTurretRot;
             }
         }
     }

@@ -50,10 +50,11 @@ namespace TankNet
         private bool       _running;
         private byte       _seq;
 
-        // Pending input (set from main thread, sent on tick)
-        private int   _pendingMoveX;
-        private int   _pendingMoveZ;
-        private bool  _pendingShoot;
+        // Pending input        // State variables sent every tick
+        private int _pendingMoveX = 0;
+        private int _pendingMoveZ = 0;
+        private float _pendingTurretYaw = 0f;
+        private bool _pendingShoot = false;
         private float _pendingShootForce = 20f;
 
         // ── Unity lifecycle ───────────────────────────────────────────────────
@@ -160,20 +161,22 @@ namespace TankNet
         }
 
         // Call from player input (main thread safe — just sets flags)
-        public void SetMove(int moveX, int moveZ)
+        public void SetMove(int moveX, int moveZ, float turretYaw = 0f)
         {
             _pendingMoveX = Mathf.Clamp(moveX, -1, 1);
             _pendingMoveZ = Mathf.Clamp(moveZ, -1, 1);
+            _pendingTurretYaw = turretYaw;
         }
 
         // Send input immediately from FixedUpdate — keeps server in sync with client prediction
-        public void SendMoveNow(int moveX, int moveZ)
+        public void SendMoveNow(int moveX, int moveZ, float turretYaw = 0f)
         {
             if (!_running) return;
             // Keep pending in sync so SendTick (heartbeat/shoot) doesn't override with (0,0)
             _pendingMoveX = Mathf.Clamp(moveX, -1, 1);
             _pendingMoveZ = Mathf.Clamp(moveZ, -1, 1);
-            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, PlayerId, _seq++);
+            _pendingTurretYaw = turretYaw;
+            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, PlayerId, _seq++);
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
         }
 
@@ -202,7 +205,7 @@ namespace TankNet
                     try { _udp.Send(pingPkt, pingPkt.Length, _server); } catch { }
                 }
 
-                byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, PlayerId, _seq++);
+                byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, PlayerId, _seq++);
                 int sent = _udp.Send(pkt, pkt.Length, _server);
                 
              /*   if (_seq % 20 == 0) // Log once per second

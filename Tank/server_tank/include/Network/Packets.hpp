@@ -48,12 +48,20 @@ struct PacketMovement {
     uint8_t dirX  = 1;   // 0=left, 1=none, 2=right
     uint8_t dirZ  = 1;   // 0=back, 1=none, 2=forward
     uint8_t speed = 0;
+    float   turretYaw = 0.f; // synced turret rotation
 
     template<typename Stream>
     bool Serialize(Stream& stream) {
         serialize_int(stream, dirX,  NetConst::DIR_X_MIN, NetConst::DIR_X_MAX);
         serialize_int(stream, dirZ,  NetConst::DIR_Y_MIN, NetConst::DIR_Y_MAX);
         serialize_int(stream, speed, NetConst::SPEED_MIN, NetConst::SPEED_MAX);
+        
+        int32_t yawDegInt = static_cast<int32_t>(turretYaw * 180.f / 3.14159265f);
+        serialize_int(stream, yawDegInt, -180, 180);
+        if constexpr (Stream::IsReading) {
+            turretYaw = static_cast<float>(yawDegInt) * 3.14159265f / 180.f;
+        }
+        
         return true;
     }
 
@@ -61,6 +69,7 @@ struct PacketMovement {
         ClientInput ci;
         ci.moveX = static_cast<int8_t>(dirX) - 1;
         ci.moveZ = static_cast<int8_t>(dirZ) - 1;
+        ci.turretYaw = turretYaw;
         ci.seq   = s;
         return ci;
     }
@@ -101,6 +110,7 @@ struct TankState {
     uint32_t tankId = 0;
     float    x = 0.f, y = 0.f, z = 0.f;
     float    yaw    = 0.f;
+    float    turretYaw = 0.f;
     int16_t  health = 100;
     uint8_t  flags  = 0;   // bit0 = isAlive
     uint16_t score  = 0;

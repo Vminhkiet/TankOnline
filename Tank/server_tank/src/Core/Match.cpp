@@ -248,6 +248,7 @@ void Match::tick(float dt) {
 // ────────────────────────────────────────────────────────────────────────────
 
 void Match::handlePing(GameCommand& cmd) {
+
     if (cmd.rawBuffer.empty()) return;
     ReadStream rs(reinterpret_cast<const uint32_t*>(cmd.rawBuffer.data()), static_cast<int>(cmd.rawBuffer.size()));
     PacketHeader hdr;
@@ -255,6 +256,16 @@ void Match::handlePing(GameCommand& cmd) {
 
     PacketPing ping;
     if (!ping.Serialize(rs)) return;
+
+    // Calculate queue processing delay (server internal lag)
+    auto now = std::chrono::high_resolution_clock::now();
+    double queueDelayMs = std::chrono::duration<double, std::milli>(now - cmd.recvTime).count();
+
+    uint32_t pid = 0;
+    resolvePlayer(cmd.sender, pid);
+
+    // Log the internal processing delay so we know if the server is lagging internally
+    LOG_INFO("Match {}: Processed PING from Player {}. Server internal queue delay: {:.3f} ms", _config.matchId, pid, queueDelayMs);
 
     PacketPong pong;
     pong.matchId = _config.matchId;

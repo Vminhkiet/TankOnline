@@ -460,6 +460,7 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
         t.y      = tank.position.y;
         t.z      = tank.position.z;
         t.yaw    = tank.yaw;
+        t.turretYaw = tank.turretYaw;
         t.health = static_cast<int16_t>(tank.health);
         t.flags  = tank.isAlive ? 1u : 0u;
 

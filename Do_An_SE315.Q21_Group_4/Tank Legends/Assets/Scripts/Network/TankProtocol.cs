@@ -50,6 +50,7 @@ namespace TankNet
         public uint  tankId;
         public float x, y, z;
         public float yaw;
+        public float turretYaw;
         public short health;
         public byte  flags;          // bit0 = isAlive, bit1 = inBush
         public ushort score;
@@ -174,7 +175,7 @@ namespace TankNet
             return w.ToBytes();
         }
 
-        public static byte[] BuildMove(uint matchId, int moveX, int moveZ,
+        public static byte[] BuildMove(uint matchId, int moveX, int moveZ, float turretYaw,
                                        uint playerId = 0, byte seq = 0, ushort tick = 0)
         {
             var w = new BitWriter(8);
@@ -182,6 +183,13 @@ namespace TankNet
             w.WriteInt(moveX + 1, NetConst.DIR_MIN,   NetConst.DIR_MAX);
             w.WriteInt(moveZ + 1, NetConst.DIR_MIN,   NetConst.DIR_MAX);
             w.WriteInt(0,         NetConst.SPEED_MIN,  NetConst.SPEED_MAX);
+            
+            int yawDegInt = UnityEngine.Mathf.RoundToInt(turretYaw * 180f / UnityEngine.Mathf.PI);
+            yawDegInt = (yawDegInt % 360 + 360) % 360;
+            if (yawDegInt > 180) yawDegInt -= 360;
+            yawDegInt = UnityEngine.Mathf.Clamp(yawDegInt, -180, 180);
+            w.WriteInt(yawDegInt, -180, 180);
+            
             return w.ToBytes();
         }
 

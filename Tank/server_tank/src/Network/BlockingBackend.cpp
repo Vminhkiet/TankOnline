@@ -133,6 +133,7 @@ void BlockingBackend::recvLoop() {
         cmd.matchId   = hdr.matchId;
         cmd.op        = hdr.opcode;
         cmd.rawBuffer.assign(ctx->buffer, ctx->buffer + n);
+        cmd.recvTime  = t_parse_start;
 
         _pool.release(ctx);
 
