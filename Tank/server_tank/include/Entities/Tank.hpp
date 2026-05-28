@@ -13,6 +13,7 @@ public:
     
     Vector3  position;    // bottom-center of capsule
     float    yaw = 0.f;   // rotation around Y axis (radians)
+    float    turretYaw = 0.f; // rotation of the turret (radians)
     Vector3  velocity;    // world-space velocity (set from input each tick)
     float    velocityY = 0.f; // vertical velocity (gravity)
     int      health;

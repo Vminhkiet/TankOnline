@@ -12,6 +12,7 @@ void Tank::processInput(const ClientInput& input)
 {
     if (!isAlive) return;
     lastInput = input;
+    turretYaw = input.turretYaw;
     if (input.shoot) {
         wantsShoot        = true;
         wantsShootForce   = input.launchForce;

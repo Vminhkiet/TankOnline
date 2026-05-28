@@ -49,8 +49,14 @@ public class TestConnectionToggler : MonoBehaviour
         // Đọc mode hiện tại
         string currentMode = PlayerPrefs.GetString(GameApiClient.ConnectionModePrefKey, "lan_auto");
         
-        // Đổi chế độ: nếu đang là lan_auto hoặc lan thủ công, về localhost. Ngược lại lên lan_auto.
-        string newMode = (currentMode == "lan_auto" || currentMode == "lan") ? "localhost" : "lan_auto";
+        // Đổi chế độ: lan_auto -> localhost -> lan_manual -> lan_auto
+        string newMode;
+        if (currentMode == "lan_auto")
+            newMode = "localhost";
+        else if (currentMode == "localhost")
+            newMode = "lan_manual";
+        else
+            newMode = "lan_auto";
         
         // Lưu lại cấu hình mới
         PlayerPrefs.SetString(GameApiClient.ConnectionModePrefKey, newMode);
@@ -83,10 +89,33 @@ public class TestConnectionToggler : MonoBehaviour
             return;
         }
 
-        string displayModeName = (currentMode == "lan_auto" || currentMode == "lan") ? "LAN (AUTO)" : "LOCALHOST";
+        string displayModeName = "";
         string currentUrl = GameApiClient.BaseUrl;
         
-        buttonLabelText.color = Color.white;
+        if (currentMode == "lan_auto")
+        {
+            displayModeName = "LAN (AUTO)";
+            if (currentUrl == "http://not-found")
+            {
+                currentUrl = "Không tìm thấy";
+                buttonLabelText.color = Color.red;
+            }
+            else
+            {
+                buttonLabelText.color = Color.green;
+            }
+        }
+        else if (currentMode == "lan_manual")
+        {
+            displayModeName = "LAN (MANUAL)";
+            buttonLabelText.color = new Color(1f, 0.6f, 0f); // Orange
+        }
+        else
+        {
+            displayModeName = "LOCALHOST";
+            buttonLabelText.color = Color.cyan;
+        }
+        
         buttonLabelText.text = $"{prefixLabel}{displayModeName}\n({currentUrl})";
     }
 

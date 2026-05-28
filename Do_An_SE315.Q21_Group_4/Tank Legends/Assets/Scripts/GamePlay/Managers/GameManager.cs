@@ -58,6 +58,18 @@ namespace Complete
         public UnityEngine.UI.Image specialAbilityIcon;
         public TextMeshProUGUI pingText;
 
+        [Header("Cinematic Intro")]
+        public float cinematicPhase1Duration = 1.5f;
+        public float cinematicPhase2Duration = 1.5f;
+        public float cinematicPhase3Duration = 1.5f;
+        public Vector3 cinematicFrontOffset = new Vector3(0, 2f, 5f);
+        public Vector3 cinematicBackOffset = new Vector3(0, 3f, -4f);
+        public float cinematicSideBulge = 6f;
+        public float cinematicLookAtHeight = 1.5f;
+        public float cameraShakeDuration = 0.4f;
+        public float cameraShakeMagnitude = 0.25f;
+        public float postCinematicWait = 0.6f;
+
         private void UpdateHUDForLocalTank(GameObject localTank)
         {
             if (specialAbilityIcon == null || localTank == null) return;
@@ -88,7 +100,7 @@ namespace Complete
         private readonly Dictionary<uint, GameObject> _remoteBullets = new();
 
         // ── Snapshot interpolation ───────────────────────────────────────────
-        private struct SnapEntry { public float t; public Vector3 pos; public Quaternion rot; }
+        private struct SnapEntry { public float t; public Vector3 pos; public Quaternion rot; public float turretYaw; }
 
         // Delay behind real-time to interpolate. 2 snapshot intervals @ 60Hz = ~33ms.
         private const float INTERP_DELAY = 0.033f;
@@ -245,16 +257,41 @@ namespace Complete
                 else { next = i; break; }
             }
 
+            float currentTurretYaw = 0f;
+
             if (prev == -1)      // all entries are in the future — show oldest
-            { tr.position = buf[0].pos; tr.rotation = buf[0].rot; }
+            { 
+                tr.position = buf[0].pos; 
+                tr.rotation = buf[0].rot; 
+                currentTurretYaw = buf[0].turretYaw;
+            }
             else if (next == -1) // all entries are in the past — show newest
-            { tr.position = buf[prev].pos; tr.rotation = buf[prev].rot; }
+            { 
+                tr.position = buf[prev].pos; 
+                tr.rotation = buf[prev].rot; 
+                currentTurretYaw = buf[prev].turretYaw;
+            }
             else                 // interpolate between prev and next
             {
                 float span = buf[next].t - buf[prev].t;
                 float f    = span > 0f ? (renderTime - buf[prev].t) / span : 1f;
                 tr.position = Vector3.Lerp(buf[prev].pos, buf[next].pos, f);
                 tr.rotation = Quaternion.Slerp(buf[prev].rot, buf[next].rot, f);
+                
+                // Interpolate turret yaw safely (handling -pi to +pi wrapping)
+                float prevYaw = buf[prev].turretYaw;
+                float nextYaw = buf[next].turretYaw;
+                // Unwrap angles if difference is > PI
+                if (nextYaw - prevYaw > Mathf.PI) nextYaw -= 2f * Mathf.PI;
+                else if (prevYaw - nextYaw > Mathf.PI) nextYaw += 2f * Mathf.PI;
+                
+                currentTurretYaw = Mathf.Lerp(prevYaw, nextYaw, f);
+            }
+
+            var shooting = tr.GetComponent<Complete.TankShooting>();
+            if (shooting != null)
+            {
+                shooting.SetRemoteTurretYaw(currentTurretYaw);
             }
 
             // Trim entries older than renderTime - 0.2s (keep a small tail)
@@ -475,15 +512,157 @@ namespace Complete
             ResetAllTanks ();
             DisableTankControl ();
 
-            // Snap the camera's zoom and position to something appropriate for the reset tanks.
-            m_CameraControl.SetStartPositionAndSize ();
+            // Wait for tank to spawn (especially in online mode where it waits for server snapshot)
+            Transform targetTank = null;
+            float waitSpawnTimeout = 5f;
+            while (targetTank == null && waitSpawnTimeout > 0)
+            {
+                for (int i = 0; i < m_Tanks.Length; i++)
+                {
+                    if (m_Tanks[i].m_Instance != null && m_Tanks[i].m_Instance.activeSelf)
+                    {
+                        // In online mode, ensure we pick our local tank
+                        if (m_OnlineMode && i != 0) continue; 
+                        
+                        targetTank = m_Tanks[i].m_Instance.transform;
+                        break;
+                    }
+                }
+
+                if (targetTank == null)
+                {
+                    waitSpawnTimeout -= Time.deltaTime;
+                    yield return null;
+                }
+            }
+            
+            // Re-apply disable control in case the tank spawned AFTER we called it earlier
+            DisableTankControl ();
+
+            if (targetTank != null)
+            {
+                // Start cinematic
+                m_CameraControl.m_IsCinematicMode = true;
+                
+                Camera cam = m_CameraControl.GetComponentInChildren<Camera>();
+                Vector3 originalLocalPos = cam.transform.localPosition;
+                Quaternion originalLocalRot = cam.transform.localRotation;
+                
+                // Hide round text initially
+                m_MessageText.text = "";
+
+                // Move rig to origin to allow camera local movement
+                m_CameraControl.transform.position = Vector3.zero;
+
+                // Phase 1: Front of tank
+                float elapsed = 0f;
+                while (elapsed < cinematicPhase1Duration)
+                {
+                    elapsed += Time.deltaTime;
+                    
+                    Vector3 currentFrontPos = targetTank.position + targetTank.rotation * cinematicFrontOffset;
+                    // Interpolate smoothly towards the front pos to absorb any landing jitters
+                    cam.transform.position = Vector3.Lerp(cam.transform.position, currentFrontPos, Time.deltaTime * 10f);
+                    cam.transform.LookAt(targetTank.position + Vector3.up * cinematicLookAtHeight);
+                    
+                    yield return null;
+                }
+
+                // Phase 2: Slide to back (horizontally around the side)
+                elapsed = 0f;
+                Vector3 startPos = cam.transform.position;
+                while (elapsed < cinematicPhase2Duration)
+                {
+                    elapsed += Time.deltaTime;
+                    float t = Mathf.SmoothStep(0f, 1f, elapsed / cinematicPhase2Duration);
+                    
+                    Vector3 currentBackPos = targetTank.position + targetTank.rotation * cinematicBackOffset;
+                    Vector3 linearPos = Vector3.Lerp(startPos, currentBackPos, t);
+                    
+                    // Add sine wave offset to push camera to the side during the slide
+                    float sideOffset = Mathf.Sin(t * Mathf.PI) * cinematicSideBulge;
+                    cam.transform.position = linearPos + targetTank.right * sideOffset;
+                    
+                    Quaternion targetRot = Quaternion.LookRotation((targetTank.position + Vector3.up * cinematicLookAtHeight) - cam.transform.position);
+                    cam.transform.rotation = Quaternion.Slerp(cam.transform.rotation, targetRot, Time.deltaTime * 15f);
+                    
+                    yield return null;
+                }
+
+                // Phase 3: Fly up to top-down gameplay view
+                m_CameraControl.m_IsCinematicMode = false; 
+                m_CameraControl.SetStartPositionAndSize();
+                
+                Vector3 targetRigPos = m_CameraControl.transform.position;
+                m_CameraControl.transform.position = Vector3.zero; 
+                m_CameraControl.m_IsCinematicMode = true;
+                
+                Vector3 finalWorldPos = targetRigPos + m_CameraControl.transform.TransformVector(originalLocalPos);
+                Quaternion finalWorldRot = m_CameraControl.transform.rotation * originalLocalRot; 
+                
+                startPos = cam.transform.position;
+                Quaternion startRot = cam.transform.rotation;
+                
+                elapsed = 0f;
+                while (elapsed < cinematicPhase3Duration)
+                {
+                    elapsed += Time.deltaTime;
+                    float t = Mathf.SmoothStep(0f, 1f, elapsed / cinematicPhase3Duration);
+                    
+                    cam.transform.position = Vector3.Lerp(startPos, finalWorldPos, t);
+                    
+                    // Always calculate a look-at rotation towards the tank from current position
+                    Quaternion lockOnRot = Quaternion.LookRotation((targetTank.position + Vector3.up * cinematicLookAtHeight) - cam.transform.position);
+                    // Gradually blend from locking onto the tank to the final gameplay rotation
+                    cam.transform.rotation = Quaternion.Slerp(lockOnRot, finalWorldRot, t);
+                    
+                    yield return null;
+                }
+                
+                // End cinematic
+                m_CameraControl.transform.position = targetRigPos;
+                cam.transform.localPosition = originalLocalPos;
+                cam.transform.localRotation = originalLocalRot;
+                m_CameraControl.m_IsCinematicMode = false;
+            }
+            else
+            {
+                // Fallback if no tank
+                m_CameraControl.SetStartPositionAndSize();
+                yield return m_StartWait;
+            }
 
             // Increment the round number and display text showing the players what round it is.
             m_RoundNumber++;
             m_MessageText.text = "ROUND " + m_RoundNumber;
+            
+            // Add slight camera shake
+            StartCoroutine(CameraShake(cameraShakeDuration, cameraShakeMagnitude));
 
-            // Wait for the specified length of time until yielding control back to the game loop.
-            yield return m_StartWait;
+            // Wait a tiny bit before allowing control
+            yield return new WaitForSeconds(postCinematicWait);
+        }
+
+        private IEnumerator CameraShake(float duration, float magnitude)
+        {
+            Camera cam = m_CameraControl.GetComponentInChildren<Camera>();
+            if (cam == null) yield break;
+
+            Vector3 originalLocalPos = cam.transform.localPosition;
+
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                float x = UnityEngine.Random.Range(-1f, 1f) * magnitude;
+                float y = UnityEngine.Random.Range(-1f, 1f) * magnitude;
+
+                cam.transform.localPosition = originalLocalPos + new Vector3(x, y, 0);
+
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            cam.transform.localPosition = originalLocalPos;
         }
 
 
@@ -1034,7 +1213,8 @@ namespace Complete
             {
                 t   = Time.time,
                 pos = new Vector3(ts.x, ts.y, ts.z),
-                rot = Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0)
+                rot = Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0),
+                turretYaw = ts.turretYaw
             });
             if (buf.Count > SNAP_BUFFER) buf.RemoveAt(0);
         }

@@ -11,6 +11,9 @@ namespace Complete
         [HideInInspector] public Transform[] m_Targets; // All the targets the camera needs to encompass.
 
 
+        public bool m_IsCinematicMode = false;          // True when intro cinematic is playing to disable automatic control
+
+
         private Camera m_Camera;                        // Used for referencing the camera.
         private float m_ZoomSpeed;                      // Reference speed for the smooth damping of the orthographic size.
         private Vector3 m_MoveVelocity;                 // Reference velocity for the smooth damping of the position.
@@ -25,6 +28,8 @@ namespace Complete
 
         private void FixedUpdate ()
         {
+            if (m_IsCinematicMode) return;
+
             // Move the camera towards a desired position.
             Move ();
 

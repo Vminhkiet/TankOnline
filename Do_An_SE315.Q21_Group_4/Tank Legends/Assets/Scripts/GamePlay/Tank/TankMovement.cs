@@ -509,7 +509,12 @@ namespace Complete
         {
             var net = TankNetClient.Instance;
             if (net != null && net.IsConnected)
-                net.SetMove(moveX, moveZ);
+            {
+                float turretYaw = 0f;
+                var shooting = GetComponent<TankShooting>();
+                if (shooting != null) turretYaw = shooting.GetCurrentTurretYaw();
+                net.SetMove(moveX, moveZ, turretYaw);
+            }
         }
 
         private void SendOnlineMoveFromMobile()
@@ -518,8 +523,12 @@ namespace Complete
             if (net == null || !net.IsConnected)
                 return;
 
+            float turretYaw = 0f;
+            var shooting = GetComponent<TankShooting>();
+            if (shooting != null) turretYaw = shooting.GetCurrentTurretYaw();
+
             GetMobileDiscreteMove(out int mx, out int mz);
-            net.SendMoveNow(mx, mz);
+            net.SendMoveNow(mx, mz, turretYaw);
         }
     }
 }
