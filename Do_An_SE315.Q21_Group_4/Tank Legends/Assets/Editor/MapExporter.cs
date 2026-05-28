@@ -404,9 +404,10 @@ public class MapExporter
                         movement_speed = def.RealStats.MovementSpeed,
                         fire_rate = def.RealStats.FireRate,
                         damage = def.RealStats.Damage,
-                        fire_range = def.RealStats.FireRange
+                        fire_range = def.RealStats.FireRange,
+                        magazine_capacity = def.RealStats.MagazineCapacity,
+                        reload_time = def.RealStats.ReloadTime
                     });
-                    
                     Debug.Log($"[MapExporter] Exported Tank {def.TankName} extents: ({ex:F4}, {ey:F4}, {ez:F4}) offset: ({localCenter.x:F4}, {localCenter.y:F4}, {localCenter.z:F4}) barrels: {barrelOffsets.Count}");
                 }
             }
@@ -473,6 +474,8 @@ public class MapExporter
         public float fire_rate;
         public float damage;
         public float fire_range;
+        public int magazine_capacity;
+        public float reload_time;
     }
 
     [System.Serializable]

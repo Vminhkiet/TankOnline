@@ -7168,9 +7168,11 @@
             ],
             "max_health": 2200.0,
             "movement_speed": 8.0,
-            "fire_rate": 0.699999988079071,
+            "fire_rate": 1.4199999570846558,
             "damage": 280.0,
-            "fire_range": 15.0
+            "fire_range": 15.0,
+            "magazine_capacity": 14,
+            "reload_time": 2.200000047683716
         },
         {
             "name": "CRAB-X",
@@ -7204,9 +7206,11 @@
             ],
             "max_health": 3000.0,
             "movement_speed": 6.5,
-            "fire_rate": 1.0,
+            "fire_rate": 20.0,
             "damage": 450.0,
-            "fire_range": 20.0
+            "fire_range": 20.0,
+            "magazine_capacity": 140,
+            "reload_time": 2.0
         },
         {
             "name": "SCOUT-01",
@@ -7235,40 +7239,44 @@
             ],
             "max_health": 1400.0,
             "movement_speed": 10.5,
-            "fire_rate": 0.3499999940395355,
+            "fire_rate": 2.8499999046325685,
             "damage": 160.0,
-            "fire_range": 14.0
+            "fire_range": 14.0,
+            "magazine_capacity": 10,
+            "reload_time": 1.7999999523162842
         },
         {
             "name": "TITAN-816",
             "collider_extents": {
-                "x": 1.015131950378418,
-                "y": 0.4856714904308319,
-                "z": 1.1877416372299195
+                "x": 1.5226980447769166,
+                "y": 0.7285072803497315,
+                "z": 1.781612753868103
             },
             "collider_offset": {
-                "x": 0.1521587371826172,
-                "y": 0.5407514572143555,
-                "z": 0.19231224060058595
+                "x": 0.22823810577392579,
+                "y": 0.8111271858215332,
+                "z": 0.2884674072265625
             },
             "weapon_type": 0,
             "turret_offset": {
                 "x": 0.0,
-                "y": 0.5190794467926025,
-                "z": -0.00806427001953125
+                "y": 0.7786192893981934,
+                "z": -0.012096405029296875
             },
             "barrel_offsets": [
                 {
-                    "x": -0.1119999885559082,
-                    "y": 0.37004542350769045,
-                    "z": 2.2625255584716799
+                    "x": -0.1680002212524414,
+                    "y": 0.5550680160522461,
+                    "z": 3.393787384033203
                 }
             ],
             "max_health": 4200.0,
             "movement_speed": 5.5,
-            "fire_rate": 1.600000023841858,
+            "fire_rate": 0.6499999761581421,
             "damage": 520.0,
-            "fire_range": 13.0
+            "fire_range": 13.0,
+            "magazine_capacity": 5,
+            "reload_time": 4.0
         }
     ],
     "bullet": {

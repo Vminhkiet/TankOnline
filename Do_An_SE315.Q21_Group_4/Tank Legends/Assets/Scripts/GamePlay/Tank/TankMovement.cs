@@ -512,9 +512,13 @@ namespace Complete
             if (net != null && net.IsConnected)
             {
                 float turretYaw = 0f;
+                bool reload = false;
                 var shooting = GetComponent<TankShooting>();
-                if (shooting != null) turretYaw = shooting.GetCurrentTurretYaw();
-                net.SetMove(moveX, moveZ, turretYaw, m_Rigidbody.rotation.eulerAngles.y);
+                if (shooting != null) {
+                    turretYaw = shooting.GetCurrentTurretYaw();
+                    reload = shooting.ConsumeReloadIntent();
+                }
+                net.SetMove(moveX, moveZ, turretYaw, m_Rigidbody.rotation.eulerAngles.y, reload);
             }
         }
 
@@ -525,11 +529,15 @@ namespace Complete
                 return;
 
             float turretYaw = 0f;
+            bool reload = false;
             var shooting = GetComponent<TankShooting>();
-            if (shooting != null) turretYaw = shooting.GetCurrentTurretYaw();
+            if (shooting != null) {
+                turretYaw = shooting.GetCurrentTurretYaw();
+                reload = shooting.ConsumeReloadIntent();
+            }
 
             GetMobileDiscreteMove(out int mx, out int mz);
-            net.SendMoveNow(mx, mz, turretYaw, m_Rigidbody.rotation.eulerAngles.y);
+            net.SendMoveNow(mx, mz, turretYaw, m_Rigidbody.rotation.eulerAngles.y, reload);
         }
     }
 }

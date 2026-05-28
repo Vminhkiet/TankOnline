@@ -2,8 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
-using TMPro;
 using TankNet;
 
 namespace Complete
@@ -14,7 +12,6 @@ namespace Complete
         public float m_StartDelay = 3f;             // The delay between the start of RoundStarting and RoundPlaying phases.
         public float m_EndDelay = 3f;               // The delay between the end of RoundPlaying and RoundEnding phases.
         public CameraControl m_CameraControl;       // Reference to the CameraControl script for control during different phases.
-        public Text m_MessageText;                  // Reference to the overlay Text to display winning text, etc.
         public GameObject m_TankPrefab;             // Reference to the prefab the players will control.
         public TankManager[] m_Tanks;               // A collection of managers for enabling and disabling different aspects of the tanks.
 
@@ -40,23 +37,10 @@ namespace Complete
         public List<TankPrefabMapping> m_TankPrefabMappings;
 
         [Header("Match End UI")]
-        public GameObject     matchEndPanel;
-        public TextMeshProUGUI matchEndResultText;
-        public TextMeshProUGUI matchEndStatsText;
-        public TextMeshProUGUI matchEndRpText;
-        public TextMeshProUGUI matchEndCoinText;
-        public MatchEndLeaderboardUIManager leaderboardUI;
-        public string          lobbySceneName = "Lobby";
+        public string lobbySceneName = "Lobby";
         
         [Header("Match End Intermediate Screens")]
-        public GameObject m_VictoryScreen;
-        public GameObject m_YouDiedScreen;
         private bool _skipEndDelay = false;
-
-        [Header("Match HUD")]
-        public TextMeshProUGUI matchTimerText;
-        public UnityEngine.UI.Image specialAbilityIcon;
-        public TextMeshProUGUI pingText;
 
         [Header("Cinematic Intro")]
         public float cinematicPhase1Duration = 1.5f;
@@ -70,22 +54,6 @@ namespace Complete
         public float cameraShakeMagnitude = 0.25f;
         public float postCinematicWait = 0.6f;
 
-        private void UpdateHUDForLocalTank(GameObject localTank)
-        {
-            if (specialAbilityIcon == null || localTank == null) return;
-            var tankHealth = localTank.GetComponent<Complete.TankHealth>();
-            if (tankHealth != null && tankHealth.m_Definition != null)
-            {
-                var icon = tankHealth.m_Definition.SpecialAbility.Icon;
-                specialAbilityIcon.sprite = icon;
-                specialAbilityIcon.enabled = (icon != null);
-            }
-            else
-            {
-                specialAbilityIcon.enabled = false;
-            }
-        }
-
         // ── Match tracking (online) ───────────────────────────────────────────
         private float   _matchStartTime;
         private bool    _matchEnded;
@@ -94,6 +62,8 @@ namespace Complete
         private string  _opponentId = "bot-1";
         private int     _totalPlayersSeen;
         private float   _serverTimeRemaining = -1f;
+        private float   _highestTimeRemaining = 0f;
+        private bool    _isPlaying = false;
         private readonly Dictionary<uint, bool> _prevAliveStatus = new();
 
         private readonly Dictionary<uint, GameObject> _remoteTanks   = new();
@@ -119,7 +89,6 @@ namespace Complete
         private void Awake()
         {
             _matchStartTime = Time.time;
-            if (matchEndPanel != null) matchEndPanel.SetActive(false);
 
             if (GlobalMatchState.HasMatchInfo)
             {
@@ -219,28 +188,34 @@ namespace Complete
                 }
             }
 
-            // Update match timer UI
-            if (m_OnlineMode && matchTimerText != null && _serverTimeRemaining >= 0f)
+            if (m_OnlineMode && GameUIManager.Instance != null && _serverTimeRemaining >= 0f)
             {
-                int totalSecs = Mathf.CeilToInt(_serverTimeRemaining);
-                int minutes   = totalSecs / 60;
-                int seconds   = totalSecs % 60;
-                matchTimerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
-            }
-
-            // Update Ping UI
-            if (m_OnlineMode && pingText != null && TankNetClient.Instance != null)
-            {
-                int pingTime = TankNetClient.Instance.PingMs;
-                if (pingTime >= 0)
+                if (_serverTimeRemaining > _highestTimeRemaining)
                 {
-                    pingText.text = $"Ping: {pingTime} ms";
-                    pingText.color = pingTime < 100 ? Color.green : (pingTime < 200 ? Color.yellow : Color.red);
+                    _highestTimeRemaining = _serverTimeRemaining;
+                }
+
+                if (!_isPlaying)
+                {
+                    // Freeze timer at max seen time during cinematic
+                    GameUIManager.Instance.SetMatchTimer(_highestTimeRemaining);
                 }
                 else
                 {
-                    pingText.text = "Ping: -- ms";
-                    pingText.color = Color.white;
+                    GameUIManager.Instance.SetMatchTimer(_serverTimeRemaining);
+                }
+            }
+
+            if (m_OnlineMode && GameUIManager.Instance != null && TankNetClient.Instance != null)
+            {
+                if (TankNetClient.Instance.IsConnected)
+                {
+                    int pingTime = (int)TankNetClient.Instance.PingMs;
+                    GameUIManager.Instance.SetPing(pingTime);
+                }
+                else
+                {
+                    GameUIManager.Instance.SetPingOffline();
                 }
             }
         }
@@ -354,7 +329,7 @@ namespace Complete
 
             if (!m_OnlineMode && m_Tanks.Length > 0 && m_Tanks[0].m_Instance != null)
             {
-                UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
+                GameUIManager.Instance.UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
             }
         }
 
@@ -463,7 +438,7 @@ namespace Complete
             // Camera follow local tank
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
 
-            UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
+            GameUIManager.Instance.UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
         }
 
 
@@ -508,6 +483,8 @@ namespace Complete
 
         private IEnumerator RoundStarting ()
         {
+            _isPlaying = false;
+
             // As soon as the round starts reset the tanks and make sure they can't move.
             ResetAllTanks ();
             DisableTankControl ();
@@ -547,9 +524,6 @@ namespace Complete
                 Camera cam = m_CameraControl.GetComponentInChildren<Camera>();
                 Vector3 originalLocalPos = cam.transform.localPosition;
                 Quaternion originalLocalRot = cam.transform.localRotation;
-                
-                // Hide round text initially
-                m_MessageText.text = "";
 
                 // Move rig to origin to allow camera local movement
                 m_CameraControl.transform.position = Vector3.zero;
@@ -560,6 +534,12 @@ namespace Complete
                 {
                     elapsed += Time.deltaTime;
                     
+                    // Dynamic dots with invisible characters to preserve alignment
+                    int numDots = (int)((elapsed * 3f) % 4);
+                    string visibleDots = new string('.', numDots);
+                    string invisibleDots = new string('.', 3 - numDots);
+                    if (GameUIManager.Instance != null) GameUIManager.Instance.SetMessageText($"Initializing{visibleDots}<color=#00000000>{invisibleDots}</color>");
+
                     Vector3 currentFrontPos = targetTank.position + targetTank.rotation * cinematicFrontOffset;
                     // Interpolate smoothly towards the front pos to absorb any landing jitters
                     cam.transform.position = Vector3.Lerp(cam.transform.position, currentFrontPos, Time.deltaTime * 10f);
@@ -568,12 +548,18 @@ namespace Complete
                     yield return null;
                 }
 
-                // Phase 2: Slide to back (horizontally around the side)
                 elapsed = 0f;
                 Vector3 startPos = cam.transform.position;
                 while (elapsed < cinematicPhase2Duration)
                 {
                     elapsed += Time.deltaTime;
+                    
+                    // Dynamic dots with invisible characters to preserve alignment
+                    int numDots = (int)((elapsed * 3f) % 4);
+                    string visibleDots = new string('.', numDots);
+                    string invisibleDots = new string('.', 3 - numDots);
+                    if (GameUIManager.Instance != null) GameUIManager.Instance.SetMessageText($"Combat Mode Activated{visibleDots}<color=#00000000>{invisibleDots}</color>");
+
                     float t = Mathf.SmoothStep(0f, 1f, elapsed / cinematicPhase2Duration);
                     
                     Vector3 currentBackPos = targetTank.position + targetTank.rotation * cinematicBackOffset;
@@ -607,6 +593,12 @@ namespace Complete
                 while (elapsed < cinematicPhase3Duration)
                 {
                     elapsed += Time.deltaTime;
+                    // Dynamic dots with invisible characters to preserve alignment
+                    int numDots = (int)((elapsed * 3f) % 4);
+                    string visibleDots = new string('.', numDots);
+                    string invisibleDots = new string('.', 3 - numDots);
+                    if (GameUIManager.Instance != null) GameUIManager.Instance.SetMessageText($"Combat Mode Activated{visibleDots}<color=#00000000>{invisibleDots}</color>");
+
                     float t = Mathf.SmoothStep(0f, 1f, elapsed / cinematicPhase3Duration);
                     
                     cam.transform.position = Vector3.Lerp(startPos, finalWorldPos, t);
@@ -632,9 +624,8 @@ namespace Complete
                 yield return m_StartWait;
             }
 
-            // Increment the round number and display text showing the players what round it is.
+            // Increment the round number
             m_RoundNumber++;
-            m_MessageText.text = "ROUND " + m_RoundNumber;
             
             // Add slight camera shake
             StartCoroutine(CameraShake(cameraShakeDuration, cameraShakeMagnitude));
@@ -668,11 +659,14 @@ namespace Complete
 
         private IEnumerator RoundPlaying ()
         {
+            _isPlaying = true;
+
             // As soon as the round begins playing let the players control the tanks.
             EnableTankControl ();
 
-            // Clear the text from the screen.
-            m_MessageText.text = string.Empty;
+            // Show Engage!
+            if (GameUIManager.Instance != null) GameUIManager.Instance.SetMessageText("Engage.");
+            StartCoroutine(ClearMessageAfterDelay(1.5f));
 
             // While there is not one tank left...
             while (!OneTankLeft())
@@ -682,6 +676,14 @@ namespace Complete
             }
         }
 
+        private IEnumerator ClearMessageAfterDelay(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (_isPlaying && GameUIManager.Instance != null) 
+            {
+                GameUIManager.Instance.SetMessageText(string.Empty);
+            }
+        }
 
         private IEnumerator RoundEnding ()
         {
@@ -702,8 +704,10 @@ namespace Complete
             m_GameWinner = GetGameWinner ();
 
             // Get a message based on the scores and whether or not there is a game winner and display it.
-            string message = EndMessage ();
-            m_MessageText.text = message;
+            if (GameUIManager.Instance != null)
+            {
+                GameUIManager.Instance.ShowEndMessage(m_OnlineMode, m_Tanks, m_RoundWinner, m_GameWinner);
+            }
 
             // Wait for the specified length of time until yielding control back to the game loop.
             yield return m_EndWait;
@@ -751,59 +755,6 @@ namespace Complete
             return null;
         }
 
-
-        // Returns a string message to display at the end of each round.
-        private string EndMessage()
-        {
-            if (m_OnlineMode)
-            {
-                // In online mode, we act as a final leaderboard based on score and placement
-                string message = "MATCH ENDED\n\nLEADERBOARD:\n\n";
-                
-                var sortedTanks = new List<TankManager>();
-                for (int i = 0; i < m_Tanks.Length; i++)
-                {
-                    if (m_Tanks[i].m_Instance != null && m_Tanks[i].m_Instance.activeSelf || m_Tanks[i].m_Placement > 0)
-                    {
-                        sortedTanks.Add(m_Tanks[i]);
-                    }
-                }
-                
-                sortedTanks.Sort((a, b) => {
-                    int pCmp = a.m_Placement.CompareTo(b.m_Placement);
-                    if (pCmp != 0) return pCmp;
-                    return b.m_Score.CompareTo(a.m_Score); // Higher score wins tiebreaker
-                });
-
-                foreach (var t in sortedTanks)
-                {
-                    message += $"{t.m_ColoredPlayerText} - Rank #{t.m_Placement} - {t.m_Score} PTS\n";
-                }
-                return message;
-            }
-
-            // By default when a round ends there are no winners so the default end message is a draw.
-            string offlineMessage = "DRAW!";
-
-            // If there is a winner then change the message to reflect that.
-            if (m_RoundWinner != null)
-                offlineMessage = m_RoundWinner.m_ColoredPlayerText + " WINS THE ROUND!";
-
-            // Add some line breaks after the initial message.
-            offlineMessage += "\n\n\n\n";
-
-            // Go through all the tanks and add each of their scores to the message.
-            for (int i = 0; i < m_Tanks.Length; i++)
-            {
-                offlineMessage += m_Tanks[i].m_ColoredPlayerText + ": " + m_Tanks[i].m_Wins + " WINS\n";
-            }
-
-            // If there is a game winner, change the entire message to reflect that.
-            if (m_GameWinner != null)
-                offlineMessage = m_GameWinner.m_ColoredPlayerText + " WINS THE GAME!";
-
-            return offlineMessage;
-        }
 
 
         private void ResetAllTanks()
@@ -1301,10 +1252,11 @@ namespace Complete
             TankNetClient.Instance?.Disconnect();
 
             // Hiển thị màn hình trung gian (Victory / You Died)
-            if (won && m_VictoryScreen != null) 
-                m_VictoryScreen.SetActive(true);
-            else if (!won && !draw && m_YouDiedScreen != null) 
-                m_YouDiedScreen.SetActive(true);
+            if (GameUIManager.Instance != null)
+            {
+                if (won) GameUIManager.Instance.ShowVictoryScreen(true);
+                else GameUIManager.Instance.ShowYouDiedScreen(true);
+            }
 
             _skipEndDelay = false;
             float waitTimer = 30f;
@@ -1315,50 +1267,18 @@ namespace Complete
             }
 
             // Tắt màn hình trung gian trước khi bật bảng kết quả
-            if (m_VictoryScreen != null) m_VictoryScreen.SetActive(false);
-            if (m_YouDiedScreen != null) m_YouDiedScreen.SetActive(false);
+            if (GameUIManager.Instance != null)
+            {
+                GameUIManager.Instance.ShowVictoryScreen(false);
+                GameUIManager.Instance.ShowYouDiedScreen(false);
+            }
 
             int durationSecs = Mathf.Max(1, (int)(Time.time - _matchStartTime));
 
             // Show match end panel
-            if (matchEndPanel != null) matchEndPanel.SetActive(true);
-
-            string resultText = draw ? "DRAW!" : (won ? "YOU WIN!" : "YOU LOSE!");
-            if (matchEndResultText != null)
-                matchEndResultText.text = resultText;
-
-            if (matchEndStatsText != null)
+            if (GameUIManager.Instance != null)
             {
-                if (end != null)
-                {
-                    matchEndStatsText.text =
-                        $"Kills: {_myKills}   Deaths: {_myDeaths}\n" +
-                        $"Duration: {durationSecs / 60}:{durationSecs % 60:00}\n" +
-                        $"Rank: #{end.Placement}";
-                }
-                else
-                {
-                    matchEndStatsText.text =
-                        $"Kills: {_myKills}   Deaths: {_myDeaths}\n" +
-                        $"Duration: {durationSecs / 60}:{durationSecs % 60:00}";
-                }
-            }
-
-            if (end != null)
-            {
-                if (matchEndRpText != null)
-                    matchEndRpText.text = $"{(end.RpReward > 0 ? "+" : "")}{end.RpReward}";
-                    
-                if (matchEndCoinText != null)
-                    matchEndCoinText.text = "+25";
-
-                if (leaderboardUI != null)
-                    leaderboardUI.BuildLeaderboard(end.Players);
-            }
-            else
-            {
-                if (matchEndRpText != null) matchEndRpText.text = "+0";
-                if (matchEndCoinText != null) matchEndCoinText.text = "+25";
+                GameUIManager.Instance.ShowMatchEndPanel(won, draw, _myKills, _myDeaths, durationSecs, end);
             }
 
             // Save match to history service
