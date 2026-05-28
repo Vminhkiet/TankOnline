@@ -13,6 +13,7 @@ public class TestConnectionToggler : MonoBehaviour
     [Header("UI Binding")]
     [SerializeField] private TMP_Text buttonLabelText;
     [SerializeField] private string prefixLabel = "Server: ";
+    [SerializeField] private TMP_InputField manualIpInput; // Người test chuẩn bị sẵn
 
     private Button cachedButton;
 
@@ -23,6 +24,18 @@ public class TestConnectionToggler : MonoBehaviour
 
         if (buttonLabelText == null)
             buttonLabelText = GetComponentInChildren<TMP_Text>();
+
+        if (manualIpInput != null)
+        {
+            manualIpInput.text = GameApiClient.LanManualIp;
+            manualIpInput.onValueChanged.AddListener(OnManualIpChanged);
+        }
+    }
+
+    private void OnManualIpChanged(string newIp)
+    {
+        GameApiClient.LanManualIp = newIp;
+        UpdateUI();
     }
 
     private bool isSearching = false;
@@ -82,6 +95,11 @@ public class TestConnectionToggler : MonoBehaviour
 
         string currentMode = PlayerPrefs.GetString(GameApiClient.ConnectionModePrefKey, "lan_auto");
         
+        if (manualIpInput != null)
+        {
+            manualIpInput.gameObject.SetActive(currentMode == "lan_manual");
+        }
+
         if (isSearching)
         {
             buttonLabelText.text = $"{prefixLabel}TÌM SERVER...";
@@ -108,7 +126,7 @@ public class TestConnectionToggler : MonoBehaviour
         else if (currentMode == "lan_manual")
         {
             displayModeName = "LAN (MANUAL)";
-            buttonLabelText.color = new Color(1f, 0.6f, 0f); // Orange
+            buttonLabelText.color = new Color(1f, 0.5f, 0f); // Màu cam
         }
         else
         {
@@ -116,7 +134,7 @@ public class TestConnectionToggler : MonoBehaviour
             buttonLabelText.color = Color.cyan;
         }
         
-        buttonLabelText.text = $"{prefixLabel}{displayModeName}\n({currentUrl})";
+        buttonLabelText.text = $"{prefixLabel}{displayModeName}\n<size=70%>{currentUrl}</size>";
     }
 
     private void OnDestroy()

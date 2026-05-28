@@ -402,6 +402,7 @@ public class TankSelectionManager : MonoBehaviour
 
         currentPreviewInstance = Instantiate(previewPrefab, previewAnchor);
         currentPreviewInstance.name = previewPrefab.name + "_Preview";
+        currentPreviewInstance.SetActive(true);
 
         Transform previewTransform = currentPreviewInstance.transform;
         previewTransform.localPosition = tankData.PreviewLocalPosition;

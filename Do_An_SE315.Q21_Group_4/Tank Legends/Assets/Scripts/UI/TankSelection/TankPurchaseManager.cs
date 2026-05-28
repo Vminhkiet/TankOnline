@@ -382,6 +382,7 @@ public class TankPurchaseManager : MonoBehaviour
             if (string.IsNullOrEmpty(json))
             {
                 ownershipLoadedFromServer = true;
+                RefreshBuyState();
                 yield break;
             }
 
@@ -431,6 +432,7 @@ public class TankPurchaseManager : MonoBehaviour
             }
 
             ownershipLoadedFromServer = true;
+            RefreshBuyState();
         }
     }
 

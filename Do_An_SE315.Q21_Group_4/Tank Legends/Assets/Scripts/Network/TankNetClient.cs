@@ -160,23 +160,27 @@ namespace TankNet
             _recvThread?.Join(200);
         }
 
+        private float _pendingHullYaw;
+
         // Call from player input (main thread safe — just sets flags)
-        public void SetMove(int moveX, int moveZ, float turretYaw = 0f)
+        public void SetMove(int moveX, int moveZ, float turretYaw = 0f, float hullYaw = 0f)
         {
             _pendingMoveX = Mathf.Clamp(moveX, -1, 1);
             _pendingMoveZ = Mathf.Clamp(moveZ, -1, 1);
             _pendingTurretYaw = turretYaw;
+            _pendingHullYaw = hullYaw;
         }
 
         // Send input immediately from FixedUpdate — keeps server in sync with client prediction
-        public void SendMoveNow(int moveX, int moveZ, float turretYaw = 0f)
+        public void SendMoveNow(int moveX, int moveZ, float turretYaw = 0f, float hullYaw = 0f)
         {
             if (!_running) return;
             // Keep pending in sync so SendTick (heartbeat/shoot) doesn't override with (0,0)
             _pendingMoveX = Mathf.Clamp(moveX, -1, 1);
             _pendingMoveZ = Mathf.Clamp(moveZ, -1, 1);
             _pendingTurretYaw = turretYaw;
-            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, PlayerId, _seq++);
+            _pendingHullYaw = hullYaw;
+            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, _pendingHullYaw, PlayerId, _seq++);
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
         }
 
@@ -205,7 +209,7 @@ namespace TankNet
                     try { _udp.Send(pingPkt, pingPkt.Length, _server); } catch { }
                 }
 
-                byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, PlayerId, _seq++);
+                byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, _pendingHullYaw, PlayerId, _seq++);
                 int sent = _udp.Send(pkt, pkt.Length, _server);
                 
              /*   if (_seq % 20 == 0) // Log once per second

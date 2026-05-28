@@ -38,6 +38,7 @@ struct ClientInput {
     int8_t  moveX       = 0;      // -1 left, 0 none, +1 right
     int8_t  moveZ       = 0;      // -1 back, 0 none, +1 forward
     float   turretYaw   = 0.f;
+    float   hullYaw     = 0.f;
     bool    shoot       = false;
     uint8_t seq         = 0;
     float   launchForce = 20.f;   // bullet speed (m/s) when shoot=true
@@ -49,6 +50,7 @@ struct PacketMovement {
     uint8_t dirZ  = 1;   // 0=back, 1=none, 2=forward
     uint8_t speed = 0;
     float   turretYaw = 0.f; // synced turret rotation
+    float   hullYaw   = 0.f; // authoritative client hull rotation
 
     template<typename Stream>
     bool Serialize(Stream& stream) {
@@ -62,6 +64,12 @@ struct PacketMovement {
             turretYaw = static_cast<float>(yawDegInt) * 3.14159265f / 180.f;
         }
         
+        int32_t hullYawDegInt = static_cast<int32_t>(hullYaw * 180.f / 3.14159265f);
+        serialize_int(stream, hullYawDegInt, -180, 180);
+        if constexpr (Stream::IsReading) {
+            hullYaw = static_cast<float>(hullYawDegInt) * 3.14159265f / 180.f;
+        }
+
         return true;
     }
 
@@ -70,6 +78,7 @@ struct PacketMovement {
         ci.moveX = static_cast<int8_t>(dirX) - 1;
         ci.moveZ = static_cast<int8_t>(dirZ) - 1;
         ci.turretYaw = turretYaw;
+        ci.hullYaw = hullYaw;
         ci.seq   = s;
         return ci;
     }
