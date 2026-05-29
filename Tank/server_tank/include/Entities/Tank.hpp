@@ -13,6 +13,7 @@ public:
     
     Vector3  position;    // bottom-center of capsule
     float    yaw = 0.f;   // rotation around Y axis (radians)
+    float    targetYaw = 0.f; // authoritative yaw from client, clamped by server
     float    turretYaw = 0.f; // rotation of the turret (radians)
     Vector3  velocity;    // world-space velocity (set from input each tick)
     float    velocityY = 0.f; // vertical velocity (gravity)
@@ -23,6 +24,10 @@ public:
     float    wantsShootYaw   = 0.f;   // actual aiming yaw of the turret
     uint8_t  wantsShootBarrels = 1;   // number of barrels
     float    shootFreezeTimer = 0.f;  // timer tracking freeze duration
+
+    int      currentAmmo = 1;         // current shots in magazine
+    float    reloadTimer = 0.f;       // timer for reload
+    bool     isReloading = false;     // true if currently reloading
 
     ClientInput lastInput; // last received input — reapplied every tick
 

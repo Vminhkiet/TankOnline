@@ -15,6 +15,8 @@ struct TankStats {
     bool holdsToCharge = false; // New toggle for charging mechanic
     int barrelCount = 1;        // Number of barrels (default 1)
     float barrelSpacing = 0.4f; // Lateral distance between barrels
+    int magazineCapacity = 1;   // Default 1 shot per magazine
+    float reloadTime = 2.0f;    // Default 2 seconds reload time
 };
 
 struct MatchConfig {

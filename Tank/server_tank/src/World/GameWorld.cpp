@@ -38,6 +38,8 @@ void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos, const Tank
     finalStats.damage    = static_cast<int>(cfg.damage);
     finalStats.fireRate  = cfg.fireRate;
     finalStats.fireRange = cfg.fireRange;
+    finalStats.magazineCapacity = cfg.magazineCapacity;
+    finalStats.reloadTime = cfg.reloadTime;
 
     _tanks.emplace(playerId, Tank(playerId, spawnPos, finalStats));
 

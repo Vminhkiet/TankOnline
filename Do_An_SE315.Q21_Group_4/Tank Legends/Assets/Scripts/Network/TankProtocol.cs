@@ -175,11 +175,11 @@ namespace TankNet
             return w.ToBytes();
         }
 
-        public static byte[] BuildMove(uint matchId, int moveX, int moveZ, float turretYaw,
+        public static byte[] BuildMove(uint matchId, int moveX, int moveZ, float turretYaw, float hullYaw, bool reload,
                                        uint playerId = 0, byte seq = 0, ushort tick = 0)
         {
             var w = new BitWriter(8);
-            WriteHeader(w, Opcode.C2S_MOVE, matchId, 12, playerId, seq, tick);
+            WriteHeader(w, Opcode.C2S_MOVE, matchId, 15, playerId, seq, tick);
             w.WriteInt(moveX + 1, NetConst.DIR_MIN,   NetConst.DIR_MAX);
             w.WriteInt(moveZ + 1, NetConst.DIR_MIN,   NetConst.DIR_MAX);
             w.WriteInt(0,         NetConst.SPEED_MIN,  NetConst.SPEED_MAX);
@@ -189,6 +189,14 @@ namespace TankNet
             if (yawDegInt > 180) yawDegInt -= 360;
             yawDegInt = UnityEngine.Mathf.Clamp(yawDegInt, -180, 180);
             w.WriteInt(yawDegInt, -180, 180);
+
+            int hullYawDegInt = UnityEngine.Mathf.RoundToInt(hullYaw); // hullYaw is passed as eulerAngles.y (degrees)
+            hullYawDegInt = (hullYawDegInt % 360 + 360) % 360;
+            if (hullYawDegInt > 180) hullYawDegInt -= 360;
+            hullYawDegInt = UnityEngine.Mathf.Clamp(hullYawDegInt, -180, 180);
+            w.WriteInt(hullYawDegInt, -180, 180);
+            
+            w.WriteInt(reload ? 1 : 0, 0, 1);
             
             return w.ToBytes();
         }

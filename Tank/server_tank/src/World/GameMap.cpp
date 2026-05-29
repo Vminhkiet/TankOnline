@@ -112,11 +112,13 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
                     }
                 }
                 // Real gameplay stats from TankDefinitionSO.RealGameplayStats
-                if (t.contains("max_health"))      cfg.maxHealth     = t["max_health"].get<float>();
+                if (t.contains("max_health"))       cfg.maxHealth     = t["max_health"].get<float>();
                 if (t.contains("movement_speed"))   cfg.movementSpeed = t["movement_speed"].get<float>();
                 if (t.contains("fire_rate"))        cfg.fireRate      = t["fire_rate"].get<float>();
                 if (t.contains("damage"))           cfg.damage        = t["damage"].get<float>();
                 if (t.contains("fire_range"))       cfg.fireRange     = t["fire_range"].get<float>();
+                if (t.contains("magazine_capacity"))cfg.magazineCapacity = t["magazine_capacity"].get<int>();
+                if (t.contains("reload_time"))      cfg.reloadTime    = t["reload_time"].get<float>();
                 _tankConfigs[name] = cfg;
             }
         }

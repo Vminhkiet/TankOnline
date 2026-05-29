@@ -26,3 +26,19 @@
 			}													\
 		}														\
 	} while(0)
+
+#define serialize_bool(stream, value) \
+	do { \
+		int32_t int32_value; \
+		if (Stream::IsWriting) { \
+			int32_value = value ? 1 : 0; \
+		} \
+		if( !stream.SerializeInteger(int32_value, 0, 1)) \
+		{ \
+			return false; \
+		} \
+		if( Stream::IsReading ) \
+		{ \
+			value = (int32_value != 0); \
+		} \
+	} while(0)

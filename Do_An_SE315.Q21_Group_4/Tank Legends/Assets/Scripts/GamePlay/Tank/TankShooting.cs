@@ -41,6 +41,9 @@ namespace Complete
         [Header("UI Display")]
         public bool m_ShowAimSlider = false;        // Toggle to show/hide the launch force aim slider.
 
+        [Header("Reloading & Audio")]
+        public AudioClip m_ReloadClip;              // Audio clip played when reloading begins
+
         [Header("Shooting Style")]
         public bool m_HoldToCharge = false;         // If true, holding the fire button/joystick charges up the shot. If false, it fires instantly at max rate.
 
@@ -58,6 +61,67 @@ namespace Complete
         private float m_FireCooldownTimer = 0f;     // Cooldown tracking timer.
         private Quaternion m_TurretToMuzzleOffset;  // Cache the rotation offset between turret bone and muzzle.
         private float m_HitscanVisualTimer = 0f;    // Timer to turn off hitscan visuals for remote tanks.
+
+        private int m_CurrentAmmo = 1;
+        private float m_ReloadTimer = 0f;
+        private bool m_IsReloading = false;
+        private bool m_WantsReloadIntent = false;
+
+        private bool m_Started = false;
+
+        public bool ConsumeReloadIntent()
+        {
+            if (m_WantsReloadIntent)
+            {
+                m_WantsReloadIntent = false;
+                return true;
+            }
+            return false;
+        }
+
+        public void TriggerReload()
+        {
+            if (m_Definition == null) return;
+            if (m_IsReloading || m_CurrentAmmo >= m_Definition.RealStats.MagazineCapacity) return;
+            
+            m_IsReloading = true;
+            m_ReloadTimer = m_Definition.RealStats.ReloadTime;
+            m_WantsReloadIntent = true;
+            
+            if (m_Definition != null && m_Definition.WeaponType == WeaponType.Hitscan)
+            {
+                SetHitscanVisualsActive(false);
+            }
+            
+            if (m_ShootingAudio != null && m_ReloadClip != null)
+            {
+                m_ShootingAudio.clip = m_ReloadClip;
+                m_ShootingAudio.loop = false;
+                m_ShootingAudio.Play();
+            }
+        }
+
+        private void SetupUI()
+        {
+            if (GameUIManager.Instance != null && m_IsLocalPlayer)
+            {
+                GameUIManager.Instance.UpdateReloadProgress(0f);
+                if (GameUIManager.Instance.m_ReloadButton != null)
+                {
+                    GameUIManager.Instance.m_ReloadButton.onClick.RemoveListener(OnReloadButtonClicked);
+                    GameUIManager.Instance.m_ReloadButton.onClick.AddListener(OnReloadButtonClicked);
+                }
+                UpdateAmmoUI();
+            }
+        }
+
+        private void UpdateAmmoUI()
+        {
+            if (m_Definition != null && GameUIManager.Instance != null && m_IsLocalPlayer)
+            {
+                GameUIManager.Instance.UpdateAmmoUI(m_CurrentAmmo, m_Definition.RealStats.MagazineCapacity);
+            }
+        }
 
         private void SetHitscanVisualsActive(bool active)
         {
@@ -126,11 +190,42 @@ namespace Complete
                 m_AimSlider.gameObject.SetActive(m_ShowAimSlider && m_IsLocalPlayer);
             }
             m_FireCooldownTimer = 0f;
+            
+            if (m_Definition != null)
+            {
+                m_CurrentAmmo = m_Definition.RealStats.MagazineCapacity;
+            }
+            m_IsReloading = false;
+            m_WantsReloadIntent = false;
+            
+            if (m_Started)
+            {
+                SetupUI();
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (GameUIManager.Instance != null && m_IsLocalPlayer && GameUIManager.Instance.m_ReloadButton != null)
+            {
+                GameUIManager.Instance.m_ReloadButton.onClick.RemoveListener(OnReloadButtonClicked);
+            }
+        }
+
+        private void OnReloadButtonClicked()
+        {
+            if (m_IsLocalPlayer)
+            {
+                TriggerReload();
+            }
         }
 
 
         private void Start ()
         {
+            m_Started = true;
+            SetupUI();
+
             // The fire axis is based on the player number.
             m_FireButton = "Fire" + m_PlayerNumber;
 
@@ -162,6 +257,29 @@ namespace Complete
                         SetHitscanVisualsActive(false);
                     }
                 }
+                return;
+            }
+
+            if (m_IsReloading)
+            {
+                m_ReloadTimer -= Time.deltaTime;
+                if (GameUIManager.Instance != null && m_Definition != null && m_Definition.RealStats.ReloadTime > 0f && m_IsLocalPlayer)
+                {
+                    GameUIManager.Instance.UpdateReloadProgress(1f - (m_ReloadTimer / m_Definition.RealStats.ReloadTime));
+                }
+                
+                if (m_ReloadTimer <= 0f)
+                {
+                    m_IsReloading = false;
+                    if (m_Definition != null) m_CurrentAmmo = m_Definition.RealStats.MagazineCapacity;
+                    UpdateAmmoUI();
+                }
+                return; // cannot shoot while reloading
+            }
+            
+            if (Input.GetKeyDown(KeyCode.R) || (InputManager.Instance != null && InputManager.Instance.IsMobileMode == false && Input.GetKeyDown(KeyCode.R)))
+            {
+                TriggerReload();
                 return;
             }
 
@@ -372,6 +490,16 @@ namespace Complete
             {
                 m_ShootingAudio.clip = m_FireClip;
                 m_ShootingAudio.Play ();
+            }
+
+            if (m_Definition != null)
+            {
+                m_CurrentAmmo--;
+                UpdateAmmoUI();
+                if (m_CurrentAmmo <= 0)
+                {
+                    TriggerReload();
+                }
             }
 
             // Reset the launch force.  This is a precaution in case of missing button events.

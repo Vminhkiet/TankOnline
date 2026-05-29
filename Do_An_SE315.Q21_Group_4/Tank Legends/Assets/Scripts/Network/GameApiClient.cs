@@ -13,7 +13,12 @@ public static class GameApiClient
     #region TEST_CONNECTION_MODE (Dễ dàng xóa region này khi release game)
     // Cấu hình các cổng kết nối test
     private const string LocalhostUrl = "http://localhost:8080";
-    private const string LanManualUrl = "http://10.83.136.219:8080"; // IPv4 hard code fallback
+    public static string LanManualIp
+    {
+        get => PlayerPrefs.GetString("manual_ipv4_ip", "172.30.7.7");
+        set { PlayerPrefs.SetString("manual_ipv4_ip", value); PlayerPrefs.Save(); }
+    }
+    public static string LanManualUrl => $"http://{LanManualIp}:8080";
     public const string ConnectionModePrefKey = "test_connection_mode"; // "localhost", "lan_manual", hoặc "lan_auto"
 
     private static string _cachedAutoUrl;

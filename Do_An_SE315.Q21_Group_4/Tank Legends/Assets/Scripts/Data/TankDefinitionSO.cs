@@ -120,12 +120,21 @@ public struct RealGameplayStats
     
     [Tooltip("Tầm bắn thực tế của súng (VD: 30)")]
     [SerializeField] private float fireRange;
+    
+    [Header("Ammo & Reload")]
+    [Tooltip("Số lượng đạn tối đa trong băng (Magazine Capacity)")]
+    [SerializeField] private int magazineCapacity;
+    
+    [Tooltip("Thời gian nạp đạn đầy băng (giây)")]
+    [SerializeField] private float reloadTime;
 
     public float MaxHealth => maxHealth == 0f ? 100f : maxHealth;
     public float MovementSpeed => movementSpeed == 0f ? 12f : movementSpeed;
     public float FireRate => fireRate == 0f ? 1.5f : fireRate;
     public float Damage => damage == 0f ? 20f : damage;
     public float FireRange => fireRange == 0f ? 30f : fireRange;
+    public int MagazineCapacity => magazineCapacity == 0 ? 1 : magazineCapacity;
+    public float ReloadTime => reloadTime == 0f ? 2.0f : reloadTime;
 }
 
 [Serializable]
