@@ -195,6 +195,7 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
             Bush b;
             b.min = { center.x - extents.x, center.y - extents.y, center.z - extents.z };
             b.max = { center.x + extents.x, center.y + extents.y, center.z + extents.z };
+            b.regionId = item.value("regionId", 0);
             _bushes.push_back(b);
         }
     }

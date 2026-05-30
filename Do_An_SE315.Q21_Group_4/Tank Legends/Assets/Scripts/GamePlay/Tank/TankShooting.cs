@@ -109,6 +109,11 @@ namespace Complete
             m_ReloadTimer = m_Definition.RealStats.ReloadTime;
             m_WantsReloadIntent = true;
             
+            if (m_TankAnimation != null)
+            {
+                m_TankAnimation.SetShooting(false);
+            }
+            
             if (m_Definition != null && m_Definition.WeaponType == WeaponType.Hitscan)
             {
                 SetHitscanVisualsActive(false);
@@ -624,6 +629,9 @@ namespace Complete
             // calculated from (spawnPos - tankCenter) is incorrect for multi-barrel tanks.
             // m_RemoteTargetDir is now perfectly set in RemoteFire using the exact yaw.
 
+            // Stop any active charging effect when the shot actually fires
+            StopChargingEffect();
+
             // Play shooting audio (if not already playing to prevent double audio for multi-barrel shots)
             if (m_ShootingAudio != null && m_FireClip != null)
             {
@@ -633,13 +641,42 @@ namespace Complete
                     m_ShootingAudio.Play();
                 }
             }
+
+            // Start charging effect for next shot after a short delay (visual-only for remote)
+            if (m_ChargingEffects != null && m_ChargingEffects.Length > 0 && m_FireRate > 0f)
+            {
+                float cooldown = 1f / m_FireRate;
+                float delay = Mathf.Min(cooldown * 0.3f, 0.5f);
+                if (m_RemoteChargeCoroutine != null) StopCoroutine(m_RemoteChargeCoroutine);
+                m_RemoteChargeCoroutine = StartCoroutine(DelayedRemoteCharge(delay, cooldown - delay));
+            }
         }
+
+        private Coroutine m_RemoteChargeCoroutine;
+
+        private System.Collections.IEnumerator DelayedRemoteCharge(float delay, float duration)
+        {
+            yield return new WaitForSeconds(delay);
+            StartChargingEffect();
+            yield return new WaitForSeconds(duration + 0.15f); // +buffer for latency jitter
+            StopChargingEffect();
+            m_RemoteChargeCoroutine = null;
+        }
+
         public void RemoteFire(float yaw, int barrelIndex, byte weaponType = 0)
         {
             if (m_TankHead != null)
             {
                 m_RemoteTargetDir = new Vector3(Mathf.Sin(yaw), 0, Mathf.Cos(yaw));
                 m_RemoteAimTimer = 1.0f;
+            }
+
+            // Stop any active charging effect on fire
+            StopChargingEffect();
+            if (m_RemoteChargeCoroutine != null)
+            {
+                StopCoroutine(m_RemoteChargeCoroutine);
+                m_RemoteChargeCoroutine = null;
             }
 
             if (weaponType != 1 && m_ShootingAudio != null && m_FireClip != null)
@@ -668,6 +705,14 @@ namespace Complete
                 // Dynamically bridge the gap between continuous fire packets (+0.15s buffer for latency jitter)
                 float expectedGap = (m_FireRate > 0f) ? (1f / m_FireRate) : 0.2f;
                 m_HitscanVisualTimer = expectedGap + 0.15f; 
+            }
+
+            // Start charging effect for next shot after a short delay (visual-only for remote)
+            if (m_ChargingEffects != null && m_ChargingEffects.Length > 0 && m_FireRate > 0f)
+            {
+                float cooldown = 1f / m_FireRate;
+                float delay = Mathf.Min(cooldown * 0.3f, 0.5f);
+                m_RemoteChargeCoroutine = StartCoroutine(DelayedRemoteCharge(delay, cooldown - delay));
             }
         }
 

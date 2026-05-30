@@ -306,6 +306,16 @@ public class MapExporter
 
             if (col.gameObject.CompareTag("Bush"))
             {
+                int regionId = 0;
+                if (col.transform.parent != null && col.transform.parent.name.StartsWith("BushRegion_"))
+                {
+                    string idStr = col.transform.parent.name.Substring("BushRegion_".Length);
+                    if (int.TryParse(idStr, out int parsedId))
+                    {
+                        regionId = parsedId;
+                    }
+                }
+                data.regionId = regionId;
                 bushesList.Add(data);
             }
             else
@@ -513,6 +523,7 @@ public class MapExporter
         public float height;
         public int direction;
         public bool walkable;
+        public int regionId;
     }
 
     [System.Serializable]

@@ -129,6 +129,7 @@ struct TankState {
     uint8_t  flags  = 0;   // bit0 = isAlive
     uint16_t score  = 0;
     uint8_t  placement = 0;
+    uint8_t  bushRegion = 0;
 };
 
 // ─── S2C: per-bullet state entry ─────────────────────────────────────────────

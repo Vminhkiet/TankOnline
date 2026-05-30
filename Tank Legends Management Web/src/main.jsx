@@ -152,9 +152,12 @@ function App() {
 
   // Fetch real players from Auth Service
   const fetchPlayers = useCallback(async () => {
+    if (!session || !session.jwt) return;
     try {
       setPlayersLoading(true);
-      const res = await fetch(`${API_BASE}/api/user/users`);
+      const res = await fetch(`${API_BASE}/api/user/users`, {
+        headers: { 'Authorization': `Bearer ${session.jwt}` }
+      });
       if (res.ok) {
         const data = await res.json();
         setPlayers(data.map(u => ({
@@ -171,13 +174,16 @@ function App() {
     } finally {
       setPlayersLoading(false);
     }
-  }, []);
+  }, [session]);
 
   // Fetch leaderboard from History Service
   const fetchLeaderboard = useCallback(async () => {
+    if (!session || !session.jwt) return;
     try {
       setLeaderboardLoading(true);
-      const res = await fetch(`${API_BASE}/api/history/leaderboard`);
+      const res = await fetch(`${API_BASE}/api/history/leaderboard`, {
+        headers: { 'Authorization': `Bearer ${session.jwt}` }
+      });
       if (res.ok) {
         setLeaderboard(await res.json());
       }
@@ -186,16 +192,17 @@ function App() {
     } finally {
       setLeaderboardLoading(false);
     }
-  }, []);
+  }, [session]);
 
   // Fetch per-player history + stats
   const fetchPlayerHistory = useCallback(async (pid) => {
-    if (!pid) return;
+    if (!pid || !session || !session.jwt) return;
     try {
       setHistoryLoading(true);
+      const headers = { 'Authorization': `Bearer ${session.jwt}` };
       const [histRes, statsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/history/player/${pid}`),
-        fetch(`${API_BASE}/api/history/player/${pid}/stats`)
+        fetch(`${API_BASE}/api/history/player/${pid}`, { headers }),
+        fetch(`${API_BASE}/api/history/player/${pid}/stats`, { headers })
       ]);
       if (histRes.ok) setPlayerHistory(await histRes.json());
       if (statsRes.ok) setPlayerStats(await statsRes.json());
@@ -204,7 +211,7 @@ function App() {
     } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [session]);
 
   // Initial data load
   useEffect(() => {
@@ -391,6 +398,13 @@ function App() {
                         <div className="action-row">
                           <button title="View match history" onClick={() => { setHistoryPlayerId(String(player.rawId)); fetchPlayerHistory(String(player.rawId)); pushCommand(`Viewing history for ${player.username}`); }}>
                             <Eye size={16} /> History
+                          </button>
+                          <button 
+                            title={player.isBanned ? "Unban Player" : "Ban Player"} 
+                            className={player.isBanned ? "primary" : ""}
+                            onClick={() => toggleBanPlayer(player.playerId)}
+                          >
+                            <Ban size={16} /> {player.isBanned ? "Unban" : "Ban"}
                           </button>
                         </div>
                       </td>
