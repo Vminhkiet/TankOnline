@@ -1,0 +1,417 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "── Bài toán: s = thời gian 1 match nặng nhất trong 1 tick trên 1 core  →  GPC = ⌊16667 / s⌋",
+      "type": "row"
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#1f78c1", "mode": "fixed" },
+          "unit": "µs",
+          "noValue": "Đang đo...",
+          "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null}] }
+        }
+      },
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "text": { "valueSize": 36 }
+      },
+      "title": "① Số match giả lập",
+      "description": "Benchmark chạy đúng 1 match duy nhất — đây là match nặng nhất có thể thiết lập (10 player, 0 tường, tank đứng yên bắn liên tục)",
+      "type": "stat",
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "1",
+        "legendFormat": "Số match"
+      }]
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "µs",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 8000 },
+              { "color": "red",    "value": 13000 }
+            ]
+          },
+          "noValue": "Đang đo..."
+        }
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 5, "y": 1 },
+      "id": 2,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "text": { "valueSize": 36 }
+      },
+      "title": "② s = Tick P99 (1 match, 1 tick)",
+      "description": "Thời gian xử lý 1 tick trong trường hợp tệ nhất (P99 từ 6000 mẫu). Đây là giá trị s dùng trong công thức GPC = ⌊16667 / s⌋",
+      "type": "stat",
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "bench_total_p99_us",
+        "legendFormat": "s = P99 (µs)"
+      }]
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 2 },
+              { "color": "green",  "value": 5 }
+            ]
+          },
+          "noValue": "Đang tính...",
+          "displayName": "GPC"
+        }
+      },
+      "gridPos": { "h": 5, "w": 5, "x": 11, "y": 1 },
+      "id": 3,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "text": { "valueSize": 40 }
+      },
+      "title": "③ GPC = ⌊16667 / s⌋ (match/core)",
+      "description": "Games Per Core: số match nặng nhất có thể chạy đồng thời trên 1 core vật lý ở 60Hz. GPC = floor(16667 / tick_P99)",
+      "type": "stat",
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "bench_gpc",
+        "legendFormat": "GPC"
+      }]
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red",    "value": 80 }
+            ]
+          },
+          "noValue": "Đang đo..."
+        }
+      },
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 1 },
+      "id": 4,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "text": { "valueSize": 32 }
+      },
+      "title": "Budget Used @ P99",
+      "description": "s / 16667 × 100%. Còn lại là headroom cho OS jitter và overhead khác.",
+      "type": "stat",
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "bench_budget_used_pct",
+        "legendFormat": "% dùng"
+      }]
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 1 }
+            ]
+          },
+          "noValue": "0"
+        }
+      },
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 1 },
+      "id": 5,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "value_and_name",
+        "colorMode": "value"
+      },
+      "title": "Overruns (tick > 16667µs)",
+      "description": "Số tick vượt quá budget. 0 = không có overrun nào trong 6000 mẫu đo.",
+      "type": "stat",
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "bench_overruns_total",
+        "legendFormat": "Overruns"
+      }]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "id": 101,
+      "title": "── Phân tích s = Bullet + Physics + Snapshot  |  Tại sao đo 6000 ticks? → để tính P99 chính xác (cần ≥ 1000 mẫu)",
+      "type": "row"
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "µs",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Budget 60Hz (16667µs)" },
+            "properties": [
+              { "id": "color",               "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "custom.lineStyle",    "value": { "dash": [10,10], "fill": "dash" } },
+              { "id": "custom.lineWidth",    "value": 2 },
+              { "id": "custom.fillOpacity",  "value": 0 }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "s = Total P99" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }, { "id": "custom.lineWidth", "value": 3 }] },
+          { "matcher": { "id": "byName", "options": "Physics P99" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#F03B20", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Bullet P99" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#FEB24C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Snapshot P99" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#31A354", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 9, "w": 15, "x": 0, "y": 7 },
+      "id": 10,
+      "options": {
+        "legend": { "calcs": ["lastNotNull","mean"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "Tick Latency per Phase — P99 (1 match, đo 6000 mẫu để tính phân vị)",
+      "description": "Mỗi điểm trên đường 's = Total P99' là giá trị P99 cập nhật mỗi 5s. Đường đỏ đứt = budget 60Hz. Physics (đỏ) là bottleneck chính.",
+      "type": "timeseries",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "bench_phase_p99_us{phase='physics'}",  "legendFormat": "Physics P99" },
+        { "datasource": "Prometheus", "expr": "bench_phase_p99_us{phase='bullet'}",   "legendFormat": "Bullet P99"  },
+        { "datasource": "Prometheus", "expr": "bench_phase_p99_us{phase='snapshot'}", "legendFormat": "Snapshot P99"},
+        { "datasource": "Prometheus", "expr": "bench_total_p99_us",                   "legendFormat": "s = Total P99"},
+        { "datasource": "Prometheus", "expr": "vector(16667)",                         "legendFormat": "Budget 60Hz (16667µs)"}
+      ]
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": { "unit": "µs" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Physics" }, "properties": [{ "id": "color", "value": { "fixedColor": "#F03B20", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Bullet"  }, "properties": [{ "id": "color", "value": { "fixedColor": "#FEB24C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Snapshot"}, "properties": [{ "id": "color", "value": { "fixedColor": "#31A354", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 9, "w": 9, "x": 15, "y": 7 },
+      "id": 11,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showUnfilled": true,
+        "text": { "valueSize": 14 }
+      },
+      "title": "Avg | P50 | P95 | P99 | Max — mỗi pha (µs)",
+      "description": "s = tổng P99 (Physics+Bullet+Snapshot). Physics chiếm ~67% → đây là bottleneck cần tối ưu để tăng GPC.",
+      "type": "bargauge",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "bench_phase_avg_us{phase='physics'}",  "legendFormat": "Physics Avg" },
+        { "datasource": "Prometheus", "expr": "bench_phase_p99_us{phase='physics'}",  "legendFormat": "Physics P99" },
+        { "datasource": "Prometheus", "expr": "bench_phase_max_us{phase='physics'}",  "legendFormat": "Physics Max" },
+        { "datasource": "Prometheus", "expr": "bench_phase_avg_us{phase='bullet'}",   "legendFormat": "Bullet Avg"  },
+        { "datasource": "Prometheus", "expr": "bench_phase_p99_us{phase='bullet'}",   "legendFormat": "Bullet P99"  },
+        { "datasource": "Prometheus", "expr": "bench_phase_avg_us{phase='snapshot'}", "legendFormat": "Snapshot Avg"},
+        { "datasource": "Prometheus", "expr": "bench_phase_p99_us{phase='snapshot'}", "legendFormat": "Snapshot P99"}
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 102,
+      "title": "── Bảng tóm tắt đầy đủ: Avg / P50 / P95 / P99 / Max theo từng pha",
+      "type": "row"
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": { "unit": "µs", "custom": { "align": "center" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "P99" },
+            "properties": [
+              { "id": "custom.width", "value": 100 },
+              { "id": "custom.displayMode", "value": "color-background" },
+              { "id": "color", "value": { "mode": "thresholds" } },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":3000},{"color":"red","value":"8000"}] } }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "Max" },
+            "properties": [{ "id": "custom.width", "value": 100 }] },
+          { "matcher": { "id": "byName", "options": "Phase" },
+            "properties": [{ "id": "custom.width", "value": 110 }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 17 },
+      "id": 20,
+      "options": { "footer": { "show": false }, "showHeader": true },
+      "title": "Bảng kết quả: 1 match × 6000 mẫu  (6000 ticks = 100s đo để P99 ổn định)",
+      "description": "6000 ticks = 100 giây đo thực. Cần nhiều mẫu để P99 hội tụ — nếu chỉ đo 1 tick, không tính được phân vị. 's' trong bài toán GPC chính là cột P99 dòng Total.",
+      "type": "table",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "bench_phase_avg_us", "legendFormat": "{{phase}}", "instant": true },
+        { "datasource": "Prometheus", "expr": "bench_phase_p50_us", "legendFormat": "{{phase}}", "instant": true },
+        { "datasource": "Prometheus", "expr": "bench_phase_p95_us", "legendFormat": "{{phase}}", "instant": true },
+        { "datasource": "Prometheus", "expr": "bench_phase_p99_us", "legendFormat": "{{phase}}", "instant": true },
+        { "datasource": "Prometheus", "expr": "bench_phase_max_us", "legendFormat": "{{phase}}", "instant": true }
+      ],
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": {
+            "renameByName": {
+              "Value #A": "Avg (µs)",
+              "Value #B": "P50 (µs)",
+              "Value #C": "P95 (µs)",
+              "Value #D": "P99 = s (µs)",
+              "Value #E": "Max (µs)",
+              "phase": "Phase"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": { "unit": "µs", "custom": { "lineWidth": 2 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Budget 16667µs" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "dash": [10,10], "fill": "dash" } }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 25 },
+      "id": 30,
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "Rolling Avg — 3 pha trong lúc benchmark chạy",
+      "description": "Cập nhật mỗi 10s (600 ticks/window). Đường đi lên = bullet pool tích lũy đến steady-state. Đường ngang = steady-state.",
+      "type": "timeseries",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "bench_physics_us_avg",  "legendFormat": "Physics avg" },
+        { "datasource": "Prometheus", "expr": "bench_bullet_us_avg",   "legendFormat": "Bullet avg"  },
+        { "datasource": "Prometheus", "expr": "bench_snapshot_us_avg", "legendFormat": "Snapshot avg"},
+        { "datasource": "Prometheus", "expr": "bench_total_us_avg",    "legendFormat": "Total avg"   },
+        { "datasource": "Prometheus", "expr": "vector(16667)",          "legendFormat": "Budget 16667µs"}
+      ]
+    },
+
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "µs",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green",  "value": null },
+            { "color": "yellow", "value": 8000 },
+            { "color": "red",    "value": 13000 }
+          ]}
+        }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 25 },
+      "id": 31,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showUnfilled": true,
+        "text": {}
+      },
+      "title": "s = P50 / P95 / P99 / Max  so sánh với Budget 16667µs",
+      "description": "Thanh màu là tổng s ở từng mức phân vị. Thanh P99 < 16667µs → không có overrun. GPC = ⌊16667 / P99⌋.",
+      "type": "bargauge",
+      "targets": [
+        { "datasource": "Prometheus",
+          "expr": "bench_phase_p50_us{phase='physics'} + bench_phase_p50_us{phase='bullet'} + bench_phase_p50_us{phase='snapshot'}",
+          "legendFormat": "Total P50 (s_P50)" },
+        { "datasource": "Prometheus",
+          "expr": "bench_phase_p95_us{phase='physics'} + bench_phase_p95_us{phase='bullet'} + bench_phase_p95_us{phase='snapshot'}",
+          "legendFormat": "Total P95 (s_P95)" },
+        { "datasource": "Prometheus",
+          "expr": "bench_total_p99_us",
+          "legendFormat": "Total P99 = s (dùng tính GPC)" },
+        { "datasource": "Prometheus",
+          "expr": "bench_phase_max_us{phase='physics'} + bench_phase_max_us{phase='bullet'} + bench_phase_max_us{phase='snapshot'}",
+          "legendFormat": "Total Max (s_Max)" },
+        { "datasource": "Prometheus",
+          "expr": "vector(16667)",
+          "legendFormat": "Budget 60Hz = 16667µs" }
+      ]
+    }
+
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["tank","benchmark","gpc"],
+  "templating": { "list": [] },
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "GPC Worst-Case Benchmark — SE315.Q21",
+  "uid": "tank-gpc-bench",
+  "version": 2
+}

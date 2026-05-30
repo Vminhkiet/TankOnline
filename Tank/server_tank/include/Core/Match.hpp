@@ -10,6 +10,18 @@
 #include "Network/GameCommand.hpp"
 #include "Network/INetworkBackend.hpp"
 
+// Per-tick timing breakdown — populated every tick, read via lastBreakdown().
+// Mirrors the benchmark methodology: t0 is placed AFTER drain, t1 after broadcastSnapshot.
+struct TickBreakdown {
+    int64_t drainUs    = 0;  // mutex swap time (excluded from totalPostDrainUs)
+    int64_t dispatchUs = 0;  // command dispatch
+    int64_t bulletUs   = 0;  // updateBullets (CCD + tank-hit)
+    int64_t physicsUs  = 0;  // runPhysics (buildGrid + SAT)
+    int64_t snapUs     = 0;  // broadcastSnapshot (serialize + send)
+    int64_t totalPostDrainUs = 0; // dispatch+bullet+physics+snap (= s in GPC formula)
+    int64_t activeBullets    = 0; // active bullets this tick
+};
+
 class Match {
 public:
     Match(MatchConfig config,
@@ -21,6 +33,9 @@ public:
     size_t   connectedPlayers()const { return _sessions.size(); }
     size_t   totalSlots()      const { return _config.playerIds.size(); }
     void     logPositions()    const { _world.logTankPositions(_config.matchId); }
+
+    // Per-tick breakdown — valid after every tick() call.
+    const TickBreakdown& lastBreakdown() const { return _lastBreakdown; }
 
     // Thread-safe. Called from NetworkManager IOCP workers.
     void pushCommand(GameCommand cmd);
@@ -44,6 +59,8 @@ private:
     std::mutex               _queueMutex;
     std::atomic<bool>        _running{true};
     float                    _elapsed = 0.f;
+
+    TickBreakdown _lastBreakdown{};
 
     uint32_t  _nextSlot      = 0;
     int       _tickCount     = 0;
