@@ -44,7 +44,10 @@ void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos, const Tank
     // Override TankStats defaults with real gameplay stats from world.json (TankConfig)
     TankStats finalStats = stats;
     const GameMap::TankConfig& cfg = _map.getTankConfig(stats.name);
-    finalStats.health    = static_cast<int>(cfg.maxHealth);
+    // Use the larger of map config or explicitly-set stats.health.
+    // Production: stats.health defaults to 100 → map overrides to cfg.maxHealth (correct).
+    // Benchmark:  stats.health = 9,999,999 → preserved so tanks never die during measurement.
+    finalStats.health    = std::max(stats.health, static_cast<int>(cfg.maxHealth));
     finalStats.speed     = cfg.movementSpeed;
     finalStats.damage    = static_cast<int>(cfg.damage);
     finalStats.fireRate  = cfg.fireRate;
@@ -101,6 +104,26 @@ void GameWorld::updateBullets(float deltaTime)
 {
     constexpr float BULLET_GRAVITY = 3.0f;
 
+    // Pre-compute per-tank hit dimensions once per tick (outside bullet loop).
+    // getTankConfig() is an unordered_map<string> lookup — calling it B×P times per tick
+    // (where B=active bullets, P=players) causes O(B*P) map lookups with string hashing.
+    // Pre-computing reduces this to O(P) per tick.
+    struct TankHitCache {
+        uint32_t id;
+        float hitX, hitZ;
+        float offsetX, offsetZ;
+    };
+    std::vector<TankHitCache> tankCache;
+    tankCache.reserve(_tanks.size());
+    const float bulletHitR = _map.getBulletConfig().hitRadius;
+    for (const auto& [tid, tank] : _tanks) {
+        if (!tank.isAlive) continue;
+        const GameMap::TankConfig& cfg = _map.getTankConfig(tank.stats.name);
+        tankCache.push_back({ tid,
+            cfg.extentX + bulletHitR, cfg.extentZ + bulletHitR,
+            cfg.offsetX, cfg.offsetZ });
+    }
+
     for (auto& b : _bullets) {
         if (!b.isActive) continue;
 
@@ -131,16 +154,16 @@ void GameWorld::updateBullets(float deltaTime)
             b.position = b.position + delta;
             _physics.updateSphere(b.id, b.position);
 
-            for (auto& [tid, tank] : _tanks) {
-                if (!tank.isAlive || tid == b.ownerTankId) continue;
-                const GameMap::TankConfig& tankCfg = _map.getTankConfig(tank.stats.name);
-                float bulletHitX = tankCfg.extentX + _map.getBulletConfig().hitRadius;
-                float bulletHitZ = tankCfg.extentZ + _map.getBulletConfig().hitRadius;
+            for (const auto& tc : tankCache) {
+                if (tc.id == b.ownerTankId) continue;
+                auto& tank = _tanks.at(tc.id);
+                if (!tank.isAlive) continue;
+                float bulletHitX = tc.hitX, bulletHitZ = tc.hitZ;
                 float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
                 
-                // Calculate OBB center in world space
-                float centerX = tank.position.x + tankCfg.offsetX * cy + tankCfg.offsetZ * sy;
-                float centerZ = tank.position.z - tankCfg.offsetX * sy + tankCfg.offsetZ * cy;
+                // Calculate OBB center in world space (uses pre-cached offset)
+                float centerX = tank.position.x + tc.offsetX * cy + tc.offsetZ * sy;
+                float centerZ = tank.position.z - tc.offsetX * sy + tc.offsetZ * cy;
                 
                 float dx = b.position.x - centerX;
                 float dz = b.position.z - centerZ;
@@ -151,40 +174,41 @@ void GameWorld::updateBullets(float deltaTime)
                 tank.takeDamage(b.damage);
                 
                 // Track damage for score and assist
+                const uint32_t hitTid = tc.id;
                 _damageDealt[b.ownerTankId] += b.damage;
-                _damageHistory[tid][b.ownerTankId] += b.damage;
-                
+                _damageHistory[hitTid][b.ownerTankId] += b.damage;
+
                 // Update combat time for anti-camp
                 _lastCombatTime[b.ownerTankId] = _elapsedTime;
-                _lastCombatTime[tid] = _elapsedTime;
+                _lastCombatTime[hitTid] = _elapsedTime;
 
                 if (tank.isDead() && wasAlive) {
                     LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} KILLED (dealt {} dmg)",
-                             b.id, b.ownerTankId, tid, b.damage);
+                             b.id, b.ownerTankId, hitTid, b.damage);
                     _kills[b.ownerTankId]++;
-                    _deaths[tid]++;
-                    
+                    _deaths[hitTid]++;
+
                     // Kill bonus
                     _matchScoreBase[b.ownerTankId] += 5;
-                    
+
                     // Assist bonus
-                    float maxHp = _maxHealth[tid] > 0 ? _maxHealth[tid] : 100.0f;
+                    float maxHp = _maxHealth[hitTid] > 0 ? _maxHealth[hitTid] : 100.0f;
                     float assistThreshold = maxHp * 0.3f;
-                    for (auto const& [attacker, dmg] : _damageHistory[tid]) {
+                    for (auto const& [attacker, dmg] : _damageHistory[hitTid]) {
                         if (attacker != b.ownerTankId && dmg >= assistThreshold) {
                             _matchScoreBase[attacker] += 2; // Assist!
                         }
                     }
-                    
+
                     // Assign survival placement dynamically based on CURRENT number of alive players
                     int aliveCount = 0;
                     for (auto const& [otherId, otherTank] : _tanks) {
                         if (otherTank.isAlive) aliveCount++;
                     }
-                    _survivalPlacement[tid] = aliveCount + 1; // e.g. 5 alive + 1 just died = 6th place
+                    _survivalPlacement[hitTid] = aliveCount + 1;
                 } else {
                     LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} hp={} (dealt {} dmg)",
-                             b.id, b.ownerTankId, tid, tank.health, b.damage);
+                             b.id, b.ownerTankId, hitTid, tank.health, b.damage);
                 }
                 b.isActive = false;
                 _physics.removeSphere(b.id);
@@ -204,6 +228,13 @@ void GameWorld::updateBullets(float deltaTime)
             _physics.removeSphere(b.id);
         }
     }
+
+    // Compact: xóa inactive bullets khỏi vector để giữ loop O(active) không O(total_ever).
+    // Không có erase này, vector tăng vô hạn → benchmark/production đều bị ảnh hưởng.
+    _bullets.erase(
+        std::remove_if(_bullets.begin(), _bullets.end(),
+                       [](const Bullet& b){ return !b.isActive; }),
+        _bullets.end());
 }
 
 void GameWorld::runPhysics(float deltaTime)

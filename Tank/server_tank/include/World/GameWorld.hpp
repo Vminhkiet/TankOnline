@@ -40,7 +40,12 @@ public:
     std::vector<PacketSpawnItem> getItemSpawnEvents();
     std::vector<PacketDespawnItem> getItemDespawnEvents();
 
-    size_t playerCount() const { return _tanks.size(); }
+    size_t playerCount()      const { return _tanks.size(); }
+    size_t activeBulletCount() const {
+        size_t n = 0;
+        for (const auto& b : _bullets) if (b.isActive) ++n;
+        return n;
+    }
     const std::unordered_map<uint32_t, int>& getKills()  const { return _kills; }
     const std::unordered_map<uint32_t, int>& getDeaths() const { return _deaths; }
     void logTankPositions(uint32_t matchId) const;

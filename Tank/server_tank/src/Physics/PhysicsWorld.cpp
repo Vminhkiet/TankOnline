@@ -34,34 +34,55 @@ static void aabbSphere(const SphereCollider& s, Vector3& mn, Vector3& mx)
 // CRUD
 // ════════════════════════════════════════════════════════════════════════════
 
-void PhysicsWorld::addBox       (const OBBCollider& box)     { _boxes.push_back(box); }
-void PhysicsWorld::addCapsule   (const CapsuleCollider& cap) { _capsules.push_back(cap); }
-void PhysicsWorld::addDynamicBox(const OBBCollider& box)     { _dynamicBoxes.push_back(box); }
-void PhysicsWorld::addSphere    (const SphereCollider& sph)  { _spheres.push_back(sph); }
-
-template<typename Vec>
-static void swapRemove(Vec& v, uint32_t id) {
-    for (size_t i = 0; i < v.size(); ++i) {
-        if (v[i].entityId == id) { v[i] = v.back(); v.pop_back(); return; }
-    }
+// ── Add: push to vector + record index ───────────────────────────────────────
+void PhysicsWorld::addBox(const OBBCollider& box) {
+    _boxIndex[box.entityId] = _boxes.size();
+    _boxes.push_back(box);
+}
+void PhysicsWorld::addCapsule(const CapsuleCollider& cap) {
+    _capIndex[cap.entityId] = _capsules.size();
+    _capsules.push_back(cap);
+}
+void PhysicsWorld::addDynamicBox(const OBBCollider& box) {
+    _dynIndex[box.entityId] = _dynamicBoxes.size();
+    _dynamicBoxes.push_back(box);
+}
+void PhysicsWorld::addSphere(const SphereCollider& sph) {
+    _sphIndex[sph.entityId] = _spheres.size();
+    _spheres.push_back(sph);
 }
 
-void PhysicsWorld::removeBox       (uint32_t id) { swapRemove(_boxes,        id); }
-void PhysicsWorld::removeCapsule   (uint32_t id) { swapRemove(_capsules,     id); }
-void PhysicsWorld::removeDynamicBox(uint32_t id) { swapRemove(_dynamicBoxes, id); }
-void PhysicsWorld::removeSphere    (uint32_t id) { swapRemove(_spheres,      id); }
+// ── Remove: O(1) swap-remove with index bookkeeping ──────────────────────────
+template<typename Vec, typename IdxMap>
+static void indexedRemove(Vec& v, IdxMap& idx, uint32_t id) {
+    auto it = idx.find(id);
+    if (it == idx.end()) return;
+    size_t i = it->second;
+    idx.erase(it);
+    if (i < v.size() - 1) {
+        v[i] = v.back();             // move last element into slot i
+        idx[v[i].entityId] = i;      // update its index entry
+    }
+    v.pop_back();
+}
+
+void PhysicsWorld::removeBox       (uint32_t id) { indexedRemove(_boxes,        _boxIndex, id); }
+void PhysicsWorld::removeCapsule   (uint32_t id) { indexedRemove(_capsules,     _capIndex, id); }
+void PhysicsWorld::removeDynamicBox(uint32_t id) { indexedRemove(_dynamicBoxes, _dynIndex, id); }
+void PhysicsWorld::removeSphere    (uint32_t id) { indexedRemove(_spheres,      _sphIndex, id); }
 
 void PhysicsWorld::updateDynamicBox(uint32_t id, const Vector3& center,
                                      const Vector3& axisX, const Vector3& axisY, const Vector3& axisZ) {
-    for (auto& b : _dynamicBoxes) if (b.entityId == id) {
-        b.center = center;
-        b.axisX = axisX; b.axisY = axisY; b.axisZ = axisZ;
-        return;
+    auto it = _dynIndex.find(id);
+    if (it != _dynIndex.end()) {
+        auto& b = _dynamicBoxes[it->second];
+        b.center = center; b.axisX = axisX; b.axisY = axisY; b.axisZ = axisZ;
     }
 }
 
 void PhysicsWorld::updateSphere(uint32_t id, const Vector3& center) {
-    for (auto& s : _spheres) if (s.entityId == id) { s.center = center; return; }
+    auto it = _sphIndex.find(id);
+    if (it != _sphIndex.end()) _spheres[it->second].center = center;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -299,24 +320,25 @@ void PhysicsWorld::DetectCollisions()
 
     buildGrid();
 
-    auto pairs = _grid.broadPhasePairs();
+    const auto& pairs = _grid.broadPhasePairs();
 
-    // Fast lookup helpers (linear scan – small vectors in practice)
+    // Persistent O(1) index lookups — no per-tick heap allocation.
+    // entityId → index in the corresponding vector (safe across reallocations).
     auto findDyn = [&](uint32_t id) -> OBBCollider* {
-        for (auto& b : _dynamicBoxes) if (b.entityId == id && b.isActive) return &b;
-        return nullptr;
+        auto it = _dynIndex.find(id);
+        return (it != _dynIndex.end() && _dynamicBoxes[it->second].isActive) ? &_dynamicBoxes[it->second] : nullptr;
     };
     auto findSph = [&](uint32_t id) -> SphereCollider* {
-        for (auto& s : _spheres) if (s.entityId == id && s.isActive) return &s;
-        return nullptr;
+        auto it = _sphIndex.find(id);
+        return (it != _sphIndex.end() && _spheres[it->second].isActive) ? &_spheres[it->second] : nullptr;
     };
     auto findBox = [&](uint32_t id) -> OBBCollider* {
-        for (auto& b : _boxes) if (b.entityId == id && b.isActive) return &b;
-        return nullptr;
+        auto it = _boxIndex.find(id);
+        return (it != _boxIndex.end() && _boxes[it->second].isActive) ? &_boxes[it->second] : nullptr;
     };
     auto findCap = [&](uint32_t id) -> CapsuleCollider* {
-        for (auto& c : _capsules) if (c.entityId == id && c.isActive) return &c;
-        return nullptr;
+        auto it = _capIndex.find(id);
+        return (it != _capIndex.end() && _capsules[it->second].isActive) ? &_capsules[it->second] : nullptr;
     };
 
     for (auto& [entA, entB] : pairs) {

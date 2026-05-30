@@ -43,12 +43,18 @@ public:
     void insert(uint32_t entityId, ColliderKind kind,
                 const Vector3& aabbMin, const Vector3& aabbMax);
 
-    // Returns unique candidate pairs for narrow-phase (no static-static pairs)
-    std::vector<std::pair<GridEntry, GridEntry>> broadPhasePairs() const;
+    // Fills _pairsResult with unique candidate pairs. Reuses pre-allocated memory
+    // across ticks — avoids per-tick heap allocation that causes P99 latency spikes.
+    const std::vector<std::pair<GridEntry, GridEntry>>& broadPhasePairs();
 
 private:
     float _cellSize;
     std::unordered_map<GridCell, std::vector<GridEntry>, GridCellHash> _cells;
+
+    // Persistent (pre-allocated) buffers — cleared not freed each tick
+    struct U64Hash { size_t operator()(uint64_t k) const { return k * 2654435761u; } };
+    std::unordered_map<uint64_t, std::pair<GridEntry,GridEntry>, U64Hash> _seen;
+    std::vector<std::pair<GridEntry, GridEntry>> _pairsResult;
 
     GridCell toCell(float x, float y, float z) const;
 };
