@@ -25,7 +25,7 @@ void Tank::processInput(const ClientInput& input)
         reloadTimer = stats.reloadTime;
     }
 
-    if (input.shoot && !isReloading && currentAmmo > 0) {
+    if (input.shoot && !isReloading && currentAmmo > 0 && fireCooldownTimer <= 0.f) {
         wantsShoot        = true;
         wantsShootForce   = input.launchForce;
         wantsShootYaw     = input.turretYaw;
@@ -40,12 +40,17 @@ void Tank::processInput(const ClientInput& input)
         if (!stats.canMoveWhileShooting) {
             shootFreezeTimer = 0.5f; // matches Unity's freeze duration
         }
+        fireCooldownTimer = 1.0f / stats.fireRate;
     }
 }
 
 void Tank::update(float deltaTime)
 {
     if (!isAlive) return;
+
+    if (fireCooldownTimer > 0.f) {
+        fireCooldownTimer -= deltaTime;
+    }
 
     if (shootFreezeTimer > 0.f) {
         shootFreezeTimer -= deltaTime;

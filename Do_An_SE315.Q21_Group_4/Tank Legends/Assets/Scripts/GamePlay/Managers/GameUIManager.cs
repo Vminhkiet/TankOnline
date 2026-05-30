@@ -14,6 +14,8 @@ namespace Complete
         public Image m_ReloadProgressImage;
         public Button m_ReloadButton;
         public Image specialAbilityIcon;
+        [Tooltip("Kéo object chữ 'Hết đạn' vào đây (Nó sẽ tự động nhấp nháy khi đạn = 0)")]
+        public GameObject m_OutOfAmmoUI;
 
         [Header("Match Overlay UI")]
         public Text m_MessageText;
@@ -43,7 +45,40 @@ namespace Complete
                 Destroy(gameObject);
             }
             if (matchEndPanel != null) matchEndPanel.SetActive(false);
+            if (m_OutOfAmmoUI != null) m_OutOfAmmoUI.SetActive(false);
+        }
 
+        private Coroutine m_BlinkCoroutine;
+
+        public void SetOutOfAmmoBlinking(bool isBlinking)
+        {
+            if (m_OutOfAmmoUI == null) return;
+
+            if (isBlinking)
+            {
+                if (m_BlinkCoroutine == null)
+                {
+                    m_BlinkCoroutine = StartCoroutine(BlinkRoutine());
+                }
+            }
+            else
+            {
+                if (m_BlinkCoroutine != null)
+                {
+                    StopCoroutine(m_BlinkCoroutine);
+                    m_BlinkCoroutine = null;
+                }
+                m_OutOfAmmoUI.SetActive(false);
+            }
+        }
+
+        private System.Collections.IEnumerator BlinkRoutine()
+        {
+            while (true)
+            {
+                m_OutOfAmmoUI.SetActive(!m_OutOfAmmoUI.activeSelf);
+                yield return new WaitForSeconds(0.35f); // Tốc độ nhấp nháy
+            }
         }
 
 

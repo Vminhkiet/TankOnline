@@ -7207,7 +7207,7 @@
             "max_health": 3000.0,
             "movement_speed": 6.5,
             "fire_rate": 20.0,
-            "damage": 450.0,
+            "damage": 20.0,
             "fire_range": 20.0,
             "magazine_capacity": 140,
             "reload_time": 2.0

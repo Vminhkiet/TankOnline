@@ -418,3 +418,51 @@ void PhysicsWorld::HandleCollisions()
         }
     }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Raycasting
+// ════════════════════════════════════════════════════════════════════════════
+
+PhysicsWorld::RaycastHit PhysicsWorld::Raycast(const Vector3& origin, const Vector3& dir, float maxDist, uint32_t ignoreEntityId, float radius) const
+{
+    RaycastHit bestHit;
+    
+    auto checkOBB = [&](const OBBCollider& box) {
+        if (!box.isActive || box.entityId == ignoreEntityId) return;
+
+        Vector3 rayOrig = origin - box.center;
+        float   ox = rayOrig.dot(box.axisX), oy = rayOrig.dot(box.axisY), oz = rayOrig.dot(box.axisZ);
+        float   dx = dir.dot(box.axisX),     dy = dir.dot(box.axisY),     dz = dir.dot(box.axisZ);
+
+        float tMin = 0.f, tMax = maxDist;
+        Vector3 candidateN;
+
+        auto slab = [&](float o, float d, float e, const Vector3& axis) -> bool {
+            if (std::fabs(d) < 1e-8f) return std::fabs(o) <= e;
+            float t1 = (-e - o) / d, t2 = (e - o) / d;
+            Vector3 n = axis;
+            if (t1 > t2) { std::swap(t1, t2); n = -n; }
+            if (t1 > tMin) { tMin = t1; candidateN = n; }
+            tMax = std::min(tMax, t2);
+            return tMin <= tMax;
+        };
+
+        if (!slab(ox, dx, box.extents.x + radius, box.axisX)) return;
+        if (!slab(oy, dy, box.extents.y + radius, box.axisY)) return;
+        if (!slab(oz, dz, box.extents.z + radius, box.axisZ)) return;
+        if (tMin < 0.f || tMin > maxDist) return; // behind start or too far
+
+        if (tMin < bestHit.distance) {
+            bestHit.hit = true;
+            bestHit.entityId = box.entityId;
+            bestHit.distance = tMin;
+            bestHit.normal = candidateN;
+            bestHit.point = origin + dir * tMin;
+        }
+    };
+
+    for (const auto& box : _boxes) checkOBB(box);
+    for (const auto& box : _dynamicBoxes) checkOBB(box);
+
+    return bestHit;
+}
