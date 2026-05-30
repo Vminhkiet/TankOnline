@@ -516,6 +516,50 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
                     
                     if (cfg.weaponType == 0) { // Projectile
                         spawnBullet(id, muzzlePos, tank.wantsShootYaw, tank.wantsShootForce, bulletDamage);
+                    } else if (cfg.weaponType == 1) { // Hitscan
+                        Vector3 dir = { std::sin(tank.wantsShootYaw), 0.f, std::cos(tank.wantsShootYaw) };
+                        PhysicsWorld::RaycastHit hit = _physics.Raycast(muzzlePos, dir, tank.stats.fireRange, id, _map.getBulletConfig().hitRadius);
+                        if (hit.hit) {
+                            auto targetIt = _tanks.find(hit.entityId);
+                            if (targetIt != _tanks.end() && targetIt->second.isAlive) {
+                                ev.hitTankId = hit.entityId;
+                                
+                                bool wasAlive = targetIt->second.isAlive;
+                                targetIt->second.takeDamage(bulletDamage);
+                                
+                                _damageDealt[id] += bulletDamage;
+                                _damageHistory[hit.entityId][id] += bulletDamage;
+                                _lastCombatTime[id] = _elapsedTime;
+                                _lastCombatTime[hit.entityId] = _elapsedTime;
+                                
+                                if (targetIt->second.isDead() && wasAlive) {
+                                    LOG_INFO("[Hitscan] HIT_TANK shooter={} → victim={} KILLED (dealt {} dmg)", id, hit.entityId, bulletDamage);
+                                    _kills[id]++;
+                                    _deaths[hit.entityId]++;
+                                    _matchScoreBase[id] += 5;
+                                    
+                                    float maxHp = _maxHealth[hit.entityId] > 0 ? _maxHealth[hit.entityId] : 100.0f;
+                                    float assistThreshold = maxHp * 0.3f;
+                                    for (auto const& [attacker, dmg] : _damageHistory[hit.entityId]) {
+                                        if (attacker != id && dmg >= assistThreshold) {
+                                            _matchScoreBase[attacker] += 2; // Assist
+                                        }
+                                    }
+                                    
+                                    int aliveCount = 0;
+                                    for (auto const& [otherId, otherTank] : _tanks) {
+                                        if (otherTank.isAlive) aliveCount++;
+                                    }
+                                    _survivalPlacement[hit.entityId] = aliveCount + 1;
+                                } else {
+                                    LOG_INFO("[Hitscan] HIT_TANK shooter={} → victim={} hp={} (dealt {} dmg) dist={:.2f}", id, hit.entityId, targetIt->second.health, bulletDamage, hit.distance);
+                                }
+                            } else {
+                                LOG_INFO("[Hitscan] MISS (Hit static wall or dead tank) shooter={} hitEntityId={} dist={:.2f}", id, hit.entityId, hit.distance);
+                            }
+                        } else {
+                            LOG_INFO("[Hitscan] MISS (Hit nothing) shooter={} range={:.2f}", id, tank.stats.fireRange);
+                        }
                     }
                 }
             } else {
@@ -532,6 +576,50 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
                     Vector3 muzzlePos = baseMuzzlePos + localRight * offset;
                     if (cfg.weaponType == 0) {
                         spawnBullet(id, muzzlePos, tank.wantsShootYaw, tank.wantsShootForce, bulletDamage);
+                    } else if (cfg.weaponType == 1) {
+                        Vector3 dir = { std::sin(tank.wantsShootYaw), 0.f, std::cos(tank.wantsShootYaw) };
+                        PhysicsWorld::RaycastHit hit = _physics.Raycast(muzzlePos, dir, tank.stats.fireRange, id, _map.getBulletConfig().hitRadius);
+                        if (hit.hit) {
+                            auto targetIt = _tanks.find(hit.entityId);
+                            if (targetIt != _tanks.end() && targetIt->second.isAlive) {
+                                ev.hitTankId = hit.entityId;
+                                
+                                bool wasAlive = targetIt->second.isAlive;
+                                targetIt->second.takeDamage(bulletDamage);
+                                
+                                _damageDealt[id] += bulletDamage;
+                                _damageHistory[hit.entityId][id] += bulletDamage;
+                                _lastCombatTime[id] = _elapsedTime;
+                                _lastCombatTime[hit.entityId] = _elapsedTime;
+                                
+                                if (targetIt->second.isDead() && wasAlive) {
+                                    LOG_INFO("[Hitscan] HIT_TANK shooter={} → victim={} KILLED (dealt {} dmg)", id, hit.entityId, bulletDamage);
+                                    _kills[id]++;
+                                    _deaths[hit.entityId]++;
+                                    _matchScoreBase[id] += 5;
+                                    
+                                    float maxHp = _maxHealth[hit.entityId] > 0 ? _maxHealth[hit.entityId] : 100.0f;
+                                    float assistThreshold = maxHp * 0.3f;
+                                    for (auto const& [attacker, dmg] : _damageHistory[hit.entityId]) {
+                                        if (attacker != id && dmg >= assistThreshold) {
+                                            _matchScoreBase[attacker] += 2; // Assist
+                                        }
+                                    }
+                                    
+                                    int aliveCount = 0;
+                                    for (auto const& [otherId, otherTank] : _tanks) {
+                                        if (otherTank.isAlive) aliveCount++;
+                                    }
+                                    _survivalPlacement[hit.entityId] = aliveCount + 1;
+                                } else {
+                                    LOG_INFO("[Hitscan] HIT_TANK shooter={} → victim={} hp={} (dealt {} dmg) dist={:.2f}", id, hit.entityId, targetIt->second.health, bulletDamage, hit.distance);
+                                }
+                            } else {
+                                LOG_INFO("[Hitscan] MISS (Hit static wall or dead tank) shooter={} hitEntityId={} dist={:.2f}", id, hit.entityId, hit.distance);
+                            }
+                        } else {
+                            LOG_INFO("[Hitscan] MISS (Hit nothing) shooter={} range={:.2f}", id, tank.stats.fireRange);
+                        }
                     }
                 }
             }

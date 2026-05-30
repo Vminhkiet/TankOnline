@@ -22,6 +22,7 @@ namespace Complete
         public Slider m_AimSlider;                  // A child of the tank that displays the current launch force.
         public AudioSource m_ShootingAudio;         // Reference to the audio source used to play the shooting audio. NB: different to the movement audio source.
         public AudioClip m_ChargingClip;            // Audio that plays when each shot is charging up.
+        public GameObject[] m_ChargingEffects;      // Visual effects that turn on while charging
         public AudioClip m_FireClip;                // Audio that plays when each shot is fired.
         public float m_MinLaunchForce = 15f;        // The force given to the shell if the fire button is not held.
         public float m_MaxLaunchForce = 30f;        // The force given to the shell if the fire button is held for the max charge time.
@@ -70,6 +71,24 @@ namespace Complete
         private bool m_WantsReloadIntent = false;
 
         private bool m_Started = false;
+        private bool m_IsChargingEffectActive = false;
+        private float m_ChargeDelayTimer = 0f;
+
+        private void StartBlinking()
+        {
+            if (m_IsLocalPlayer && GameUIManager.Instance != null)
+            {
+                GameUIManager.Instance.SetOutOfAmmoBlinking(true);
+            }
+        }
+        
+        private void StopBlinking()
+        {
+            if (m_IsLocalPlayer && GameUIManager.Instance != null)
+            {
+                GameUIManager.Instance.SetOutOfAmmoBlinking(false);
+            }
+        }
 
         public bool ConsumeReloadIntent()
         {
@@ -153,6 +172,56 @@ namespace Complete
             }
         }
 
+        private void SetChargingEffectsActive(bool active)
+        {
+            if (m_ChargingEffects == null) return;
+            for (int i = 0; i < m_ChargingEffects.Length; i++)
+            {
+                if (m_ChargingEffects[i] != null)
+                {
+                    if (m_ChargingEffects[i].activeSelf != active)
+                    {
+                        m_ChargingEffects[i].SetActive(active);
+                    }
+                    
+                    if (active)
+                    {
+                        ParticleSystem[] psList = m_ChargingEffects[i].GetComponentsInChildren<ParticleSystem>();
+                        foreach (var ps in psList)
+                        {
+                            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                            ps.Play(true);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void StartChargingEffect()
+        {
+            if (m_IsChargingEffectActive) return;
+            m_IsChargingEffectActive = true;
+
+            if (m_ShootingAudio != null && m_ChargingClip != null)
+            {
+                m_ShootingAudio.clip = m_ChargingClip;
+                m_ShootingAudio.loop = false;
+                m_ShootingAudio.Play();
+            }
+            SetChargingEffectsActive(true);
+        }
+
+        private void StopChargingEffect()
+        {
+            if (!m_IsChargingEffectActive) return;
+            m_IsChargingEffectActive = false;
+
+            SetChargingEffectsActive(false);
+            if (m_ShootingAudio != null && m_ShootingAudio.clip == m_ChargingClip)
+            {
+                m_ShootingAudio.Stop();
+            }
+        }
 
         private void Awake()
         {
@@ -198,6 +267,12 @@ namespace Complete
             }
             m_IsReloading = false;
             m_WantsReloadIntent = false;
+            if (m_IsLocalPlayer && GameUIManager.Instance != null)
+            {
+                GameUIManager.Instance.SetOutOfAmmoBlinking(false);
+            }
+            StopChargingEffect();
+            m_ChargeDelayTimer = 0f;
             
             if (m_Started)
             {
@@ -287,6 +362,7 @@ namespace Complete
                     m_IsReloading = false;
                     if (m_Definition != null) m_CurrentAmmo = m_Definition.RealStats.MagazineCapacity;
                     UpdateAmmoUI();
+                    StopBlinking();
                 }
                 return; // cannot shoot while reloading
             }
@@ -389,12 +465,7 @@ namespace Complete
                 {
                     m_Fired = false;
                     m_CurrentLaunchForce = m_MinLaunchForce;
-
-                    if (m_ShootingAudio != null && m_ChargingClip != null)
-                    {
-                        m_ShootingAudio.clip = m_ChargingClip;
-                        m_ShootingAudio.Play ();
-                    }
+                    StartChargingEffect();
                 }
                 // Otherwise, if the fire button is being held and the shell hasn't been launched yet...
                 else if (fireHeld && !m_Fired)
@@ -419,19 +490,44 @@ namespace Complete
                     m_AimSlider.value = m_MaxLaunchForce;
                 }
 
-                // Update cooldown timer
+                // Update cooldown timers
                 if (m_FireCooldownTimer > 0f)
                 {
                     m_FireCooldownTimer -= Time.deltaTime;
                 }
+                if (m_ChargeDelayTimer > 0f)
+                {
+                    m_ChargeDelayTimer -= Time.deltaTime;
+                }
 
                 // Shoot continuously if the fire button/joystick is held
                 isTryingToFire = fireHeld || fireDown;
-                if (isTryingToFire && m_FireCooldownTimer <= 0f)
+                if (isTryingToFire)
                 {
-                    m_CurrentLaunchForce = m_MaxLaunchForce;
-                    Fire();
-                    m_FireCooldownTimer = 1f / m_FireRate;
+                    if (m_FireCooldownTimer <= 0f)
+                    {
+                        m_CurrentLaunchForce = m_MaxLaunchForce;
+                        Fire();
+                        m_FireCooldownTimer = 1f / m_FireRate;
+
+                        // Set delay before the charging effect for the next shot starts
+                        // Delay is 30% of the cooldown time, up to max 0.5s
+                        m_ChargeDelayTimer = Mathf.Min((1f / m_FireRate) * 0.3f, 0.5f);
+                    }
+                    else
+                    {
+                        // Holding the button during cooldown -> wait for delay to expire before charging effect
+                        if (m_ChargeDelayTimer <= 0f)
+                        {
+                            StartChargingEffect();
+                        }
+                    }
+                }
+                else
+                {
+                    StopChargingEffect();
+                    // Optional: we can clear the delay timer if they let go, so tapping immediately resumes charge
+                    m_ChargeDelayTimer = 0f;
                 }
             }
         }
@@ -441,6 +537,7 @@ namespace Complete
         {
             // Set the fired flag so only Fire is only called once.
             m_Fired = true;
+            StopChargingEffect();
 
             if (!m_CanMoveWhileShooting && m_Movement != null)
             {
@@ -512,6 +609,7 @@ namespace Complete
                 UpdateAmmoUI();
                 if (m_CurrentAmmo <= 0)
                 {
+                    StartBlinking();
                     TriggerReload();
                 }
             }

@@ -317,7 +317,7 @@ namespace Complete
                 Vector2 xzErr = new Vector2(pos.x - m_NetworkTargetPosition.x, pos.z - m_NetworkTargetPosition.z);
                 if (xzErr.magnitude > 1.5f) // SOFT_THRESHOLD
                 {
-                    Debug.Log($"[TankMovement] Network Correction Triggered! Client YAW: {m_Rigidbody.rotation.eulerAngles.y:F1} | Server YAW: {m_NetworkTargetRotation.eulerAngles.y:F1} | Pos Diff: {xzErr.magnitude:F2}");
+                  //  Debug.Log($"[TankMovement] Network Correction Triggered! Client YAW: {m_Rigidbody.rotation.eulerAngles.y:F1} | Server YAW: {m_NetworkTargetRotation.eulerAngles.y:F1} | Pos Diff: {xzErr.magnitude:F2}");
                     Vector3 target = new Vector3(m_NetworkTargetPosition.x, pos.y, m_NetworkTargetPosition.z);
                     pos = Vector3.MoveTowards(pos, target, 5.0f * Time.fixedDeltaTime);
                 }

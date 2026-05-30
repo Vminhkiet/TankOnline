@@ -24,6 +24,7 @@ public:
     float    wantsShootYaw   = 0.f;   // actual aiming yaw of the turret
     uint8_t  wantsShootBarrels = 1;   // number of barrels
     float    shootFreezeTimer = 0.f;  // timer tracking freeze duration
+    float    fireCooldownTimer = 0.f; // timer for strict server-side fire rate enforcement
 
     int      currentAmmo = 1;         // current shots in magazine
     float    reloadTimer = 0.f;       // timer for reload

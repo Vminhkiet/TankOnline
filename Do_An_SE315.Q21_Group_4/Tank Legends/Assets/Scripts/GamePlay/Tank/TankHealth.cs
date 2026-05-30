@@ -55,10 +55,15 @@ namespace Complete
         private bool m_SegmentedBarBuilt = false;
 
         // Floating Text Object Pool
-        private const int FLOATING_TEXT_POOL_SIZE = 5;
+        private const int FLOATING_TEXT_POOL_SIZE = 20;
         private GameObject[] m_FloatingTextPool;
         private RectTransform[] m_FloatingTextRects;
         private TextMeshProUGUI[] m_FloatingTextTMPro;
+
+        private float m_AccumulatedDamage = 0f;
+        private float m_AccumulatedHeal = 0f;
+        private float m_DamageFlushTimer = 0f;
+        private const float DAMAGE_FLUSH_INTERVAL = 0.12f;
 
         private void Awake ()
         {
@@ -129,7 +134,7 @@ namespace Complete
             // Reduce current health by the amount of damage done.
             m_CurrentHealth -= amount;
             
-            SpawnFloatingText(-amount);
+            QueueFloatingText(-amount);
 
             // Change the UI elements appropriately.
             SetHealthUI ();
@@ -148,7 +153,7 @@ namespace Complete
             float delta = serverHealth - m_CurrentHealth;
             if (Mathf.Abs(delta) >= 1f)
             {
-                SpawnFloatingText(delta);
+                QueueFloatingText(delta);
             }
 
             m_CurrentHealth = serverHealth;
@@ -368,6 +373,44 @@ namespace Complete
         // ──────────────────────────────────────────────
         //  Floating Text Logic (Object Pool)
         // ──────────────────────────────────────────────
+        
+        private void Update()
+        {
+            if (m_DamageFlushTimer > 0f)
+            {
+                m_DamageFlushTimer -= Time.deltaTime;
+                if (m_DamageFlushTimer <= 0f)
+                {
+                    FlushFloatingText();
+                }
+            }
+        }
+
+        private void QueueFloatingText(float amount)
+        {
+            if (amount < 0f) m_AccumulatedDamage += amount;
+            else m_AccumulatedHeal += amount;
+
+            if (m_DamageFlushTimer <= 0f)
+            {
+                m_DamageFlushTimer = DAMAGE_FLUSH_INTERVAL;
+            }
+        }
+
+        private void FlushFloatingText()
+        {
+            if (m_AccumulatedDamage < 0f)
+            {
+                SpawnFloatingText(m_AccumulatedDamage);
+                m_AccumulatedDamage = 0f;
+            }
+            if (m_AccumulatedHeal > 0f)
+            {
+                SpawnFloatingText(m_AccumulatedHeal);
+                m_AccumulatedHeal = 0f;
+            }
+        }
+
         private void SpawnFloatingText(float amount)
         {
             if (m_FloatingTextPool == null || m_FloatingTextPrefab == null || !gameObject.activeInHierarchy || m_Dead) return;

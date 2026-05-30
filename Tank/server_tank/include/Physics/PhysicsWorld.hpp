@@ -17,6 +17,20 @@ public:
     std::vector<CollisionManifold>          _manifolds;
     std::unordered_map<uint32_t, Vector3>   _corrections; // position push-out per entityId
 
+    // ── Raycasting ────────────────────────────────────────────────────────────
+    struct RaycastHit {
+        bool hit = false;
+        uint32_t entityId = 0;
+        float distance = 999999.f;
+        Vector3 point;
+        Vector3 normal;
+    };
+    
+    // Casts a ray against static geometry and dynamic tanks.
+    // ignoreEntityId is used to prevent shooting yourself.
+    // radius allows for a "thick" raycast (SphereCast approximation).
+    RaycastHit Raycast(const Vector3& origin, const Vector3& dir, float maxDist, uint32_t ignoreEntityId = 0, float radius = 0.0f) const;
+
     // ── CRUD ──────────────────────────────────────────────────────────────────
     void addBox       (const OBBCollider&     box);
     void addCapsule   (const CapsuleCollider& cap);  // static capsule from map
