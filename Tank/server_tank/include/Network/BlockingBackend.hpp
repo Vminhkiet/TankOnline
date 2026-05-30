@@ -16,7 +16,7 @@
 //   the packet and calls routeCb — identical to what an IOCP worker does.
 //
 // Variable isolated:  how the OS delivers received bytes to userspace.
-// Everything else (BufferPool, ThreadPool, Match, MatchManager) is shared code.
+// Everything else (BufferPool, ThreadPool, Match, MatchScheduler) is shared code.
 class BlockingBackend : public INetworkBackend {
 public:
     // numReceivers: dedicated blocking-recv threads (default 2).
@@ -41,7 +41,7 @@ private:
     BufferPool                       _pool;
     std::function<void(GameCommand)> _routeCb;
 
-    // Recv-parse profiling — accumulated by recvLoop threads, drained by MatchManager [Perf]
+    // Recv-parse profiling — accumulated by recvLoop threads, drained by MatchScheduler [Perf]
     std::atomic<uint64_t> _accumRecvParseUs{0};
     std::atomic<uint32_t> _recvCount{0};
 };

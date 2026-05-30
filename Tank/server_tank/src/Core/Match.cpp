@@ -58,11 +58,13 @@ void Match::pushCommand(GameCommand cmd) {
 
 // ────────────────────────────────────────────────────────────────────────────
 
-void Match::tick(float dt) {
+void Match::tick(float dt, int64_t budgetUs, MetricsCollector& metrics) {
     if (!_running.load()) return;
 
     using Clock = std::chrono::high_resolution_clock;
     using Us    = std::chrono::microseconds;
+    
+    auto tickStart = Clock::now();
 
     // 1. Drain command queue
     std::deque<GameCommand> local;
@@ -159,6 +161,20 @@ void Match::tick(float dt) {
     if (playing) {
         _accumBulletUs    += std::chrono::duration_cast<Us>(t_collision  - t_bullet).count();
         _accumCollisionUs += std::chrono::duration_cast<Us>(t_phys_end   - t_collision).count();
+    }
+    
+    // 3.5 Graceful Degradation Check
+    auto t_critical_end = Clock::now();
+    int64_t elapsedUs = std::chrono::duration_cast<Us>(t_critical_end - tickStart).count();
+    
+    if (elapsedUs <= budgetUs) {
+        // [NON-CRITICAL SYSTEMS]
+        // Example: visibility calculations, minimap updates, analytics, telemetry, AI perception
+        // Simulated execution for academic report:
+        // if (playing) logPositions();
+    } else {
+        // Budget violated, skip non-critical systems
+        metrics.recordBudgetViolation();
     }
 
     // 4. Broadcast snapshot (SNAPSHOT_EVERY = 1 → every tick = 60 Hz)

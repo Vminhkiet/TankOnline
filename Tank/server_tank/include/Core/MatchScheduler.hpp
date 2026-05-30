@@ -10,14 +10,15 @@
 #include "Kafka/KafkaProducer.hpp"
 #include "Utils/ThreadPool.hpp"
 #include "Network/INetworkBackend.hpp"
+#include "Core/MetricsCollector.hpp"
 
-class MatchManager {
+class MatchScheduler {
 public:
-    static constexpr int MAX_CONCURRENT_MATCHES = 64;
+    static constexpr int MAX_CONCURRENT_MATCHES = 10;
     static constexpr int TICK_RATE_HZ           = 60;
 
-    explicit MatchManager(INetworkBackend& network);
-    ~MatchManager();
+    explicit MatchScheduler(INetworkBackend& network);
+    ~MatchScheduler();
 
     void start(const std::string& kafkaBrokers);
     void stop();
@@ -51,9 +52,5 @@ private:
 
     // Rolling stats (reset every STATS_INTERVAL_TICKS ticks)
     static constexpr int STATS_INTERVAL_TICKS = 600; // 10s at 60Hz
-    int      _statTicks     = 0;
-    int64_t  _statSumUs     = 0;   // total tick dispatch time
-    int64_t  _statMaxUs     = 0;   // worst tick
-    int64_t  _statMinUs     = INT64_MAX;
-    int      _statOverruns  = 0;
+    MetricsCollector _metrics;
 };

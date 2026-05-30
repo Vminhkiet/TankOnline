@@ -9,6 +9,7 @@
 #include "Network/CommandDispatcher.hpp"
 #include "Network/GameCommand.hpp"
 #include "Network/INetworkBackend.hpp"
+#include "Core/MetricsCollector.hpp"
 
 class Match {
 public:
@@ -26,7 +27,7 @@ public:
     void pushCommand(GameCommand cmd);
 
     // Called from tick dispatcher thread (one match per pool task).
-    void tick(float dt);
+    void tick(float dt, int64_t budgetUs, MetricsCollector& metrics);
 
     // Kick player by userId string (duplicate-login detection). Returns true if found.
     bool forceLogoutByUserId(const std::string& userId, uint16_t code,
