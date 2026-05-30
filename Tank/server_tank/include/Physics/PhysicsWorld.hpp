@@ -63,6 +63,14 @@ public:
 private:
     UniformGrid _grid{ 16.f };
 
+    // Persistent O(1) index maps: entityId → index in the corresponding vector.
+    // Using indices (not pointers) — safe across vector push_back reallocations.
+    // Updated O(1) on add/remove (with swapRemove bookkeeping), no per-tick allocation.
+    std::unordered_map<uint32_t, size_t> _dynIndex;  // _dynamicBoxes[i]
+    std::unordered_map<uint32_t, size_t> _boxIndex;  // _boxes[i]
+    std::unordered_map<uint32_t, size_t> _sphIndex;  // _spheres[i]
+    std::unordered_map<uint32_t, size_t> _capIndex;  // _capsules[i]
+
     // Broad-phase helpers
     void buildGrid();
 

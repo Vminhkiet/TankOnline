@@ -59,3 +59,38 @@ scrape_configs:
           service: tank-game-server
           server_id: local-01
           region: local
+
+  # ── Worst-Case GPC Benchmark (bench_metrics_agent.py :9101) ────────
+  # Chạy: python3 Tank/bench_metrics_agent.py --log /path/bench_worst_case.log
+  - job_name: bench-gpc
+    scrape_interval: 5s
+    metrics_path: /metrics/prometheus
+    static_configs:
+      - targets: ["10.83.136.95:9101"]
+        labels:
+          service: bench-gpc
+          benchmark: worst-case-spread
+
+  # ── 32-Match Concurrent Benchmark (bench_32match_agent.py :9102) ────
+  # Chạy: python3 Tank/bench_32match_agent.py --log /path/bench_32match.log
+  - job_name: bench-32match
+    scrape_interval: 5s
+    metrics_path: /metrics/prometheus
+    static_configs:
+      - targets: ["10.83.136.95:9102"]
+        labels:
+          service: bench-32match
+          benchmark: 32-match-concurrent
+
+  # ── Worst-Case Live Benchmark (bench_wc_live_agent.py :9103) ──────────
+  # Chạy: python3 Tank/bench_wc_live_agent.py [--players=10]
+  # Control UI: http://localhost:9103/
+  # Tự động start bench_wc_live.exe, đo vô hạn, cho phép đổi players qua UI
+  - job_name: bench-wc-live
+    scrape_interval: 5s
+    metrics_path: /metrics/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:9103"]
+        labels:
+          service: bench-wc-live
+          benchmark: worst-case-live

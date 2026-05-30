@@ -27,11 +27,11 @@ void UniformGrid::insert(uint32_t entityId, ColliderKind kind,
         _cells[{cx, cy, cz}].push_back(entry);
 }
 
-std::vector<std::pair<GridEntry, GridEntry>> UniformGrid::broadPhasePairs() const
+const std::vector<std::pair<GridEntry, GridEntry>>& UniformGrid::broadPhasePairs()
 {
-    // Track unique pairs via canonical (lowerID, higherID) key
-    struct U64Hash { size_t operator()(uint64_t k) const { return k * 2654435761u; } };
-    std::unordered_map<uint64_t, std::pair<GridEntry,GridEntry>, U64Hash> seen;
+    // Reuse persistent buffers — clear() keeps allocated capacity → no heap allocation.
+    _seen.clear();
+    _pairsResult.clear();
 
     for (auto& [cell, entries] : _cells) {
         for (size_t i = 0; i < entries.size(); ++i) {
@@ -40,7 +40,6 @@ std::vector<std::pair<GridEntry, GridEntry>> UniformGrid::broadPhasePairs() cons
             const GridEntry& b = entries[j];
 
             if (a.entityId == b.entityId) continue;
-            // Skip static-static pairs (Box/Capsule vs Box/Capsule)
             bool aStatic = (a.kind == ColliderKind::Box || a.kind == ColliderKind::Capsule);
             bool bStatic = (b.kind == ColliderKind::Box || b.kind == ColliderKind::Capsule);
             if (aStatic && bStatic) continue;
@@ -49,18 +48,15 @@ std::vector<std::pair<GridEntry, GridEntry>> UniformGrid::broadPhasePairs() cons
             if (lo > hi) std::swap(lo, hi);
             uint64_t key = (lo << 32) | hi;
 
-            if (seen.count(key)) continue;
+            if (_seen.count(key)) continue;
 
-            // Canonical order: static colliders (Box/Capsule) go second
             if (aStatic)
-                seen[key] = {b, a};
+                _seen[key] = {b, a};
             else
-                seen[key] = {a, b};
+                _seen[key] = {a, b};
         }}
     }
 
-    std::vector<std::pair<GridEntry,GridEntry>> result;
-    result.reserve(seen.size());
-    for (auto& [k, p] : seen) result.push_back(p);
-    return result;
+    for (auto& [k, p] : _seen) _pairsResult.push_back(p);
+    return _pairsResult;
 }

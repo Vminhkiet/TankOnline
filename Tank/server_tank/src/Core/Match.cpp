@@ -67,11 +67,13 @@ void Match::tick(float dt, int64_t budgetUs, MetricsCollector& metrics) {
     auto tickStart = Clock::now();
 
     // 1. Drain command queue
+    auto t_drain_start = Clock::now();
     std::deque<GameCommand> local;
     {
         std::lock_guard lock(_queueMutex);
         local.swap(_cmdQueue);
     }
+    auto t_drain_end = Clock::now();
 
     // 2. Dispatch — timed to capture handler overhead (handleMove / handleShoot)
     auto t_dispatch_start = Clock::now();
@@ -178,15 +180,32 @@ void Match::tick(float dt, int64_t budgetUs, MetricsCollector& metrics) {
     }
 
     // 4. Broadcast snapshot (SNAPSHOT_EVERY = 1 → every tick = 60 Hz)
+    int64_t snapUs = 0;
     if (++_tickCount >= SNAPSHOT_EVERY) {
         _tickCount = 0;
         auto t_snap_start = Clock::now();
         broadcastSnapshot();
-        if (playing)
-            _accumSnapUs += std::chrono::duration_cast<Us>(Clock::now() - t_snap_start).count();
+        auto t_snap_end = Clock::now();
+        snapUs = std::chrono::duration_cast<Us>(t_snap_end - t_snap_start).count();
+        if (playing) _accumSnapUs += snapUs;
     }
 
-    // 5. [Task] log — emit once per TASK_LOG_TICKS PLAYING ticks (no per-tick disk I/O)
+    // 5. Record per-tick breakdown (every tick — benchmark reads via lastBreakdown())
+    {
+        int64_t drainUs    = std::chrono::duration_cast<Us>(t_drain_end    - t_drain_start).count();
+        int64_t dispatchUs = std::chrono::duration_cast<Us>(t_dispatch_end - t_dispatch_start).count();
+        int64_t bulletUs   = std::chrono::duration_cast<Us>(t_collision    - t_bullet).count();
+        int64_t physUs     = std::chrono::duration_cast<Us>(t_phys_end     - t_collision).count();
+        _lastBreakdown.drainUs         = drainUs;
+        _lastBreakdown.dispatchUs      = dispatchUs;
+        _lastBreakdown.bulletUs        = bulletUs;
+        _lastBreakdown.physicsUs       = physUs;
+        _lastBreakdown.snapUs          = snapUs;
+        _lastBreakdown.activeBullets   = static_cast<int64_t>(_world.activeBulletCount());
+        _lastBreakdown.totalPostDrainUs = dispatchUs + bulletUs + physUs + snapUs;
+    }
+
+    // 5b. [Task] log — emit once per TASK_LOG_TICKS PLAYING ticks (no per-tick disk I/O)
     if (playing && ++_taskTickCount >= TASK_LOG_TICKS) {
         uint64_t avgBullet    = _accumBulletUs    / _taskTickCount;
         uint64_t avgCollision = _accumCollisionUs / _taskTickCount;
