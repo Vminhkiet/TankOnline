@@ -15,4 +15,6 @@ enum class Opcode : uint16_t {
     S2C_FORCE_LOGOUT = 2005,  // raw binary: ForceLogoutPacket + UTF-8 message bytes
     S2C_EVENT_SHOOT  = 2006,  // raw binary: EventShootPacket
     S2C_PONG         = 2007,  // raw binary: PongPacket
+    S2C_EVENT_SPAWN_ITEM = 2008, // raw binary: PacketSpawnItem
+    S2C_EVENT_DESPAWN_ITEM = 2009, // raw binary: PacketDespawnItem
 };

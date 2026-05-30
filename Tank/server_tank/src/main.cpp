@@ -1,4 +1,4 @@
-#include "Core/MatchManager.hpp"
+#include "Core/MatchScheduler.hpp"
 #include "Network/INetworkBackend.hpp"
 #include "Network/NetworkManager.hpp"
 #include "Network/BlockingBackend.hpp"
@@ -135,7 +135,7 @@ int main() {
     discThread.detach();
 
     // ── Match manager ────────────────────────────────────────────────────────
-    MatchManager manager(*netPtr);
+    MatchScheduler manager(*netPtr);
     manager.start(kafkaBrokers);
 
     // ── Debug matches: load from debug_matches.json if present ─────────────
@@ -165,7 +165,7 @@ int main() {
         }
     }
     if (!debugFileLoaded) {
-        const int numMatches = std::stoi(getEnv("NUM_MATCHES", "10"));
+        const int numMatches = std::stoi(getEnv("NUM_MATCHES", "0")); // Changed default to 0 to prevent filling up the server
         for (int m = 1; m <= numMatches; ++m) {
             MatchConfig cfg;
             cfg.matchId         = static_cast<uint32_t>(1002 + m);

@@ -52,6 +52,8 @@ namespace Complete
         private TankAnimation m_TankAnimation;      // Reference to the external TankAnimation component.
         private Vector3 m_RemoteTargetDir;          // Target direction for remote turret
         private float m_RemoteAimTimer = 0f;        // Timer for remote aiming
+        private Quaternion m_RemoteTurretTarget;    // Smooth target rotation for remote turret
+        private bool m_HasRemoteTurretTarget = false;
 
         private string m_FireButton;                // The input axis that is used for launching shells.
         private float m_CurrentLaunchForce;         // The force that will be given to the shell when the fire button is released.
@@ -105,7 +107,6 @@ namespace Complete
         {
             if (GameUIManager.Instance != null && m_IsLocalPlayer)
             {
-                GameUIManager.Instance.UpdateReloadProgress(0f);
                 if (GameUIManager.Instance.m_ReloadButton != null)
                 {
                     GameUIManager.Instance.m_ReloadButton.onClick.RemoveListener(OnReloadButtonClicked);
@@ -249,6 +250,13 @@ namespace Complete
         {
             if (!m_IsLocalPlayer)
             {
+                // Smooth remote turret rotation
+                if (m_HasRemoteTurretTarget && m_TankHead != null)
+                {
+                    m_TankHead.rotation = Quaternion.RotateTowards(
+                        m_TankHead.rotation, m_RemoteTurretTarget, 720f * Time.deltaTime);
+                }
+
                 if (m_HitscanVisualTimer > 0f)
                 {
                     m_HitscanVisualTimer -= Time.deltaTime;
@@ -262,6 +270,12 @@ namespace Complete
 
             if (m_IsReloading)
             {
+                // Allow movement during reload even for tanks that can't move while shooting
+                if (!m_CanMoveWhileShooting && m_Movement != null)
+                {
+                    m_Movement.m_IsInputFrozen = false;
+                }
+
                 m_ReloadTimer -= Time.deltaTime;
                 if (GameUIManager.Instance != null && m_Definition != null && m_Definition.RealStats.ReloadTime > 0f && m_IsLocalPlayer)
                 {
@@ -579,8 +593,8 @@ namespace Complete
             {
                 Vector3 targetDir = new Vector3(Mathf.Sin(yaw), 0, Mathf.Cos(yaw));
                 Quaternion targetMuzzleRot = Quaternion.LookRotation(targetDir, transform.up);
-                Quaternion targetTurretRot = targetMuzzleRot * Quaternion.Inverse(m_TurretToMuzzleOffset);
-                m_TankHead.rotation = targetTurretRot;
+                m_RemoteTurretTarget = targetMuzzleRot * Quaternion.Inverse(m_TurretToMuzzleOffset);
+                m_HasRemoteTurretTarget = true;
             }
         }
     }

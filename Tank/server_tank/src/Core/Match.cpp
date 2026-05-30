@@ -58,11 +58,13 @@ void Match::pushCommand(GameCommand cmd) {
 
 // ────────────────────────────────────────────────────────────────────────────
 
-void Match::tick(float dt) {
+void Match::tick(float dt, int64_t budgetUs, MetricsCollector& metrics) {
     if (!_running.load()) return;
 
     using Clock = std::chrono::high_resolution_clock;
     using Us    = std::chrono::microseconds;
+    
+    auto tickStart = Clock::now();
 
     // 1. Drain command queue
     std::deque<GameCommand> local;
@@ -113,6 +115,7 @@ void Match::tick(float dt) {
     _world.updateBullets(dt);
     auto t_collision = Clock::now();
     _world.runPhysics(dt);
+    _world.spawnItems();
     auto t_phys_end = Clock::now();
 
     // Broadcast shoot events instantly (don't wait for snapshot tick rate)
@@ -129,9 +132,49 @@ void Match::tick(float dt) {
         }
     }
 
+    auto spawnEvents = _world.getItemSpawnEvents();
+    if (!spawnEvents.empty()) {
+        for (auto& ev : spawnEvents) {
+            ev.matchId = _config.matchId;
+            for (uint32_t pid : _config.playerIds) {
+                sockaddr_in addr{};
+                if (_sessions.getAddress(pid, addr)) {
+                    _network.send(addr, reinterpret_cast<const uint8_t*>(&ev), sizeof(PacketSpawnItem));
+                }
+            }
+        }
+    }
+
+    auto despawnEvents = _world.getItemDespawnEvents();
+    if (!despawnEvents.empty()) {
+        for (auto& ev : despawnEvents) {
+            ev.matchId = _config.matchId;
+            for (uint32_t pid : _config.playerIds) {
+                sockaddr_in addr{};
+                if (_sessions.getAddress(pid, addr)) {
+                    _network.send(addr, reinterpret_cast<const uint8_t*>(&ev), sizeof(PacketDespawnItem));
+                }
+            }
+        }
+    }
+
     if (playing) {
         _accumBulletUs    += std::chrono::duration_cast<Us>(t_collision  - t_bullet).count();
         _accumCollisionUs += std::chrono::duration_cast<Us>(t_phys_end   - t_collision).count();
+    }
+    
+    // 3.5 Graceful Degradation Check
+    auto t_critical_end = Clock::now();
+    int64_t elapsedUs = std::chrono::duration_cast<Us>(t_critical_end - tickStart).count();
+    
+    if (elapsedUs <= budgetUs) {
+        // [NON-CRITICAL SYSTEMS]
+        // Example: visibility calculations, minimap updates, analytics, telemetry, AI perception
+        // Simulated execution for academic report:
+        // if (playing) logPositions();
+    } else {
+        // Budget violated, skip non-critical systems
+        metrics.recordBudgetViolation();
     }
 
     // 4. Broadcast snapshot (SNAPSHOT_EVERY = 1 → every tick = 60 Hz)

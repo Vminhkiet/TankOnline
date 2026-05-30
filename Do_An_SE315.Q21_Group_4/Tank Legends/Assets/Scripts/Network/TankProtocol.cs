@@ -18,6 +18,8 @@ namespace TankNet
         S2C_FORCE_LOGOUT = 2005,
         S2C_EVENT_SHOOT  = 2006,
         S2C_PONG         = 2007,
+        S2C_EVENT_SPAWN_ITEM = 2008,
+        S2C_EVENT_DESPAWN_ITEM = 2009,
     }
 
     // Must match server NetworkConstants.h exactly
@@ -66,6 +68,30 @@ namespace TankNet
         public uint  bulletId;
         public uint  ownerId;   // tankId that fired this bullet
         public float x, y, z;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct ItemState
+    {
+        public uint itemId;
+        public float x, y, z;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct PacketSpawnItem
+    {
+        public uint matchId;
+        public ushort opcode;
+        public uint itemId;
+        public float x, y, z;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct PacketDespawnItem
+    {
+        public uint matchId;
+        public ushort opcode;
+        public uint itemId;
     }
 
     // S2C_SNAPSHOT raw header (not bit-packed — easier for Unity)

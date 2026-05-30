@@ -8,6 +8,12 @@
 #include "World/GameMap.hpp"
 #include "Network/Packets.hpp"
 #include "Core/MatchConfig.hpp"
+#include <random>
+
+struct Item {
+    uint32_t id;
+    Vector3 pos;
+};
 
 class GameWorld {
 public:
@@ -19,9 +25,10 @@ public:
     void removePlayer(uint32_t playerId);
 
     void processInput(uint32_t playerId, const ClientInput& input);
-    void update(float deltaTime);           // calls updateBullets + runPhysics in order
+    void update(float deltaTime);           // calls updateBullets + runPhysics + spawnItems in order
     void updateBullets(float deltaTime);    // bullet move + CCD wall hit + tank hit
     void runPhysics(float deltaTime);       // tank movement, gravity, PhysicsWorld::Tick, corrections
+    void spawnItems();                      // item spawning logic (called after runPhysics)
 
     // Check win/timeout condition. Returns Running while game is still active.
     MatchOutcome checkOutcome(float elapsed, float maxDuration,
@@ -30,6 +37,8 @@ public:
 
     std::vector<uint8_t> getSnapshot() const;
     std::vector<EventShootPacket> getShootEvents();
+    std::vector<PacketSpawnItem> getItemSpawnEvents();
+    std::vector<PacketDespawnItem> getItemDespawnEvents();
 
     size_t playerCount() const { return _tanks.size(); }
     const std::unordered_map<uint32_t, int>& getKills()  const { return _kills; }
@@ -60,8 +69,13 @@ private:
     std::unordered_map<uint32_t, int>     _maxHealth; // playerId -> max health
     std::vector<EventShootPacket>         _shootEvents;
     uint32_t                              _nextBulletId = 50000;
+    uint32_t                              _nextItemId = 10000;
     bool                                  _respawnOnDeath = true;
     float                                 _elapsedTime = 0.0f;
+    std::vector<Vector3>                  _itemSpawnPoints;
+    std::vector<Item>                     _activeItems;
+    std::vector<PacketSpawnItem>          _itemSpawnEvents;
+    std::vector<PacketDespawnItem>        _itemDespawnEvents;
 
     void syncColliders();
     void applyPhysicsResults(float deltaTime);
