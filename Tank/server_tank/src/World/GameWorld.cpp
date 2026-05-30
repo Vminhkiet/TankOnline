@@ -21,6 +21,17 @@ bool GameWorld::loadMap(const std::string& mapPath)
              _physics._boxes.size(), _physics._capsules.size(),
              defaultCfg.extentX, defaultCfg.extentY, defaultCfg.extentZ,
              _map.getBulletConfig().radius);
+
+    // Generate 30 random spawn points for items
+    std::mt19937 rng(1337); // Fixed seed or random device
+    std::uniform_real_distribution<float> distXZ(-38.0f, 38.0f);
+    for (int i = 0; i < 30; ++i) {
+        float x = distXZ(rng);
+        float z = distXZ(rng);
+        float y = surfaceHeight(x, z);
+        _itemSpawnPoints.push_back({x, y + 0.5f, z}); // Float slightly above ground
+    }
+
     return true;
 }
 
@@ -243,6 +254,31 @@ void GameWorld::runPhysics(float deltaTime)
     // Apply position corrections and spawn bullets from wantsShoot flags
     applyPhysicsResults(deltaTime);
 
+    // Item Pickup Logic
+    for (auto& [id, tank] : _tanks) {
+        if (!tank.isAlive) continue;
+        for (auto it = _activeItems.begin(); it != _activeItems.end(); ) {
+            float dist = std::sqrt((tank.position.x - it->pos.x)*(tank.position.x - it->pos.x) + 
+                                   (tank.position.z - it->pos.z)*(tank.position.z - it->pos.z));
+            if (dist < 2.5f) { // Pickup radius
+                tank.health += 500; // Heal amount
+                float maxHp = _maxHealth[id] > 0 ? _maxHealth[id] : 100.0f;
+                if (tank.health > maxHp) tank.health = static_cast<int>(maxHp);
+
+                PacketDespawnItem pkt{};
+                pkt.opcode = static_cast<uint16_t>(Opcode::S2C_EVENT_DESPAWN_ITEM);
+                pkt.itemId = it->id;
+                _itemDespawnEvents.push_back(pkt);
+
+                LOG_INFO("GameWorld: player {} picked up item {}", id, it->id);
+
+                it = _activeItems.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
     // Respawn (non-match/training mode only)
     if (_respawnOnDeath) {
         for (auto& [id, tank] : _tanks) {
@@ -273,6 +309,92 @@ void GameWorld::update(float deltaTime)
     _elapsedTime += deltaTime;
     updateBullets(deltaTime);
     runPhysics(deltaTime);
+    spawnItems();
+}
+
+void GameWorld::spawnItems()
+{
+    if (_itemSpawnPoints.empty()) return;
+
+    // Item Spawning Logic - maintain max 5 active items
+    if (_activeItems.size() < 5) {
+        // Create a shuffled list of indices
+        int numPoints = static_cast<int>(_itemSpawnPoints.size());
+        std::vector<int> indices(numPoints);
+        for (int i = 0; i < numPoints; ++i) indices[i] = i;
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(indices.begin(), indices.end(), g);
+
+        int bestIndex = -1;
+        float maxDist = -1.0f;
+
+        for (int idx : indices) {
+            Vector3 pt = _itemSpawnPoints[idx];
+            
+            // Skip if an item already exists at this exact spot
+            bool occupied = false;
+            for (const auto& item : _activeItems) {
+                if (std::fabs(item.pos.x - pt.x) < 0.5f && std::fabs(item.pos.z - pt.z) < 0.5f) {
+                    occupied = true;
+                    break;
+                }
+            }
+            if (occupied) continue;
+
+            // Find distance to closest tank
+            float closestDistToTank = 999999.0f;
+            for (const auto& [tid, tank] : _tanks) {
+                if (!tank.isAlive) continue;
+                float dist = std::sqrt((tank.position.x - pt.x)*(tank.position.x - pt.x) + 
+                                       (tank.position.z - pt.z)*(tank.position.z - pt.z));
+                if (dist < closestDistToTank) {
+                    closestDistToTank = dist;
+                }
+            }
+
+            // Early exit
+            if (closestDistToTank > 10.0f || _tanks.empty()) {
+                bestIndex = idx;
+                break;
+            }
+
+            if (closestDistToTank > maxDist) {
+                maxDist = closestDistToTank;
+                bestIndex = idx;
+            }
+        }
+
+        if (bestIndex != -1) {
+            Item newItem;
+            newItem.id = _nextItemId++;
+            newItem.pos = _itemSpawnPoints[bestIndex];
+            _activeItems.push_back(newItem);
+
+            PacketSpawnItem pkt{};
+            pkt.opcode = static_cast<uint16_t>(Opcode::S2C_EVENT_SPAWN_ITEM);
+            pkt.itemId = newItem.id;
+            pkt.x = newItem.pos.x;
+            pkt.y = newItem.pos.y;
+            pkt.z = newItem.pos.z;
+            _itemSpawnEvents.push_back(pkt);
+
+            LOG_INFO("GameWorld: spawned item {} at ({:.1f},{:.1f},{:.1f}), active={}",
+                     newItem.id, newItem.pos.x, newItem.pos.y, newItem.pos.z, _activeItems.size());
+        }
+    }
+}
+
+std::vector<PacketSpawnItem> GameWorld::getItemSpawnEvents() {
+    auto copy = _itemSpawnEvents;
+    _itemSpawnEvents.clear();
+    return copy;
+}
+
+std::vector<PacketDespawnItem> GameWorld::getItemDespawnEvents() {
+    auto copy = _itemDespawnEvents;
+    _itemDespawnEvents.clear();
+    return copy;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -530,7 +652,8 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
 
     uint16_t tc = static_cast<uint16_t>(ts.size());
     uint16_t bc = static_cast<uint16_t>(bs.size());
-    size_t   totalBytes = 2 + tc * sizeof(TankState) + 2 + bc * sizeof(BulletState);
+    uint16_t ic = static_cast<uint16_t>(_activeItems.size());
+    size_t   totalBytes = 2 + tc * sizeof(TankState) + 2 + bc * sizeof(BulletState) + 2 + ic * (4 + 12);
 
     std::vector<uint8_t> buf(totalBytes);
     uint8_t* ptr = buf.data();
@@ -539,6 +662,13 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
     for (auto& t : ts) { std::memcpy(ptr, &t, sizeof(t)); ptr += sizeof(t); }
     std::memcpy(ptr, &bc, 2); ptr += 2;
     for (auto& bl : bs) { std::memcpy(ptr, &bl, sizeof(bl)); ptr += sizeof(bl); }
+    std::memcpy(ptr, &ic, 2); ptr += 2;
+    for (auto& item : _activeItems) {
+        std::memcpy(ptr, &item.id, 4); ptr += 4;
+        std::memcpy(ptr, &item.pos.x, 4); ptr += 4;
+        std::memcpy(ptr, &item.pos.y, 4); ptr += 4;
+        std::memcpy(ptr, &item.pos.z, 4); ptr += 4;
+    }
 
     return buf;
 }

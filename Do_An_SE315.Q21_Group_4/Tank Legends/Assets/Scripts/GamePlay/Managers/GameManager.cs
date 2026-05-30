@@ -23,6 +23,7 @@ namespace Complete
         public uint m_MatchId = 1;
         public GameObject m_RemoteTankPrefab;
         public GameObject m_RemoteBulletPrefab;
+        public GameObject m_HealthItemPrefab;
 
         [System.Serializable]
         public struct TankPrefabMapping
@@ -68,6 +69,7 @@ namespace Complete
 
         private readonly Dictionary<uint, GameObject> _remoteTanks   = new();
         private readonly Dictionary<uint, GameObject> _remoteBullets = new();
+        private readonly Dictionary<uint, GameObject> _remoteItems   = new();
 
         // ── Snapshot interpolation ───────────────────────────────────────────
         private struct SnapEntry { public float t; public Vector3 pos; public Quaternion rot; public float turretYaw; }
@@ -155,6 +157,8 @@ namespace Complete
                     TankNetClient.Instance.OnMatchEnd    += HandleMatchEnd;
                     TankNetClient.Instance.OnForceLogout += HandleForceLogout;
                     TankNetClient.Instance.OnEventShoot  += HandleEventShoot;
+                    TankNetClient.Instance.OnItemSpawn   += HandleItemSpawn;
+                    TankNetClient.Instance.OnItemDespawn += HandleItemDespawn;
 
                     TankNetClient.Instance.Connect(m_ServerHost, m_ServerPort, m_MatchId, m_MyPlayerId);
                 }
@@ -282,6 +286,8 @@ namespace Complete
                 TankNetClient.Instance.OnMatchEnd    -= HandleMatchEnd;
                 TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
                 TankNetClient.Instance.OnEventShoot  -= HandleEventShoot;
+                TankNetClient.Instance.OnItemSpawn   -= HandleItemSpawn;
+                TankNetClient.Instance.OnItemDespawn -= HandleItemDespawn;
                 TankNetClient.Instance.Disconnect();
             }
 
@@ -791,6 +797,23 @@ namespace Complete
             foreach (var id in new List<uint>(_remoteTanks.Keys))
                 if (!seen.Contains(id)) DespawnRemote(id);
 
+            // Item Synchronization
+            var seenItems = new HashSet<uint>();
+            if (snap.Items != null)
+            {
+                foreach (var st in snap.Items)
+                {
+                    seenItems.Add(st.itemId);
+                    if (!_remoteItems.TryGetValue(st.itemId, out var go))
+                    {
+                        go = InstantiateItem(st.itemId, new Vector3(st.x, st.y, st.z));
+                        _remoteItems[st.itemId] = go;
+                    }
+                }
+            }
+            foreach (var id in new List<uint>(_remoteItems.Keys))
+                if (!seenItems.Contains(id)) DespawnItem(id);
+
             // Render bullets fired by opponent tanks (skip own bullets — already shown locally)
             UpdateRemoteBullets(snap.Bullets);
 
@@ -815,6 +838,49 @@ namespace Complete
                         shooting.RemoteFire(pkt.turretYaw, i, pkt.weaponType);
                     }
                 }
+            }
+        }
+
+        private void HandleItemSpawn(PacketSpawnItem pkt)
+        {
+            if (!_remoteItems.ContainsKey(pkt.itemId))
+            {
+                var go = InstantiateItem(pkt.itemId, new Vector3(pkt.x, pkt.y, pkt.z));
+                _remoteItems[pkt.itemId] = go;
+            }
+        }
+
+        private void HandleItemDespawn(PacketDespawnItem pkt)
+        {
+            DespawnItem(pkt.itemId);
+        }
+
+        private GameObject InstantiateItem(uint itemId, Vector3 pos)
+        {
+            if (m_HealthItemPrefab != null)
+            {
+                return Instantiate(m_HealthItemPrefab, pos, Quaternion.identity);
+            }
+            else
+            {
+                // Fallback visual cross
+                GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = $"Item_{itemId}";
+                go.transform.position = pos;
+                go.transform.localScale = new Vector3(0.8f, 0.8f, 0.8f);
+                var renderer = go.GetComponent<Renderer>();
+                if (renderer != null) renderer.material.color = Color.green;
+                Destroy(go.GetComponent<Collider>()); // Let server handle physics
+                return go;
+            }
+        }
+
+        private void DespawnItem(uint itemId)
+        {
+            if (_remoteItems.TryGetValue(itemId, out var go))
+            {
+                if (go != null) Destroy(go);
+                _remoteItems.Remove(itemId);
             }
         }
 

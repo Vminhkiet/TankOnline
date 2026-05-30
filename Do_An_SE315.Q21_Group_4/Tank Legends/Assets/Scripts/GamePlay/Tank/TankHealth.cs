@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
+using System.Collections;
 
 namespace Complete
 {
@@ -33,6 +35,12 @@ namespace Complete
         public Color m_BorderColor = new Color(0.2f, 0.2f, 0.2f, 1f);
         [Tooltip("Width of the border around the health bar.")]
         public float m_BorderWidth = 1f;
+
+        [Header("Floating Text")]
+        [Tooltip("Prefab for floating text. Must contain a TextMeshProUGUI component.")]
+        public GameObject m_FloatingTextPrefab;
+        [Tooltip("Container for floating damage/heal numbers. If empty, falls back to the health bar container.")]
+        public RectTransform m_FloatingTextContainer;
         
         private TankAnimation m_TankAnimation;      // Reference to the external TankAnimation component.
         
@@ -46,6 +54,11 @@ namespace Complete
         private Image[] m_SegmentFills;
         private bool m_SegmentedBarBuilt = false;
 
+        // Floating Text Object Pool
+        private const int FLOATING_TEXT_POOL_SIZE = 5;
+        private GameObject[] m_FloatingTextPool;
+        private RectTransform[] m_FloatingTextRects;
+        private TextMeshProUGUI[] m_FloatingTextTMPro;
 
         private void Awake ()
         {
@@ -59,6 +72,36 @@ namespace Complete
             m_ExplosionParticles.gameObject.SetActive (false);
             
             m_TankAnimation = GetComponent<TankAnimation>();
+
+            // Initialize Floating Text Pool
+            m_FloatingTextPool = new GameObject[FLOATING_TEXT_POOL_SIZE];
+            m_FloatingTextRects = new RectTransform[FLOATING_TEXT_POOL_SIZE];
+            m_FloatingTextTMPro = new TextMeshProUGUI[FLOATING_TEXT_POOL_SIZE];
+
+            RectTransform container = m_FloatingTextContainer;
+            if (container == null) container = m_SegmentBarContainer;
+
+            if (container != null && m_FloatingTextPrefab != null)
+            {
+                for (int i = 0; i < FLOATING_TEXT_POOL_SIZE; i++)
+                {
+                    GameObject textGO = Instantiate(m_FloatingTextPrefab, container);
+                    
+                    RectTransform rt = textGO.GetComponent<RectTransform>();
+                    // Reset transform in case the prefab was saved with a weird offset or scale
+                    rt.localPosition = Vector3.zero;
+                    rt.localRotation = Quaternion.identity;
+                    rt.localScale = Vector3.one;
+
+                    TextMeshProUGUI tmpro = textGO.GetComponent<TextMeshProUGUI>();
+
+                    textGO.SetActive(false);
+
+                    m_FloatingTextPool[i] = textGO;
+                    m_FloatingTextRects[i] = rt;
+                    m_FloatingTextTMPro[i] = tmpro;
+                }
+            }
         }
 
 
@@ -85,6 +128,8 @@ namespace Complete
         {
             // Reduce current health by the amount of damage done.
             m_CurrentHealth -= amount;
+            
+            SpawnFloatingText(-amount);
 
             // Change the UI elements appropriately.
             SetHealthUI ();
@@ -100,6 +145,12 @@ namespace Complete
         // Syncs health bar and triggers death sequence if health reached zero.
         public void SyncFromServer(float serverHealth)
         {
+            float delta = serverHealth - m_CurrentHealth;
+            if (Mathf.Abs(delta) >= 1f)
+            {
+                SpawnFloatingText(delta);
+            }
+
             m_CurrentHealth = serverHealth;
             SetHealthUI();
             if (m_CurrentHealth <= 0f && !m_Dead)
@@ -312,6 +363,73 @@ namespace Complete
                 // Tắt xe tăng ngay lập tức
                 gameObject.SetActive (false);
             }
+        }
+
+        // ──────────────────────────────────────────────
+        //  Floating Text Logic (Object Pool)
+        // ──────────────────────────────────────────────
+        private void SpawnFloatingText(float amount)
+        {
+            if (m_FloatingTextPool == null || m_FloatingTextPrefab == null || !gameObject.activeInHierarchy || m_Dead) return;
+
+            // Find an inactive object in the pool
+            int poolIndex = -1;
+            for (int i = 0; i < FLOATING_TEXT_POOL_SIZE; i++)
+            {
+                if (m_FloatingTextPool[i] != null && !m_FloatingTextPool[i].activeSelf)
+                {
+                    poolIndex = i;
+                    break;
+                }
+            }
+
+            if (poolIndex == -1) return; // Pool full, just ignore
+
+            GameObject textGO = m_FloatingTextPool[poolIndex];
+            RectTransform rt = m_FloatingTextRects[poolIndex];
+            TextMeshProUGUI tmpro = m_FloatingTextTMPro[poolIndex];
+
+            // Randomize X slightly based on the text's own width so it scales correctly
+            float randomX = UnityEngine.Random.Range(-rt.rect.width * 0.25f, rt.rect.width * 0.25f);
+            rt.localPosition = new Vector3(randomX, 0f, 0f); // Use localPosition to ensure it's relative to container's pivot
+
+            tmpro.text = amount > 0 ? $"+{Mathf.RoundToInt(amount)}" : $"{Mathf.RoundToInt(amount)}";
+            tmpro.color = amount > 0 ? Color.green : Color.red;
+            
+            textGO.SetActive(true);
+            StartCoroutine(AnimateFloatingText(textGO, rt, tmpro));
+        }
+
+        private IEnumerator AnimateFloatingText(GameObject go, RectTransform rt, TextMeshProUGUI tmpro)
+        {
+            float duration = 1.0f;
+            float elapsed = 0f;
+            
+            // Use world position to avoid being affected by parent's rotation (like if Canvas is flipped)
+            Vector3 startPos = rt.position;
+            
+            // Calculate distance in world space. Ensure it moves at least 1.5 world units.
+            float worldFloatDist = Mathf.Max(rt.rect.height * 1.5f * rt.lossyScale.y, 1.5f);
+            Vector3 endPos = startPos + Vector3.up * worldFloatDist; 
+            
+            Color startColor = tmpro.color;
+            Color endColor = new Color(startColor.r, startColor.g, startColor.b, 0f);
+
+            while (elapsed < duration)
+            {
+                if (go == null || !go.activeSelf) yield break;
+                elapsed += Time.deltaTime;
+                float t = elapsed / duration;
+                
+                float easeT = 1f - Mathf.Pow(1f - t, 3f); // easeOutCubic
+                
+                rt.position = Vector3.Lerp(startPos, endPos, easeT);
+                tmpro.color = Color.Lerp(startColor, endColor, easeT);
+                
+                yield return null;
+            }
+            
+            if (go != null) go.SetActive(false); // Return to pool
         }
     }
 }

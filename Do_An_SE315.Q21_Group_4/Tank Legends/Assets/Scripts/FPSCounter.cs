@@ -12,7 +12,7 @@ public class FPSCounter : MonoBehaviour
     {
         // Uncap FPS according to user request
         QualitySettings.vSyncCount = 0;
-        Application.targetFrameRate = 30;
+        Application.targetFrameRate = 60;
 
         // Auto-instantiate the FPS Counter so the user doesn't have to place it in every scene
         GameObject go = new GameObject("FPS_Counter_Debug");

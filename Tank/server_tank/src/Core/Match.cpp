@@ -113,6 +113,7 @@ void Match::tick(float dt) {
     _world.updateBullets(dt);
     auto t_collision = Clock::now();
     _world.runPhysics(dt);
+    _world.spawnItems();
     auto t_phys_end = Clock::now();
 
     // Broadcast shoot events instantly (don't wait for snapshot tick rate)
@@ -124,6 +125,32 @@ void Match::tick(float dt) {
                 sockaddr_in addr{};
                 if (_sessions.getAddress(pid, addr)) {
                     _network.send(addr, reinterpret_cast<const uint8_t*>(&ev), sizeof(EventShootPacket));
+                }
+            }
+        }
+    }
+
+    auto spawnEvents = _world.getItemSpawnEvents();
+    if (!spawnEvents.empty()) {
+        for (auto& ev : spawnEvents) {
+            ev.matchId = _config.matchId;
+            for (uint32_t pid : _config.playerIds) {
+                sockaddr_in addr{};
+                if (_sessions.getAddress(pid, addr)) {
+                    _network.send(addr, reinterpret_cast<const uint8_t*>(&ev), sizeof(PacketSpawnItem));
+                }
+            }
+        }
+    }
+
+    auto despawnEvents = _world.getItemDespawnEvents();
+    if (!despawnEvents.empty()) {
+        for (auto& ev : despawnEvents) {
+            ev.matchId = _config.matchId;
+            for (uint32_t pid : _config.playerIds) {
+                sockaddr_in addr{};
+                if (_sessions.getAddress(pid, addr)) {
+                    _network.send(addr, reinterpret_cast<const uint8_t*>(&ev), sizeof(PacketDespawnItem));
                 }
             }
         }

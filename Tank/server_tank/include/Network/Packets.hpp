@@ -205,4 +205,19 @@ struct PacketPong {
     uint32_t clientTimeMs = 0;
 };
 
+// S2C_EVENT_SPAWN_ITEM = 2008
+struct PacketSpawnItem {
+    uint32_t matchId = 0;
+    uint16_t opcode = 0; // Opcode::S2C_EVENT_SPAWN_ITEM
+    uint32_t itemId = 0;
+    float x = 0.f, y = 0.f, z = 0.f;
+};
+
+// S2C_EVENT_DESPAWN_ITEM = 2009
+struct PacketDespawnItem {
+    uint32_t matchId = 0;
+    uint16_t opcode = 0; // Opcode::S2C_EVENT_DESPAWN_ITEM
+    uint32_t itemId = 0;
+};
+
 #pragma pack(pop)

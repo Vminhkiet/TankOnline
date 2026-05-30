@@ -14,7 +14,11 @@ void Tank::processInput(const ClientInput& input)
     if (!isAlive) return;
     lastInput = input;
     turretYaw = input.turretYaw;
-    targetYaw = input.hullYaw; // authoritative sync from client, validated in update()
+    // Only update hull yaw from move packets; shoot packets don't carry hullYaw
+    // so they would reset targetYaw to 0, causing the tank to spin back to origin.
+    if (!input.shoot) {
+        targetYaw = input.hullYaw;
+    }
     
     if (input.reload && currentAmmo < stats.magazineCapacity && !isReloading) {
         isReloading = true;

@@ -21,6 +21,7 @@ namespace TankNet
         public float TimeRemaining;
         public TankState[]   Tanks;
         public BulletState[] Bullets;
+        public ItemState[]   Items;
     }
 
     public class TankNetClient : MonoBehaviour
@@ -31,6 +32,8 @@ namespace TankNet
         public event Action<MatchEndData> OnMatchEnd;
         public event Action<EventShootPacket> OnEventShoot;
         public event Action<ushort, string, uint> OnForceLogout; // (code, message, disconnectAfterMs)
+        public event Action<PacketSpawnItem> OnItemSpawn;
+        public event Action<PacketDespawnItem> OnItemDespawn;
 
         [Header("Network")]
         public string ServerHost = "127.0.0.1";
@@ -274,6 +277,24 @@ namespace TankNet
                         continue;
                     }
 
+                    if ((Opcode)opcode == Opcode.S2C_EVENT_SPAWN_ITEM)
+                    {
+                        if (data.Length < Marshal.SizeOf<PacketSpawnItem>()) continue;
+                        var pkt = BytesToStruct<PacketSpawnItem>(data, 0);
+                        if (pkt.matchId != MatchId) continue;
+                        UnityMainThread.Post(() => OnItemSpawn?.Invoke(pkt));
+                        continue;
+                    }
+
+                    if ((Opcode)opcode == Opcode.S2C_EVENT_DESPAWN_ITEM)
+                    {
+                        if (data.Length < Marshal.SizeOf<PacketDespawnItem>()) continue;
+                        var pkt = BytesToStruct<PacketDespawnItem>(data, 0);
+                        if (pkt.matchId != MatchId) continue;
+                        UnityMainThread.Post(() => OnItemDespawn?.Invoke(pkt));
+                        continue;
+                    }
+
                     if ((Opcode)opcode == Opcode.S2C_EVENT_SHOOT)
                     {
                         if (data.Length < Marshal.SizeOf<EventShootPacket>()) continue;
@@ -371,6 +392,18 @@ namespace TankNet
                 snap.Bullets[i] = BytesToStruct<BulletState>(data, offset);
                 offset += bulletSize;
             }
+
+            if (offset + 2 > data.Length) { snap.Items = Array.Empty<ItemState>(); return snap; }
+            ushort itemCount = BitConverter.ToUInt16(data, offset); offset += 2;
+
+            int itemSize = Marshal.SizeOf<ItemState>();
+            snap.Items = new ItemState[itemCount];
+            for (int i = 0; i < itemCount; i++)
+            {
+                snap.Items[i] = BytesToStruct<ItemState>(data, offset);
+                offset += itemSize;
+            }
+
             return snap;
         }
 

@@ -11,7 +11,7 @@ public class AuthSessionRuntime : MonoBehaviour
 
     [Header("UI Runtime")]
     public GameObject warningPanel;
-    public TextMeshProUGUI warningText;
+    public UnityEngine.UI.Button okButton;
 
     [Header("Auth Settings")]
     public string logoutApiPath = "/api/auth/logout";
@@ -20,9 +20,10 @@ public class AuthSessionRuntime : MonoBehaviour
 
     [Header("Session Polling")]
     public string refreshApiPath = "/api/auth/refresh";
-    public float sessionPollIntervalSec = 3f; // Giảm từ 30s xuống 3s để nhận diện duplicate login cực nhạy
+    private float sessionPollIntervalSec = 3f; // Giảm từ 30s xuống 3s để nhận diện duplicate login cực nhạy
 
     private bool _isHandlingForceLogout;
+    private bool _userClickedOk;
 
     // Tự động khởi tạo khi game load, đảm bảo session check luôn hoạt động mà không cần kéo component thủ công
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -152,7 +153,7 @@ public class AuthSessionRuntime : MonoBehaviour
         if (found != null)
         {
             warningPanel = found;
-            warningText = found.GetComponentInChildren<TextMeshProUGUI>();
+            okButton = found.GetComponentInChildren<UnityEngine.UI.Button>();
             return;
         }
 
@@ -187,8 +188,29 @@ public class AuthSessionRuntime : MonoBehaviour
         var textRect = textGo.GetComponent<RectTransform>();
         textRect.sizeDelta = new Vector2(800, 300);
 
+        // Tạo nút OK
+        GameObject btnGo = new GameObject("OkButton");
+        btnGo.transform.SetParent(panelGo.transform, false);
+        var btnImage = btnGo.AddComponent<UnityEngine.UI.Image>();
+        btnImage.color = new Color(0.2f, 0.6f, 0.2f, 1f);
+        var btnComponent = btnGo.AddComponent<UnityEngine.UI.Button>();
+        
+        var btnRect = btnGo.GetComponent<RectTransform>();
+        btnRect.sizeDelta = new Vector2(200, 60);
+        btnRect.anchoredPosition = new Vector2(0, -100);
+
+        GameObject btnTextGo = new GameObject("Text");
+        btnTextGo.transform.SetParent(btnGo.transform, false);
+        var btnText = btnTextGo.AddComponent<TextMeshProUGUI>();
+        btnText.text = "OK";
+        btnText.fontSize = 24;
+        btnText.alignment = TextAlignmentOptions.Center;
+        btnText.color = Color.white;
+        var btnTextRect = btnTextGo.GetComponent<RectTransform>();
+        btnTextRect.sizeDelta = new Vector2(200, 60);
+
         warningPanel = panelGo;
-        warningText = textComponent;
+        okButton = btnComponent;
     }
 
     private IEnumerator ForceLogoutFlow(int code, string message, int countdownSeconds)
@@ -201,14 +223,25 @@ public class AuthSessionRuntime : MonoBehaviour
         if (warningPanel != null)
             warningPanel.SetActive(true);
 
-        for (int remain = countdownSeconds; remain > 0; remain--)
+        _userClickedOk = false;
+        if (okButton != null)
         {
-            if (warningText != null)
-                warningText.text = $"<size=32><b>CẢNH BÁO</b></size>\n\n{message}\n(Mã: {code})\n\n<color=yellow>Game sẽ thoát về màn hình chính sau {remain} giây...</color>";
-            yield return new WaitForSeconds(1f);
+            okButton.onClick.RemoveAllListeners();
+            okButton.onClick.AddListener(() => { _userClickedOk = true; });
         }
 
-        AuthenticationUIManager.LogoutSilently(this, GameApiClient.BuildUrl(logoutApiPath));
+        while (!_userClickedOk)
+        {
+            yield return null;
+        }
+
+        // Chỉ gọi logout lên server nếu KHÔNG phải bị đuổi do duplicate login.
+        // Khi bị kick do duplicate login (code 1003), session đã thuộc về người đăng nhập mới.
+        // Nếu gọi logout ở đây sẽ hủy luôn session của người mới → cả hai đều bị kick.
+        if (code != 1003)
+        {
+            AuthenticationUIManager.LogoutSilently(this, GameApiClient.BuildUrl(logoutApiPath));
+        }
         AuthenticationUIManager.ClearLocalAuth();
 
         yield return new WaitForSeconds(0.2f);
