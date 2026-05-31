@@ -57,6 +57,7 @@ namespace TankNet
         public byte  flags;          // bit0 = isAlive, bit1 = inBush
         public ushort score;
         public byte   placement;
+        public byte   bushRegion;
 
         public bool IsAlive => (flags & 1) != 0;
         public bool IsInBush => (flags & 2) != 0;

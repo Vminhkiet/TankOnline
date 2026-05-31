@@ -236,7 +236,11 @@ namespace Complete
                 fillRT.offsetMax = Vector2.zero;
 
                 var fillImg = fillGO.AddComponent<Image>();
-                fillImg.color = m_FullHealthColor;
+                bool isEnemy = false;
+                var shooting = GetComponent<TankShooting>();
+                if (shooting != null && !shooting.m_IsLocalPlayer) isEnemy = true;
+                
+                fillImg.color = isEnemy ? m_ZeroHealthColor : m_FullHealthColor;
                 m_SegmentFills[i] = fillImg;
             }
 
@@ -265,13 +269,18 @@ namespace Complete
         private void ResetSegmentFills()
         {
             if (m_SegmentFills == null) return;
+            
+            bool isEnemy = false;
+            var shooting = GetComponent<TankShooting>();
+            if (shooting != null && !shooting.m_IsLocalPlayer) isEnemy = true;
+            
             for (int i = 0; i < m_SegmentFills.Length; i++)
             {
                 if (m_SegmentFills[i] != null)
                 {
                     var rt = m_SegmentFills[i].GetComponent<RectTransform>();
                     rt.anchorMax = new Vector2(1f, 1f);
-                    m_SegmentFills[i].color = m_FullHealthColor;
+                    m_SegmentFills[i].color = isEnemy ? m_ZeroHealthColor : m_FullHealthColor;
                     m_SegmentFills[i].gameObject.SetActive(true);
                 }
             }
@@ -311,8 +320,12 @@ namespace Complete
                 var rt = m_SegmentFills[i].GetComponent<RectTransform>();
                 rt.anchorMax = new Vector2(segFill, 1f);
 
-                // Color: gradient based on overall health ratio (green → yellow → red)
-                Color segColor = Color.Lerp(m_ZeroHealthColor, m_FullHealthColor, healthRatio);
+                bool isEnemy = false;
+                var shooting = GetComponent<TankShooting>();
+                if (shooting != null && !shooting.m_IsLocalPlayer) isEnemy = true;
+
+                // Color: gradient based on overall health ratio for local (green → yellow → red), just red for enemies
+                Color segColor = isEnemy ? m_ZeroHealthColor : Color.Lerp(m_ZeroHealthColor, m_FullHealthColor, healthRatio);
 
                 // Add per-segment brightness variation for visual depth
                 float segRatio = (float)i / Mathf.Max(1, m_SegmentCount - 1);

@@ -1,0 +1,4 @@
+[BULLDOG] m_Speed = 12, m_TurnSpeed = 180
+[CRAB-X] m_Speed = 12, m_TurnSpeed = 180
+[SCOUT-01] m_Speed = 12, m_TurnSpeed = 180
+[TITAN-816] m_Speed = 12, m_TurnSpeed = 180

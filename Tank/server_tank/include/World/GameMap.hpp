@@ -11,6 +11,7 @@ public:
     struct Bush {
         Vector3 min;
         Vector3 max;
+        uint32_t regionId = 0;
     };
 
     // Half-extents of the tank's box collider (matches Unity BoxCollider / 2)

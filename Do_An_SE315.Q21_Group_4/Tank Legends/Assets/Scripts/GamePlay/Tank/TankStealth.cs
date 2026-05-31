@@ -26,13 +26,17 @@ namespace Complete
         /// Set by GameManager from server snapshot for remote tanks.
         /// </summary>
         [HideInInspector] public bool ServerInBush;
+        [HideInInspector] public int ServerBushRegion;
 
         /// <summary>
         /// True if this is the local player's tank.
         /// </summary>
         [HideInInspector] public bool IsLocalTank;
+        
+        public static HashSet<int> s_LocalPlayerBushRegions = new HashSet<int>();
 
         // ── Internal state ──────────────────────────────────────────────────
+        private Dictionary<Collider, int> _overlappingBushes = new Dictionary<Collider, int>();
         private int _bushOverlapCount;            // Number of bush triggers currently overlapping
         private float _lastBushExitTime = -999f;  // Time when last bush trigger was exited
         private bool _inBush;                     // Computed state: currently considered "in bush"
@@ -96,22 +100,38 @@ namespace Complete
         private void OnTriggerEnter(Collider other)
         {
             if (!other.CompareTag("Bush")) return;
-            _bushOverlapCount++;
+            
+            int regionId = 0;
+            if (other.transform.parent != null && other.transform.parent.name.StartsWith("BushRegion_"))
+            {
+                int.TryParse(other.transform.parent.name.Substring("BushRegion_".Length), out regionId);
+            }
+            _overlappingBushes[other] = regionId;
+            _bushOverlapCount = _overlappingBushes.Count;
         }
 
         private void OnTriggerExit(Collider other)
         {
             if (!other.CompareTag("Bush")) return;
-            _bushOverlapCount = Mathf.Max(0, _bushOverlapCount - 1);
+            _overlappingBushes.Remove(other);
+            _bushOverlapCount = _overlappingBushes.Count;
             if (_bushOverlapCount == 0)
                 _lastBushExitTime = Time.time;
         }
 
         private void Update()
         {
+            bool isSharedBush = false;
+
             // Determine "in bush" state
             if (IsLocalTank)
             {
+                s_LocalPlayerBushRegions.Clear();
+                foreach (var kvp in _overlappingBushes)
+                {
+                    s_LocalPlayerBushRegions.Add(kvp.Value);
+                }
+
                 // Local tank: use trigger overlap count + grace period
                 if (_bushOverlapCount > 0)
                 {
@@ -130,12 +150,23 @@ namespace Complete
             {
                 // Remote tank: trust the server flag
                 _inBush = ServerInBush;
+                
+                // Bypass full stealth if sharing the same BushRegion
+                if (_inBush && ServerBushRegion != 0 && s_LocalPlayerBushRegions.Contains(ServerBushRegion))
+                {
+                    isSharedBush = true;
+                }
             }
 
             // Compute target dissolve value
             float targetDissolve = 0f;
             if (_inBush)
-                targetDissolve = IsLocalTank ? m_LocalDissolve : m_RemoteDissolve;
+            {
+                if (IsLocalTank || isSharedBush)
+                    targetDissolve = m_LocalDissolve;
+                else
+                    targetDissolve = m_RemoteDissolve;
+            }
 
             // Smoothly interpolate
             _currentDissolve = Mathf.Lerp(_currentDissolve, targetDissolve, Time.deltaTime * m_LerpSpeed);
@@ -172,6 +203,7 @@ namespace Complete
         public void ResetDissolve()
         {
             _currentDissolve = 0f;
+            _overlappingBushes.Clear();
             _bushOverlapCount = 0;
             _inBush = false;
             ApplyDissolve(0f);

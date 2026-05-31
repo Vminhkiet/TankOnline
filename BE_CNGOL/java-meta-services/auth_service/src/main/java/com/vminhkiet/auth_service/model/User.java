@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity
 @Data
@@ -34,4 +35,8 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     private Role role = Role.ROLE_USER;
+
+    @JsonProperty("isBanned")
+    @Column(name = "is_banned")
+    private Boolean isBanned = false;
 }

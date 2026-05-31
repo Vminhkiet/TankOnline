@@ -13,6 +13,10 @@ import org.springframework.stereotype.Service;
 import com.vminhkiet.auth_service.config.JwtProvider;
 import com.vminhkiet.auth_service.dto.AuthResponse;
 import com.vminhkiet.auth_service.model.UserSession;
+import com.vminhkiet.auth_service.model.User;
+import com.vminhkiet.auth_service.repository.UserRepository;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @Service
 public class SessionService implements com.vminhkiet.auth_service.service.SessionService {
@@ -24,6 +28,9 @@ public class SessionService implements com.vminhkiet.auth_service.service.Sessio
 
     @Autowired
     private SessionInvalidationProducer sessionInvalidationProducer;
+    
+    @Autowired
+    private UserRepository userRepository;
 
     private static final long REFRESH_TTL_DAYS = 7;
     private static final Logger logger = LoggerFactory.getLogger(SessionService.class);
@@ -65,7 +72,11 @@ public class SessionService implements com.vminhkiet.auth_service.service.Sessio
         UserSession userSession = (UserSession) redisTemplate.opsForValue().get(key);
 
         if(userSession == null || !userSession.getRefreshToken().equals(refreshToken)) {
-            throw new RuntimeException("Invalid or expired refresh token.");
+            User user = userRepository.findById(userId).orElse(null);
+            if (user != null && Boolean.TRUE.equals(user.getIsBanned())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Tài khoản của bạn đã bị cấm.");
+            }
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token.");
         }
 
         String newRefreshToken = UUID.randomUUID().toString();

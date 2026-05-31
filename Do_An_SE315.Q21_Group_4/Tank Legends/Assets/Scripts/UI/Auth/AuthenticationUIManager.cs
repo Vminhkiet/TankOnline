@@ -148,7 +148,9 @@ public class AuthenticationUIManager : MonoBehaviour
             }
             else
             {
-                if (apiResult.StatusCode == 400 || apiResult.StatusCode == 401 || apiResult.StatusCode == 403)
+                if (apiResult.StatusCode == 403)
+                    ShowLoginError("Tài khoản của bạn đã bị cấm.");
+                else if (apiResult.StatusCode == 400 || apiResult.StatusCode == 401)
                     ShowLoginError("Sai tài khoản hoặc mật khẩu.");
                 else
                     ShowLoginError("Lỗi kết nối: " + apiResult.Error);

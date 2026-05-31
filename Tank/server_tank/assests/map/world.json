@@ -26,7 +26,8 @@
             "radius": 4.670000076293945,
             "height": 18.600000381469728,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -54,7 +55,8 @@
             "radius": 9.448457717895508,
             "height": 26.850000381469728,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -82,7 +84,8 @@
             "radius": 11.899999618530274,
             "height": 33.400001525878909,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -110,7 +113,8 @@
             "radius": 4.866916656494141,
             "height": 18.399999618530275,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -138,7 +142,8 @@
             "radius": 4.124958038330078,
             "height": 17.719999313354493,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -166,7 +171,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -194,7 +200,8 @@
             "radius": 0.9399999976158142,
             "height": 3.5,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -222,7 +229,8 @@
             "radius": 3.952861785888672,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -250,7 +258,8 @@
             "radius": 3.0999999046325685,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -278,7 +287,8 @@
             "radius": 4.190000057220459,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -306,7 +316,8 @@
             "radius": 2.4000000953674318,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -334,7 +345,8 @@
             "radius": 4.190000057220459,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -362,7 +374,8 @@
             "radius": 3.299999952316284,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -390,7 +403,8 @@
             "radius": 0.8999999761581421,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -418,7 +432,8 @@
             "radius": 10.5,
             "height": 11.896665573120118,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff",
@@ -446,7 +461,8 @@
             "radius": 10.5,
             "height": 11.896665573120118,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -474,7 +490,8 @@
             "radius": 4.670000076293945,
             "height": 18.600000381469728,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -502,7 +519,8 @@
             "radius": 9.448457717895508,
             "height": 26.850000381469728,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -530,7 +548,8 @@
             "radius": 11.899999618530274,
             "height": 33.400001525878909,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -558,7 +577,8 @@
             "radius": 4.866916656494141,
             "height": 18.399999618530275,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -586,7 +606,8 @@
             "radius": 4.124958038330078,
             "height": 17.719999313354493,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -614,7 +635,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -642,7 +664,8 @@
             "radius": 0.9399999976158142,
             "height": 3.5,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -670,7 +693,8 @@
             "radius": 3.952861785888672,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -698,7 +722,8 @@
             "radius": 3.0999999046325685,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -726,7 +751,8 @@
             "radius": 4.190000057220459,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -754,7 +780,8 @@
             "radius": 2.4000000953674318,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -782,7 +809,8 @@
             "radius": 4.190000057220459,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -810,7 +838,8 @@
             "radius": 3.299999952316284,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (1)",
@@ -838,7 +867,8 @@
             "radius": 0.8999999761581421,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -866,7 +896,8 @@
             "radius": 4.670000076293945,
             "height": 18.600000381469728,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -894,7 +925,8 @@
             "radius": 9.448457717895508,
             "height": 26.850000381469728,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -922,7 +954,8 @@
             "radius": 11.899999618530274,
             "height": 33.400001525878909,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -950,7 +983,8 @@
             "radius": 4.866916656494141,
             "height": 18.399999618530275,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -978,7 +1012,8 @@
             "radius": 4.124958038330078,
             "height": 17.719999313354493,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1006,7 +1041,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1034,7 +1070,8 @@
             "radius": 0.9399999976158142,
             "height": 3.5,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1062,7 +1099,8 @@
             "radius": 3.952861785888672,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1090,7 +1128,8 @@
             "radius": 3.0999999046325685,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1118,7 +1157,8 @@
             "radius": 4.190000057220459,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1146,7 +1186,8 @@
             "radius": 2.4000000953674318,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1174,7 +1215,8 @@
             "radius": 4.190000057220459,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1202,7 +1244,8 @@
             "radius": 3.299999952316284,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1230,7 +1273,8 @@
             "radius": 0.8999999761581421,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1258,7 +1302,8 @@
             "radius": 11.970000267028809,
             "height": 11.896665573120118,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (2)",
@@ -1286,7 +1331,8 @@
             "radius": 11.970000267028809,
             "height": 11.896665573120118,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1314,7 +1360,8 @@
             "radius": 4.670001029968262,
             "height": 18.600000381469728,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1342,7 +1389,8 @@
             "radius": 9.44845962524414,
             "height": 26.850000381469728,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1370,7 +1418,8 @@
             "radius": 11.900002479553223,
             "height": 33.400001525878909,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1398,7 +1447,8 @@
             "radius": 4.866917610168457,
             "height": 18.399999618530275,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1426,7 +1476,8 @@
             "radius": 4.1249589920043949,
             "height": 17.719999313354493,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1454,7 +1505,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1482,7 +1534,8 @@
             "radius": 0.9400002360343933,
             "height": 3.5,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1510,7 +1563,8 @@
             "radius": 3.9528627395629885,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1538,7 +1592,8 @@
             "radius": 3.1000006198883058,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1566,7 +1621,8 @@
             "radius": 4.190001010894775,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1594,7 +1650,8 @@
             "radius": 2.40000057220459,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1622,7 +1679,8 @@
             "radius": 4.190001010894775,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1650,7 +1708,8 @@
             "radius": 3.3000006675720217,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Cliff (3)",
@@ -1678,7 +1737,8 @@
             "radius": 0.9000002145767212,
             "height": 1.0,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Column02 (1)",
@@ -1706,7 +1766,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Column02 (1)",
@@ -1734,7 +1795,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Column02 (1)",
@@ -1762,7 +1824,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Column02",
@@ -1790,7 +1853,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Column02",
@@ -1818,7 +1882,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Column02",
@@ -1846,7 +1911,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Column01",
@@ -1874,7 +1940,8 @@
             "radius": 4.450847148895264,
             "height": 16.170217514038087,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "bridge",
@@ -1902,7 +1969,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Plane",
@@ -1930,7 +1998,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "bridge (1)",
@@ -1958,7 +2027,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Plane",
@@ -1986,7 +2056,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "bridge (2)",
@@ -2014,7 +2085,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Plane",
@@ -2042,7 +2114,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "bridge",
@@ -2070,7 +2143,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Plane",
@@ -2098,7 +2172,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "bridge (1)",
@@ -2126,7 +2201,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Plane",
@@ -2154,7 +2230,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "bridge (2)",
@@ -2182,7 +2259,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Plane",
@@ -2210,7 +2288,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "bridge",
@@ -2238,7 +2317,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Plane",
@@ -2266,7 +2346,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "bridge (1)",
@@ -2294,7 +2375,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Plane",
@@ -2322,7 +2404,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "bridge (2)",
@@ -2350,7 +2433,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Plane",
@@ -2378,7 +2462,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Tree 1",
@@ -2406,7 +2491,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005",
@@ -2434,7 +2520,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005",
@@ -2462,7 +2549,8 @@
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005 (1)",
@@ -2490,7 +2578,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005 (1)",
@@ -2518,7 +2607,8 @@
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005 (3)",
@@ -2546,7 +2636,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005 (3)",
@@ -2574,7 +2665,8 @@
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005 (2)",
@@ -2602,7 +2694,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005 (2)",
@@ -2630,7 +2723,8 @@
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005 (4)",
@@ -2658,7 +2752,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "tree_005 (4)",
@@ -2686,7 +2781,8 @@
             "radius": 1.7474822998046876,
             "height": 4.974052429199219,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall",
@@ -2714,7 +2810,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall (1)",
@@ -2742,7 +2839,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall (2)",
@@ -2770,7 +2868,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall_002",
@@ -2798,7 +2897,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall_002 (2)",
@@ -2826,7 +2926,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall_002 (4)",
@@ -2854,7 +2955,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall_002 (1)",
@@ -2882,7 +2984,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall_002 (3)",
@@ -2910,7 +3013,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall_002 (5)",
@@ -2938,7 +3042,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall_001",
@@ -2966,7 +3071,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall_001 (1)",
@@ -2994,7 +3100,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "wall_001 (2)",
@@ -3022,7 +3129,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "OilStorage (3)",
@@ -3050,7 +3158,8 @@
             "radius": 1.509953260421753,
             "height": 4.070000171661377,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "OilStorage (2)",
@@ -3078,7 +3187,8 @@
             "radius": 1.509953260421753,
             "height": 4.070000171661377,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "OilStorage (1)",
@@ -3106,7 +3216,8 @@
             "radius": 1.509953260421753,
             "height": 4.070000171661377,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "OilStorage",
@@ -3134,7 +3245,8 @@
             "radius": 1.509953260421753,
             "height": 4.070000171661377,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "canon_001",
@@ -3162,7 +3274,8 @@
             "radius": 1.909244179725647,
             "height": 1.6319339275360108,
             "direction": 1,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         },
         {
             "name": "Building01",
@@ -3190,7 +3303,8 @@
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 0
         }
     ],
     "bushes": [
@@ -3209,18 +3323,19 @@
             },
             "center": {
                 "x": -0.45458757877349856,
-                "y": 0.8761849403381348,
-                "z": 17.502092361450197
+                "y": 2.461294651031494,
+                "z": 17.502090454101564
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 1
         },
         {
             "name": "Bush (1)",
@@ -3237,18 +3352,19 @@
             },
             "center": {
                 "x": -2.015761137008667,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 15.239999771118164
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 1
         },
         {
             "name": "Bush (2)",
@@ -3265,18 +3381,19 @@
             },
             "center": {
                 "x": -3.085761070251465,
-                "y": 0.8761849403381348,
-                "z": 17.940000534057618
+                "y": 2.461294651031494,
+                "z": 17.939998626708986
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 1
         },
         {
             "name": "Bush (3)",
@@ -3293,18 +3410,19 @@
             },
             "center": {
                 "x": -4.995760917663574,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 16.34000015258789
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 1
         },
         {
             "name": "Bush",
@@ -3321,18 +3439,19 @@
             },
             "center": {
                 "x": 23.64541244506836,
-                "y": 0.8761849403381348,
-                "z": -14.997907638549805
+                "y": 2.461294651031494,
+                "z": -14.997909545898438
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 9
         },
         {
             "name": "Bush (1)",
@@ -3349,18 +3468,19 @@
             },
             "center": {
                 "x": 22.084239959716798,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": -17.260000228881837
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 9
         },
         {
             "name": "Bush (2)",
@@ -3377,18 +3497,19 @@
             },
             "center": {
                 "x": 21.014240264892579,
-                "y": 0.8761849403381348,
-                "z": -14.559999465942383
+                "y": 2.461294651031494,
+                "z": -14.560001373291016
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 9
         },
         {
             "name": "Bush (3)",
@@ -3405,18 +3526,19 @@
             },
             "center": {
                 "x": 19.10424041748047,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": -16.15999984741211
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 9
         },
         {
             "name": "Bush (1)",
@@ -3433,18 +3555,19 @@
             },
             "center": {
                 "x": -18.615760803222658,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": -28.059999465942384
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 7
         },
         {
             "name": "Bush (2)",
@@ -3461,18 +3584,19 @@
             },
             "center": {
                 "x": -19.685760498046876,
-                "y": 0.8761849403381348,
-                "z": -25.35999870300293
+                "y": 2.461294651031494,
+                "z": -25.360000610351564
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 7
         },
         {
             "name": "Bush (3)",
@@ -3489,18 +3613,19 @@
             },
             "center": {
                 "x": -21.595760345458986,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": -26.959999084472658
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 7
         },
         {
             "name": "Bush (2)",
@@ -3517,18 +3642,19 @@
             },
             "center": {
                 "x": 19.714237213134767,
-                "y": 0.8761849403381348,
-                "z": -34.959999084472659
+                "y": 2.461294651031494,
+                "z": -34.96000289916992
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 8
         },
         {
             "name": "Bush (3)",
@@ -3545,18 +3671,19 @@
             },
             "center": {
                 "x": 17.804237365722658,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": -36.560001373291019
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 8
         },
         {
             "name": "Bush (1)",
@@ -3573,18 +3700,19 @@
             },
             "center": {
                 "x": 6.564238548278809,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": -28.059999465942384
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 2
         },
         {
             "name": "Bush (2)",
@@ -3601,18 +3729,19 @@
             },
             "center": {
                 "x": 5.49423885345459,
-                "y": 0.8761849403381348,
-                "z": -25.35999870300293
+                "y": 2.461294651031494,
+                "z": -25.360000610351564
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 2
         },
         {
             "name": "Bush (3)",
@@ -3629,18 +3758,19 @@
             },
             "center": {
                 "x": 3.5842390060424806,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": -26.959999084472658
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 2
         },
         {
             "name": "Bush (1)",
@@ -3657,18 +3787,19 @@
             },
             "center": {
                 "x": 15.524239540100098,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 28.200000762939454
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 3
         },
         {
             "name": "Bush (2)",
@@ -3685,18 +3816,19 @@
             },
             "center": {
                 "x": 14.454239845275879,
-                "y": 0.8761849403381348,
-                "z": 30.900001525878908
+                "y": 2.461294651031494,
+                "z": 30.89999771118164
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 3
         },
         {
             "name": "Bush (3)",
@@ -3713,18 +3845,19 @@
             },
             "center": {
                 "x": 12.54423999786377,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 29.299999237060548
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 3
         },
         {
             "name": "Bush (1)",
@@ -3741,18 +3874,19 @@
             },
             "center": {
                 "x": 30.274240493774415,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 26.389999389648439
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 4
         },
         {
             "name": "Bush (2)",
@@ -3769,18 +3903,19 @@
             },
             "center": {
                 "x": 29.204238891601564,
-                "y": 0.8761849403381348,
-                "z": 29.09000015258789
+                "y": 2.461294651031494,
+                "z": 29.089998245239259
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 4
         },
         {
             "name": "Bush (3)",
@@ -3797,18 +3932,19 @@
             },
             "center": {
                 "x": 27.294239044189454,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 27.489999771118165
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 4
         },
         {
             "name": "Bush (1)",
@@ -3825,18 +3961,19 @@
             },
             "center": {
                 "x": 34.784236907958987,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 28.200000762939454
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 5
         },
         {
             "name": "Bush (2)",
@@ -3853,18 +3990,19 @@
             },
             "center": {
                 "x": 33.714237213134769,
-                "y": 0.8761849403381348,
-                "z": 30.900001525878908
+                "y": 2.461294651031494,
+                "z": 30.89999771118164
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 5
         },
         {
             "name": "Bush (3)",
@@ -3881,18 +4019,19 @@
             },
             "center": {
                 "x": 31.804237365722658,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 29.299999237060548
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 5
         },
         {
             "name": "Bush (1)",
@@ -3909,18 +4048,19 @@
             },
             "center": {
                 "x": -24.10576057434082,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 32.400001525878909
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 6
         },
         {
             "name": "Bush (2)",
@@ -3937,18 +4077,19 @@
             },
             "center": {
                 "x": -25.175762176513673,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 35.099998474121097
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 6
         },
         {
             "name": "Bush (3)",
@@ -3965,18 +4106,19 @@
             },
             "center": {
                 "x": -27.08576202392578,
-                "y": 0.8761849403381348,
+                "y": 2.461294651031494,
                 "z": 33.5
             },
             "size": {
                 "x": 2.4115219116210939,
-                "y": 2.15081787109375,
+                "y": 5.321033477783203,
                 "z": 2.3995285034179689
             },
             "radius": 0.0,
             "height": 0.0,
             "direction": 0,
-            "walkable": false
+            "walkable": false,
+            "regionId": 6
         }
     ],
     "heightmaps": [
@@ -7144,13 +7286,13 @@
         {
             "name": "BULLDOG",
             "collider_extents": {
-                "x": 0.35924747586250307,
-                "y": 0.46340295672416689,
+                "x": 0.9203710556030273,
+                "y": 0.7507569789886475,
                 "z": 1.359018325805664
             },
             "collider_offset": {
-                "x": -0.04172515869140625,
-                "y": 0.4680827856063843,
+                "x": -0.023517608642578126,
+                "y": 0.7554366588592529,
                 "z": 0.0849151611328125
             },
             "weapon_type": 0,
@@ -7209,19 +7351,19 @@
             "fire_rate": 20.0,
             "damage": 20.0,
             "fire_range": 20.0,
-            "magazine_capacity": 140,
+            "magazine_capacity": 100,
             "reload_time": 2.0
         },
         {
             "name": "SCOUT-01",
             "collider_extents": {
                 "x": 0.75,
-                "y": 0.8500000238418579,
+                "y": 0.6986422538757324,
                 "z": 0.800000011920929
             },
             "collider_offset": {
                 "x": 0.0,
-                "y": 0.8500000238418579,
+                "y": 0.6986422538757324,
                 "z": 0.0
             },
             "weapon_type": 0,
@@ -7242,32 +7384,32 @@
             "fire_rate": 2.8499999046325685,
             "damage": 160.0,
             "fire_range": 14.0,
-            "magazine_capacity": 10,
+            "magazine_capacity": 14,
             "reload_time": 1.7999999523162842
         },
         {
             "name": "TITAN-816",
             "collider_extents": {
                 "x": 1.5226980447769166,
-                "y": 0.7285072803497315,
-                "z": 1.781612753868103
+                "y": 0.7285072207450867,
+                "z": 1.781612515449524
             },
             "collider_offset": {
-                "x": 0.22823810577392579,
-                "y": 0.8111271858215332,
-                "z": 0.2884674072265625
+                "x": 0.22823812067508698,
+                "y": 0.8065485954284668,
+                "z": 0.30103158950805666
             },
             "weapon_type": 0,
             "turret_offset": {
                 "x": 0.0,
-                "y": 0.7786192893981934,
-                "z": -0.012096405029296875
+                "y": 0.7787132859230042,
+                "z": 0.0
             },
             "barrel_offsets": [
                 {
-                    "x": -0.1680002212524414,
-                    "y": 0.5550680160522461,
-                    "z": 3.393787384033203
+                    "x": -0.1680000126361847,
+                    "y": 0.5022860169410706,
+                    "z": 3.401998519897461
                 }
             ],
             "max_health": 4200.0,

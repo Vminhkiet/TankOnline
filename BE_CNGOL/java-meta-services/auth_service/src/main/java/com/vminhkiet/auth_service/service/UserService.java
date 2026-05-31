@@ -13,4 +13,5 @@ public interface UserService {
     AuthResponse registerAccount(SignUpRequest request);
     UserMeResponse getUserMe(Long userId);
     List<User> getAllUser();
+    void toggleBan(Long userId);
 }

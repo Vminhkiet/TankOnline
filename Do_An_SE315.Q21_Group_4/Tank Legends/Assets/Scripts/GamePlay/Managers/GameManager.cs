@@ -399,6 +399,68 @@ namespace Complete
             }
         }
 
+        /// <summary>
+        /// Gathers all BulletHitVolume colliders from every active tank (local + remote)
+        /// and registers them into each tank's ParticleSystem trigger modules.
+        /// This is required so that Particle System Trigger callbacks (OnParticleTrigger) fire.
+        /// </summary>
+        private void RegisterParticleTriggerColliders()
+        {
+            // Collect all active tank GameObjects
+            var allTanks = new List<GameObject>();
+            if (m_Tanks.Length > 0 && m_Tanks[0].m_Instance != null)
+                allTanks.Add(m_Tanks[0].m_Instance);
+            foreach (var kvp in _remoteTanks)
+            {
+                if (kvp.Value != null) allTanks.Add(kvp.Value);
+            }
+
+            // Collect all BulletHitVolume colliders
+            var allHitColliders = new List<Collider>();
+            for (int i = 0; i < allTanks.Count; i++)
+            {
+                var hitVol = allTanks[i].transform.Find("BulletHitVolume");
+                if (hitVol != null)
+                {
+                    var col = hitVol.GetComponent<Collider>();
+                    if (col != null) allHitColliders.Add(col);
+                }
+            }
+
+            // For each tank, find all ParticleSystems with trigger enabled,
+            // clear old colliders and re-add every OTHER tank's BulletHitVolume
+            for (int i = 0; i < allTanks.Count; i++)
+            {
+                var psList = allTanks[i].GetComponentsInChildren<ParticleSystem>(true);
+                for (int p = 0; p < psList.Length; p++)
+                {
+                    var trigger = psList[p].trigger;
+                    if (!trigger.enabled) continue;
+
+                    // Find this tank's own BulletHitVolume collider to exclude it
+                    Collider ownCol = null;
+                    var ownHitVol = allTanks[i].transform.Find("BulletHitVolume");
+                    if (ownHitVol != null) ownCol = ownHitVol.GetComponent<Collider>();
+
+                    // Clear existing colliders
+                    int oldCount = trigger.colliderCount;
+                    for (int c = oldCount - 1; c >= 0; c--)
+                    {
+                        trigger.RemoveCollider(c);
+                    }
+
+                    // Add every other tank's collider
+                    for (int j = 0; j < allHitColliders.Count; j++)
+                    {
+                        if (allHitColliders[j] != ownCol)
+                        {
+                            trigger.AddCollider(allHitColliders[j]);
+                        }
+                    }
+                }
+            }
+        }
+
         private void SpawnLocalTankAt(TankState ts)
         {
             if (m_Tanks.Length == 0) return;
@@ -430,6 +492,9 @@ namespace Complete
             var tm = m_Tanks[0].m_Instance.GetComponent<Complete.TankMovement>();
             bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
 
+            var tankShooting = m_Tanks[0].m_Instance.GetComponent<Complete.TankShooting>();
+            if (tankShooting != null) tankShooting.m_IsLocalPlayer = true;
+
             var rb = m_Tanks[0].m_Instance.GetComponent<Rigidbody>();
             if (rb != null) { rb.isKinematic = customPhysics; rb.useGravity = !customPhysics; }
 
@@ -445,6 +510,9 @@ namespace Complete
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
 
             GameUIManager.Instance.UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
+
+            // Register BulletHitVolume colliders into particle system triggers
+            RegisterParticleTriggerColliders();
         }
 
 
@@ -952,6 +1020,20 @@ namespace Complete
                         var shooting = shooterTank.GetComponent<TankShooting>();
                         if (shooting != null)
                         {
+                            // Use the shooter tank's own shell prefab if available
+                            if (shooting.m_Shell != null)
+                            {
+                                Destroy(go);
+                                go = Instantiate(shooting.m_Shell.gameObject, pos, Quaternion.identity);
+                                var shellRb = go.GetComponent<Rigidbody>();
+                                if (shellRb != null) { shellRb.isKinematic = true; }
+                                var shellExplosion = go.GetComponent<ShellExplosion>();
+                                if (shellExplosion != null) shellExplosion.enabled = false;
+                                var shellCol = go.GetComponent<Collider>();
+                                if (shellCol != null) shellCol.enabled = false;
+                                _remoteBullets[bs.bulletId] = go;
+                            }
+
                             Vector3 bulletDir = pos - shooterTank.transform.position;
                             bulletDir.y = 0f;
                             if (bulletDir.sqrMagnitude > 0.001f)
@@ -1130,7 +1212,11 @@ namespace Complete
 
             // Forward server InBush flag to local TankStealth (server is authoritative backup)
             var localStealth = go.GetComponent<TankStealth>();
-            if (localStealth != null) localStealth.ServerInBush = ts.IsInBush;
+            if (localStealth != null)
+            {
+                localStealth.ServerInBush = ts.IsInBush;
+                localStealth.ServerBushRegion = ts.bushRegion;
+            }
         }
 
         private void UpdateRemoteTank(TankState ts)
@@ -1183,6 +1269,9 @@ namespace Complete
                 var remoteStealth = go.GetComponent<TankStealth>()
                                  ?? go.AddComponent<TankStealth>();
                 remoteStealth.IsLocalTank = false;
+
+                // Register BulletHitVolume colliders into particle system triggers
+                RegisterParticleTriggerColliders();
             }
             
             // Find remote TankManager to sync score/placement
@@ -1209,6 +1298,7 @@ namespace Complete
                 if (stealth != null)
                 {
                     stealth.ServerInBush = ts.IsInBush;
+                    stealth.ServerBushRegion = ts.bushRegion;
                 }
 
                 if (!_remoteSnaps.ContainsKey(ts.tankId))
@@ -1242,6 +1332,9 @@ namespace Complete
             Destroy(go);
             _remoteTanks.Remove(tankId);
             _remoteSnaps.Remove(tankId);
+
+            // Re-register particle trigger colliders after removing a tank
+            RegisterParticleTriggerColliders();
         }
 
 

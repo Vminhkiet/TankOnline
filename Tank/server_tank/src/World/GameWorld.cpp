@@ -751,6 +751,7 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
                     tmin.y <= b.max.y && tmax.y >= b.min.y &&
                     tmin.z <= b.max.z && tmax.z >= b.min.z) {
                     t.flags |= 2u; // InBush
+                    t.bushRegion = static_cast<uint8_t>(b.regionId);
                     break;
                 }
             }

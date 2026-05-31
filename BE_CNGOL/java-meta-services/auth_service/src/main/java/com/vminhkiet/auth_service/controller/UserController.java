@@ -7,6 +7,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 
 import com.vminhkiet.auth_service.dto.UserMeResponse;
 import com.vminhkiet.auth_service.service.UserService;
@@ -43,9 +45,19 @@ public class UserController {
     }
 
     @GetMapping("/{userId}")
-    public ResponseEntity<UserMeResponse> getUserById(@org.springframework.web.bind.annotation.PathVariable Long userId) {
+    public ResponseEntity<UserMeResponse> getUserById(@PathVariable Long userId) {
         try {
             return ResponseEntity.ok(userService.getUserMe(userId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
+    @PutMapping("/{userId}/ban")
+    public ResponseEntity<Void> toggleBan(@PathVariable Long userId) {
+        try {
+            userService.toggleBan(userId);
+            return ResponseEntity.ok().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }

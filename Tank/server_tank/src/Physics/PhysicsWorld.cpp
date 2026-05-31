@@ -462,7 +462,12 @@ PhysicsWorld::RaycastHit PhysicsWorld::Raycast(const Vector3& origin, const Vect
     };
 
     for (const auto& box : _boxes) checkOBB(box);
-    for (const auto& box : _dynamicBoxes) checkOBB(box);
+    for (auto box : _dynamicBoxes) {
+        // Create a taller hitbox for hitscan to compensate for top-down aim height differences
+        box.extents.y += 5.0f; // Add 5 meters to half-height (10m total)
+        box.center.y += 5.0f;  // Shift center up
+        checkOBB(box);
+    }
 
     return bestHit;
 }
