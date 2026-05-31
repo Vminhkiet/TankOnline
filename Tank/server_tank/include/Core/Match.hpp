@@ -30,6 +30,7 @@ public:
           std::function<void(MatchResult)> onEnd);
 
     uint32_t id()              const { return _config.matchId; }
+    const MatchConfig& config() const { return _config; }
     bool     isRunning()       const { return _running.load(std::memory_order_relaxed); }
     size_t   connectedPlayers()const { return _sessions.size(); }
     size_t   totalSlots()      const { return _config.playerIds.size(); }
@@ -82,6 +83,8 @@ private:
 
     void registerHandlers();
     bool resolvePlayer(const sockaddr_in& addr, uint32_t& outPid, const std::string& overrideTankName = "");
+    bool resolvePlayerWithToken(const sockaddr_in& addr, const std::string& token,
+                                uint32_t& outPid, const std::string& overrideTankName = "");
     void broadcastSnapshot();
     void broadcastMatchEnd(const MatchResult& r);
 

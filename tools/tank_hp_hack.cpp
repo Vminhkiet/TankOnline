@@ -27,9 +27,9 @@ using ms_t = std::chrono::milliseconds;
 // Per tank 26 bytes: id(4) x(4) y(4) z(4) yaw(4) hp(2) flags(1) score(2) place(1)
 #pragma pack(push,1)
 struct SnapHdr { uint32_t matchId; uint16_t opcode, tick, tankCount, localId, timeLeft; };
-struct TankRaw { uint32_t id; float x,y,z,yaw; int16_t hp; uint8_t flags; uint16_t score; uint8_t placement; };
+struct TankRaw { uint32_t id; float x,y,z,yaw,turretYaw; int16_t hp; uint8_t flags; uint16_t score; uint8_t placement; uint8_t bushRegion; };
 #pragma pack(pop)
-static_assert(sizeof(SnapHdr)==14 && sizeof(TankRaw)==26, "layout");
+static_assert(sizeof(SnapHdr)==14 && sizeof(TankRaw)==31, "layout");
 
 static const size_t HDR=sizeof(SnapHdr), TANK=sizeof(TankRaw), GAP=2;
 
@@ -49,7 +49,7 @@ static HWND              g_overlay = nullptr;
 static std::mutex        g_mtx;
 static Snap              g_snap;
 static std::atomic<bool> g_running { true };
-static std::atomic<bool> g_botOn   { false };
+static std::atomic<bool> g_espOn   { true };   // F8 toggle: hien/an overlay
 static std::atomic<bool> g_blocked { false };
 
 // ── Process helpers ───────────────────────────────────────────────────────────
@@ -77,50 +77,43 @@ static DWORD pickPID(){
 }
 
 // ── Snapshot parsing ──────────────────────────────────────────────────────────
-// STRICT: dung cho fullScan de loai false-positive trong RAM
-static bool parseStrict(const BYTE* buf, SIZE_T n, Snap& out) {
+static bool doParse(const BYTE* buf, SIZE_T n, Snap& out, bool strict) {
     if (n < HDR+GAP+TANK) return false;
     SnapHdr h; memcpy(&h, buf, HDR);
     if (h.opcode!=2000 || h.tankCount==0 || h.tankCount>8 || h.matchId==0) return false;
-    if (h.localId==0 || h.localId>255) return false;
+    if (h.localId==0) return false;
     if (n < HDR+GAP+(size_t)h.tankCount*TANK) return false;
     TankRaw raw[8]; memcpy(raw, buf+HDR+GAP, h.tankCount*TANK);
-    bool hasLive=false;
-    for(int i=0;i<h.tankCount;i++){
-        if(raw[i].hp<0||raw[i].hp>200) return false;
-        if(fabsf(raw[i].y)>500.f||fabsf(raw[i].x)>9000.f||fabsf(raw[i].z)>9000.f) return false;
-        if(raw[i].hp>0) hasLive=true;
+    bool foundLocal=false;
+    if (strict) {
+        for(int i=0;i<h.tankCount;i++){
+            if(raw[i].id==0) return false;
+            if(raw[i].hp<0) return false;
+            if(!std::isfinite(raw[i].x)||!std::isfinite(raw[i].y)||!std::isfinite(raw[i].z)) return false;
+            if(fabsf(raw[i].y)>500.f||fabsf(raw[i].x)>9000.f||fabsf(raw[i].z)>9000.f) return false;
+            if(raw[i].id==h.localId) foundLocal=true;
+        }
+        if(!foundLocal) return false;  // localId phai co trong danh sach tank
     }
-    if(!hasLive) return false;
     float mx=0,mz=0;
     for(int i=0;i<h.tankCount;i++) if(raw[i].id==h.localId){mx=raw[i].x;mz=raw[i].z;break;}
     out={true,h.matchId,h.tick,{}};
     for(int i=0;i<h.tankCount;i++){
         float dx=raw[i].x-mx,dz=raw[i].z-mz;
-        out.tanks.push_back({raw[i].id,raw[i].x,raw[i].z,raw[i].yaw,raw[i].hp,
-                             (raw[i].flags&1)!=0,(raw[i].id==h.localId),sqrtf(dx*dx+dz*dz)});
-    }
-    return true;
-}
-
-// LOOSE: dung cho readAt — tin tuong vao dia chi, chi check opcode + co ban
-static bool parseLoose(const BYTE* buf, SIZE_T n, Snap& out) {
-    if (n < HDR+GAP+TANK) return false;
-    SnapHdr h; memcpy(&h, buf, HDR);
-    if (h.opcode!=2000 || h.tankCount==0 || h.tankCount>8) return false;
-    if (h.matchId==0 || h.localId==0 || h.localId>255) return false;
-    if (n < HDR+GAP+(size_t)h.tankCount*TANK) return false;
-    TankRaw raw[8]; memcpy(raw, buf+HDR+GAP, h.tankCount*TANK);
-    float mx=0,mz=0;
-    for(int i=0;i<h.tankCount;i++) if(raw[i].id==h.localId){mx=raw[i].x;mz=raw[i].z;break;}
-    out={true,h.matchId,h.tick,{}};
-    for(int i=0;i<h.tankCount;i++){
-        float dx=raw[i].x-mx,dz=raw[i].z-mz;
-        int hp=raw[i].hp; if(hp<0)hp=0; if(hp>200)hp=200;
+        int hp=raw[i].hp; if(hp<0)hp=0;
         out.tanks.push_back({raw[i].id,raw[i].x,raw[i].z,raw[i].yaw,hp,
                              (raw[i].flags&1)!=0,(raw[i].id==h.localId),sqrtf(dx*dx+dz*dz)});
     }
     return true;
+}
+static bool parseStrict(const BYTE* buf, SIZE_T n, Snap& out){ return doParse(buf,n,out,true);  }
+static bool parseLoose (const BYTE* buf, SIZE_T n, Snap& out){ return doParse(buf,n,out,false); }
+
+// So sanh 2 snapshot: uu tien matchId cao hon (real > fake), tie-break bang tick
+static bool betterSnap(const Snap& s, const Snap& best) {
+    if (!best.valid) return true;
+    if (s.matchId != best.matchId) return s.matchId > best.matchId;
+    return s.tick > best.tick;
 }
 
 static bool readAt(uintptr_t base, Snap& out) {
@@ -152,18 +145,25 @@ static std::pair<uintptr_t,Snap> fullScan() {
     if(g_blocked) return {0,{}};
     uintptr_t bestAddr=0; Snap best;
     MEMORY_BASIC_INFORMATION mbi; uintptr_t addr=0;
+
+    const DWORD READABLE = PAGE_READWRITE | PAGE_EXECUTE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_WRITECOPY;
+    const SIZE_T CHUNK   = 16u * 1024 * 1024;  // doc tung 16MB tranh cap phat qua lon
     while(VirtualQueryEx(g_proc,(LPCVOID)addr,&mbi,sizeof(mbi))){
         uintptr_t base=(uintptr_t)mbi.BaseAddress; addr+=mbi.RegionSize;
-        if(!(mbi.State==MEM_COMMIT&&(mbi.Protect&PAGE_READWRITE)&&mbi.RegionSize<32u*1024*1024)) continue;
-        std::vector<BYTE> buf(mbi.RegionSize); SIZE_T n=0;
-        if(!ReadProcessMemory(g_proc,(LPCVOID)base,buf.data(),mbi.RegionSize,&n)) continue;
-        for(SIZE_T i=0;i+HDR+GAP+TANK<=n;i++){
-            uint16_t op; memcpy(&op,&buf[i+4],2);
-            if(op!=2000) continue;
-            Snap s;
-            if(!parseStrict(&buf[i],n-i,s)) continue;
-            if(best.valid && s.tick<=best.tick) continue;
-            bestAddr=base+i; best=s;
+        if(!(mbi.State==MEM_COMMIT&&(mbi.Protect&READABLE))) continue;
+        // Scan toan bo region, chia thanh cac chunk 16MB
+        for(SIZE_T off=0; off<mbi.RegionSize; off+=CHUNK){
+            SIZE_T toRead=std::min(CHUNK, mbi.RegionSize-off);
+            std::vector<BYTE> buf(toRead); SIZE_T n=0;
+            if(!ReadProcessMemory(g_proc,(LPCVOID)(base+off),buf.data(),toRead,&n)) continue;
+            for(SIZE_T i=0;i+HDR+GAP+TANK<=n;i++){
+                uint16_t op; memcpy(&op,&buf[i+4],2);
+                if(op!=2000) continue;
+                Snap s;
+                if(!parseStrict(&buf[i],n-i,s)) continue;
+                if(!betterSnap(s,best)) continue;
+                bestAddr=base+off+i; best=s;
+            }
         }
     }
     return {bestAddr,best};
@@ -244,21 +244,21 @@ static void scanLoop() {
         }
 
         { std::lock_guard<std::mutex> lk(g_mtx); g_snap=snap; }
-        std::this_thread::sleep_for(ms_t(snap.valid?50:500));
+        std::this_thread::sleep_for(ms_t(50));
     }
 }
 
 // ── Console thread ────────────────────────────────────────────────────────────
 static void consoleLoop(){
     bool wasValid=false; uint16_t lastTick=0xFFFF;
-    printf("Chua vao match...\nF8=Bot ON  F9=Bot OFF  ESC=Thoat\n");
+    printf("Chua vao match...\nF8=Toggle ESP  ESC=Thoat\n");
     while(g_running){
         Snap s; {std::lock_guard<std::mutex> lk(g_mtx); s=g_snap;}
         if(s.valid){
             if(!wasValid||s.tick!=lastTick){
                 if(!wasValid) printf("\033[2J");  // xoa man hinh 1 lan khi vao match
                 printf("\033[H");
-                printf("Match:%-6u  Tick:%-5u  Bot:%s\n",s.matchId,s.tick,g_botOn?"ON ":"OFF");
+                printf("Match:%-6u  Tick:%-5u  ESP:%s\n",s.matchId,s.tick,g_espOn?"ON ":"OFF");
                 for(auto&t:s.tanks)
                     printf("%s ID:%-3u  X:%8.1f  Z:%8.1f  HP:%-3d  %s\n",
                            t.isMe?"[ME ]":"[FOE]",t.id,t.x,t.z,t.hp,t.alive?"alive":"dead ");
@@ -266,14 +266,11 @@ static void consoleLoop(){
                 wasValid=true; lastTick=s.tick;
             }
         } else if(wasValid){
-            printf("\033[2J\033[H""Chua vao match...\n"); wasValid=false;
+            printf("\033[2J\033[H""Chua vao match...\nF8=Toggle ESP  ESC=Thoat\n"); wasValid=false;
         }
         std::this_thread::sleep_for(ms_t(50));
     }
 }
-
-// ── Bot stub ──────────────────────────────────────────────────────────────────
-static void botLoop(){ while(g_botOn) std::this_thread::sleep_for(ms_t(100)); }
 
 // ── GDI helpers ───────────────────────────────────────────────────────────────
 static const COLORREF CHROMA=RGB(0,128,0);
@@ -303,7 +300,7 @@ static void drawOverlay(HDC dc, int W, int H){
     }
     if(!s.valid){
         gText(dc,10,10,RGB(255,255,0),16,"ESP: Chua vao match...");
-        char sb[64]; sprintf_s(sb,"Bot:%s  [F8]ON [F9]OFF [ESC]Thoat",g_botOn?"ON":"OFF");
+        char sb[64]; sprintf_s(sb,"ESP:%s  [F8]=Toggle  [ESC]=Thoat",g_espOn?"ON":"OFF");
         gText(dc,10,H-24,RGB(160,160,160),13,sb); return;
     }
 
@@ -319,45 +316,47 @@ static void drawOverlay(HDC dc, int W, int H){
     float myX=0,myZ=0;
     for(auto&t:s.tanks) if(t.isMe){myX=t.x;myZ=t.z;break;}
 
+    // Minimap dots
     for(auto&t:s.tanks){
         int px=MX+MAP/2+(int)((t.x-myX)/R*(MAP/2-10));
         int py=MY+MAP/2-(int)((t.z-myZ)/R*(MAP/2-10));
         px=std::max(MX+4,std::min(MX+MAP-4,px));
         py=std::max(MY+4,std::min(MY+MAP-4,py));
         if(t.isMe){
-            gCirc(dc,px,py,7,RGB(0,255,0),2);
-            gText(dc,px-8,py-20,RGB(0,255,0),11,"ME");
+            gCirc(dc,px,py,7,RGB(0,220,0),3);
+            gText(dc,px-8,py-18,RGB(0,255,0),11,"ME");
         } else if(!t.alive){
-            gText(dc,px-4,py-6,RGB(100,100,100),13,"x");
+            gText(dc,px-4,py-6,RGB(120,120,120),13,"x");
         } else {
-            gCirc(dc,px,py,6,RGB(255,50,50),2);
-            gLine(dc,MX+MAP/2,MY+MAP/2,px,py,RGB(170,40,40),1);
+            // Do: enemy; Vang: HP
+            gFill(dc,px-5,py-5,10,10,RGB(220,0,0));          // hinh vuong do
+            gLine(dc,MX+MAP/2,MY+MAP/2,px,py,RGB(200,0,0),1);
             char lbl[8]; sprintf_s(lbl,"%d",t.hp);
-            gText(dc,px+8,py-6,RGB(255,200,0),11,lbl);
+            gText(dc,px+8,py-6,RGB(255,220,0),12,lbl);       // HP mau vang
         }
     }
 
-    // Player list (top-left)
-    char hdr[64]; sprintf_s(hdr,"Match:%-6u  Tick:%-5u",s.matchId,s.tick);
-    gText(dc,10,10,RGB(200,200,200),14,hdr);
-    int rowY=30;
+    // Danh sach (top-left): ten do cho enemy, xanh cho ban than
+    char hdrTxt[64]; sprintf_s(hdrTxt,"Match:%-6u  Tick:%-5u",s.matchId,s.tick);
+    gText(dc,10,10,RGB(220,220,220),14,hdrTxt);
+    int rowY=32;
     for(auto&t:s.tanks){
         char line[160]; COLORREF col;
         if(t.isMe){
             col=RGB(0,255,0);
-            sprintf_s(line,"[ME  ]  ID:%-3u  X:%8.1f  Z:%8.1f  HP:%d",t.id,t.x,t.z,t.hp);
+            sprintf_s(line,"[ME]  X:%7.1f  Z:%7.1f  HP:%d",t.x,t.z,t.hp);
         } else {
             float dx=t.x-myX,dz=t.z-myZ;
             float deg=atan2f(dx,dz)*180.f/3.14159265f; if(deg<0)deg+=360.f;
             static const char*dirs[]={"N","NE","E","SE","S","SW","W","NW"};
-            col=t.alive?RGB(255,60,60):RGB(120,120,120);
-            sprintf_s(line,"[%s]  ID:%-3u  X:%8.1f  Z:%8.1f  HP:%-4d  Dist:%-6.0f  %s",
-                      t.alive?"ENEMY":"DEAD ",t.id,t.x,t.z,t.hp,t.dist,dirs[(int)((deg+22.5f)/45.f)%8]);
+            col=t.alive?RGB(255,60,60):RGB(130,130,130);
+            sprintf_s(line,"[%s]  X:%7.1f  Z:%7.1f  HP:%-3d  %.0fm  %s",
+                      t.alive?"ENEMY":"DEAD",t.x,t.z,t.hp,t.dist,dirs[(int)((deg+22.5f)/45.f)%8]);
         }
         gText(dc,10,rowY,col,14,line); rowY+=20;
     }
-    char sb[80]; sprintf_s(sb,"[F8]Bot ON  [F9]Bot OFF  [ESC]Thoat  |  Bot:%s",g_botOn?"ON":"OFF");
-    gText(dc,10,H-24,g_botOn?RGB(255,200,0):RGB(160,160,160),13,sb);
+    char sb[80]; sprintf_s(sb,"[F8] ESP: %s        [ESC] Thoat",g_espOn?"ON ":"OFF");
+    gText(dc,10,H-22,g_espOn?RGB(0,220,0):RGB(150,150,150),13,sb);
 }
 
 // ── Overlay WndProc ───────────────────────────────────────────────────────────
@@ -403,11 +402,9 @@ int main(){
     SetLayeredWindowAttributes(g_overlay,CHROMA,0,LWA_COLORKEY);
     ShowWindow(g_overlay,SW_SHOW);SetTimer(g_overlay,1,50,nullptr);
 
-    std::thread tScan(scanLoop), tCon(consoleLoop), tBot;
-    auto stopBot =[&](){g_botOn=false;if(tBot.joinable())tBot.join();};
-    auto startBot=[&](){stopBot();g_botOn=true;tBot=std::thread(botLoop);};
+    std::thread tScan(scanLoop), tCon(consoleLoop);
 
-    bool pF8=false,pF9=false,pEsc=false;
+    bool pF8=false,pEsc=false;
     MSG msg={};
     while(true){
         while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){
@@ -417,16 +414,17 @@ int main(){
         RECT r; GetWindowRect(g_gameWnd,&r);
         SetWindowPos(g_overlay,HWND_TOPMOST,r.left,r.top,r.right-r.left,r.bottom-r.top,SWP_NOACTIVATE);
         bool f8=(GetAsyncKeyState(VK_F8)&0x8000)!=0;
-        bool f9=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
         bool esc=(GetAsyncKeyState(VK_ESCAPE)&0x8000)!=0;
-        if(f8&&!pF8) startBot();
-        if(f9&&!pF9) stopBot();
+        if(f8&&!pF8){
+            g_espOn=!g_espOn;
+            ShowWindow(g_overlay, g_espOn?SW_SHOW:SW_HIDE);
+        }
         if(esc&&!pEsc) break;
-        pF8=f8;pF9=f9;pEsc=esc;
+        pF8=f8;pEsc=esc;
         std::this_thread::sleep_for(ms_t(10));
     }
 done:
-    g_running=false; stopBot();
+    g_running=false;
     tScan.join(); tCon.join();
     DestroyWindow(g_overlay); CloseHandle(g_proc);
     return 0;

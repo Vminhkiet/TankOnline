@@ -28,6 +28,10 @@ public class MatchResultKafkaListener {
     public void onMatchResult(String message) {
         try {
             MatchResultEvent event = objectMapper.readValue(message, MatchResultEvent.class);
+            if ("cheat_void".equalsIgnoreCase(event.getOutcome())) {
+                log.warn("Match {} cancelled due to cheat — skipping history save", event.getMatchId());
+                return;
+            }
             saveForAllPlayers(event);
         } catch (Exception e) {
             log.error("Failed to process match.result event: {}", e.getMessage());

@@ -30,7 +30,7 @@ struct MatchConfig {
     int                  port           = 8080;
 };
 
-enum class MatchOutcome { Running, Win, Draw, Timeout };
+enum class MatchOutcome { Running, Win, Draw, Timeout, CheatVoid };
 
 struct MatchResult {
     uint32_t     matchId     = 0;

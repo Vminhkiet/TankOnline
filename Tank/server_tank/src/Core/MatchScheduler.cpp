@@ -222,8 +222,32 @@ bool MatchScheduler::forceLogoutByUserId(const std::string& userId, uint16_t cod
     return kicked;
 }
 
+void MatchScheduler::cancelMatch(uint32_t matchId) {
+    std::unique_lock lock(_matchesMutex);
+    auto it = _matches.find(matchId);
+    if (it == _matches.end()) {
+        LOG_WARN("MatchScheduler: cancelMatch({}) — match not found", matchId);
+        return;
+    }
+    // Build a minimal CheatVoid result from the existing match config
+    const auto& cfg = it->second->config();
+    MatchResult r;
+    r.matchId     = matchId;
+    r.outcome     = MatchOutcome::CheatVoid;
+    r.winnerId    = 0;
+    r.durationSecs = 0.f;
+    r.mapName     = cfg.mapName;
+    for (auto pid : cfg.playerIds) {
+        r.userIds[pid] = cfg.userIds.count(pid) ? cfg.userIds.at(pid) : "";
+    }
+    _matches.erase(it);
+    lock.unlock();
+    onMatchEnd(r);
+    LOG_INFO("MatchScheduler: match {} force-cancelled (CheatVoid)", matchId);
+}
+
 void MatchScheduler::onMatchEnd(MatchResult r) {
-    static constexpr const char* kOutcomeStr[] = { "running", "win", "draw", "timeout" };
+    static constexpr const char* kOutcomeStr[] = { "running", "win", "draw", "timeout", "cheat_void" };
     const char* outcomeStr = kOutcomeStr[std::min(static_cast<int>(r.outcome), 3)];
 
     LOG_INFO("MatchScheduler: match {} ended (outcome={}, winner={}, dur={:.1f}s)",

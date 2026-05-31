@@ -87,11 +87,35 @@ void Match::tick(float dt, int64_t budgetUs, MetricsCollector& metrics) {
                     ReadStream rs(reinterpret_cast<const uint32_t*>(cmd.rawBuffer.data()), static_cast<int>(cmd.rawBuffer.size()));
                     PacketHeader dummy;
                     dummy.Serialize(rs); // skip header
+
                     int32_t typeIndex = 0;
-                    if (rs.SerializeInteger(typeIndex, 0, 255)) {
-                        tankNameOverride = _world.getMap().getTankNameByIndex(static_cast<uint8_t>(typeIndex));
-                        LOG_INFO("Match {}: received C2S_LOGIN with tank typeIndex {}, resolved to '{}'", _config.matchId, typeIndex, tankNameOverride);
+                    rs.SerializeInteger(typeIndex, 0, 255);
+                    tankNameOverride = _world.getMap().getTankNameByIndex(static_cast<uint8_t>(typeIndex));
+
+                    // Doc token (32 ASCII chars) theo sau typeIndex
+                    // Token duoc ghi phia sau phan bit-packed: [typeIndex bits][32 bytes token]
+                    int byteOffset = rs.GetBytesRead();
+                    const auto& raw = cmd.rawBuffer;
+                    if ((int)raw.size() >= byteOffset + 32) {
+                        std::string token(reinterpret_cast<const char*>(raw.data() + byteOffset), 32);
+                        if (!resolvePlayerWithToken(cmd.sender, token, pid, tankNameOverride)) {
+                            LOG_WARN("Match {}: rejected C2S_LOGIN from {}:{} — invalid token '{}'",
+                                     _config.matchId,
+                                     ntohl(cmd.sender.sin_addr.s_addr), ntohs(cmd.sender.sin_port),
+                                     token);
+                            continue; // tu choi ket noi
+                        }
+                        LOG_INFO("Match {}: player {} authenticated via token, tank='{}'",
+                                 _config.matchId, pid, tankNameOverride);
+                        if (cmd.op == Opcode::C2S_LOGIN) continue;
+                        cmd.dt = dt;
+                        _dispatcher.dispatch(cmd);
+                        continue;
                     }
+                    // Fallback: khong co token → dung resolvePlayer cu (backward compat)
+                    LOG_WARN("Match {}: C2S_LOGIN from {}:{} has no token — using legacy slot assign",
+                             _config.matchId,
+                             ntohl(cmd.sender.sin_addr.s_addr), ntohs(cmd.sender.sin_port));
                 }
             }
         }
@@ -364,6 +388,47 @@ void Match::broadcastSnapshot() {
         std::memcpy(pkt.data() + sizeof(hdr), body.data(), body.size());
         _network.send(addr, pkt.data(), pkt.size());
     }
+}
+
+bool Match::resolvePlayerWithToken(const sockaddr_in& addr, const std::string& token,
+                                    uint32_t& outPid, const std::string& overrideTankName) {
+    // Fast path: da dang ky roi
+    if (_sessions.getPlayerID(addr, outPid)) return true;
+
+    // Tim slotId tuong ung voi token nay
+    uint32_t matchedPid = 0;
+    for (auto& [pid, tok] : _config.playerTokens) {
+        if (tok == token) { matchedPid = pid; break; }
+    }
+    if (matchedPid == 0) return false; // token khong hop le
+
+    // Kiem tra slot chua bi chiem boi session khac
+    {
+        std::lock_guard lock(_slotMutex);
+        if (_sessions.hasPlayerID(matchedPid)) {
+            // Slot da duoc assign — co the la reconnect tu cung player
+            // Cho phep neu cung token
+            outPid = matchedPid;
+            _sessions.updateAddress(matchedPid, addr);
+            return true;
+        }
+        // Assign slot nay cho addr nay
+        size_t slot = 0;
+        for (size_t i = 0; i < _config.playerIds.size(); i++) {
+            if (_config.playerIds[i] == matchedPid) { slot = i; break; }
+        }
+        outPid = matchedPid;
+        _sessions.addSession(matchedPid, "player" + std::to_string(matchedPid), addr);
+
+        Vector3 spawn = _world.getSpawnPosition(slot);
+        TankStats stats = _config.playerStats.count(matchedPid) ? _config.playerStats.at(matchedPid) : TankStats{};
+        if (!overrideTankName.empty()) stats.name = overrideTankName;
+        _world.addPlayer(matchedPid, spawn, stats);
+
+        LOG_INFO("Match {}: player {} authenticated (token={:.8}...) → spawn ({:.1f},{:.1f},{:.1f})",
+                 _config.matchId, matchedPid, token, spawn.x, spawn.y, spawn.z);
+    }
+    return true;
 }
 
 bool Match::resolvePlayer(const sockaddr_in& addr, uint32_t& outPid, const std::string& overrideTankName) {

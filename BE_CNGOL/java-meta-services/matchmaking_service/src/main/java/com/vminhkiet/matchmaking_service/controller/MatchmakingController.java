@@ -11,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -191,6 +193,30 @@ public class MatchmakingController {
         } catch (Exception e) {
             log.error("[MatchmakingController] Error processing match.ready: {}", e.getMessage());
         }
+    }
+
+    private static final String AC_SECRET = "AC-SECRET-SE315";
+
+    @PostMapping("/admin/cancel-cheat")
+    public ResponseEntity<Map<String, Object>> cancelCheat(
+            @RequestHeader(value = "X-Anticheat-Key", required = false) String key,
+            @RequestBody Map<String, Object> body) {
+        if (!AC_SECRET.equals(key))
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Invalid key"));
+        int matchId;
+        try { matchId = Integer.parseInt(body.get("matchId").toString()); }
+        catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("error", "Invalid matchId")); }
+        String reason = body.getOrDefault("reason", "cheat_detected").toString();
+
+        Map<String, Object> cancelMsg = Map.of("matchId", matchId, "reason", reason);
+        try {
+            kafkaTemplate.send("match.cancel", String.valueOf(matchId), objectMapper.writeValueAsString(cancelMsg));
+            log.warn("[Anticheat] match {} cancel published to Kafka (reason={})", matchId, reason);
+        } catch (Exception e) {
+            log.error("[Anticheat] Failed to publish match.cancel: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+        return ResponseEntity.ok(Map.of("status", "cancel_sent", "matchId", matchId));
     }
 
     private static String generateToken() {
