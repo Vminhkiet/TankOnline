@@ -25,6 +25,7 @@ public:
 
     // Called from Kafka consumer (main thread).
     void createMatch(MatchConfig config);
+    void cancelMatch(uint32_t matchId);  // force-end with CheatVoid outcome
 
     // Called from NetworkManager IOCP workers (multiple threads).
     void routeCommand(GameCommand cmd);

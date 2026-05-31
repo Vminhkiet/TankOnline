@@ -105,9 +105,10 @@ int main() {
 
     // Kafka broker list — set KAFKA_BROKERS=host:9092 to enable publishing.
     // Leave empty (default) to run without Kafka (stub silently no-ops).
-    const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "localhost:9092");
+    const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "172.25.203.168:9092");
     const std::string kafkaGroupId = getEnv("KAFKA_GROUP_ID", "tank-server");
     const std::string kafkaTopic   = getEnv("KAFKA_TOPIC_IN",  "match.create");
+    const std::string kafkaCancelTopic = getEnv("KAFKA_TOPIC_CANCEL", "match.cancel");
     const std::string kafkaSessionInvalidatedTopic = getEnv("KAFKA_TOPIC_SESSION_INVALIDATED", "user.session.invalidated");
 
     // ── Network backend (switchable via BACKEND env var) ────────────────────
@@ -180,7 +181,7 @@ int main() {
 
     KafkaConsumer consumer;
     bool kafkaOk = !kafkaBrokers.empty() &&
-                   consumer.connect(kafkaBrokers, kafkaGroupId, {kafkaTopic, kafkaSessionInvalidatedTopic});
+                   consumer.connect(kafkaBrokers, kafkaGroupId, {kafkaTopic, kafkaCancelTopic, kafkaSessionInvalidatedTopic});
     if (!kafkaBrokers.empty() && !kafkaOk)
         LOG_WARN("main: Kafka unavailable — running without dynamic match creation");
 
@@ -224,6 +225,13 @@ int main() {
                         }
                     }
                     manager.createMatch(std::move(cfg));
+                    return;
+                }
+
+                if (msg.topic == kafkaCancelTopic) {
+                    uint32_t matchId = j.at("matchId").get<uint32_t>();
+                    LOG_INFO("main: received match.cancel for matchId={}", matchId);
+                    manager.cancelMatch(matchId);
                     return;
                 }
 

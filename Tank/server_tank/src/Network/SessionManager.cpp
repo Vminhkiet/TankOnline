@@ -55,6 +55,20 @@ void SessionManager::removeSession(uint32_t playerID) {
 	_playerToAddr.erase(playerID);
 }
 
+void SessionManager::updateAddress(uint32_t playerID, const sockaddr_in& newAddr) {
+	auto it = _playerToAddr.find(playerID);
+	if (it == _playerToAddr.end()) return;
+	// Xoa key cu
+	_sessionByAddr.erase(it->second);
+	// Them key moi
+	uint64_t newKey = ((uint64_t)ntohl(newAddr.sin_addr.s_addr) << 16) | ntohs(newAddr.sin_port);
+	Session& s = _sessionByAddr[newKey];
+	s.playerID = playerID;
+	s.ip       = newAddr;
+	s.lastActiveTime = std::chrono::steady_clock::now();
+	it->second = newKey;
+}
+
 bool SessionManager::updateHeartbeat(const sockaddr_in& addr) {
 	uint64_t key = ((uint64_t)ntohl(addr.sin_addr.s_addr) << 16) | ntohs(addr.sin_port);
 	

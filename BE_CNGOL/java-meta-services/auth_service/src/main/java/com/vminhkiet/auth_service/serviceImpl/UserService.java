@@ -150,4 +150,15 @@ public class UserService implements com.vminhkiet.auth_service.service.UserServi
             sessionInvalidationProducer.publishBanKick(userId);
         }
     }
+
+    @Override
+    public void forceBan(Long userId, String reason) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+        if (Boolean.TRUE.equals(user.getIsBanned())) return;
+        user.setIsBanned(true);
+        userRepository.save(user);
+        sessionService.logout(userId);
+        sessionInvalidationProducer.publishBanKick(userId);
+    }
 }

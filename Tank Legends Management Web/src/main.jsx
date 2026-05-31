@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
-const API_BASE = 'http://localhost:8080';
+const API_BASE = 'http://172.25.203.168:8080';
 
 
 
@@ -552,7 +552,7 @@ function StoreManagementPanel({ pushCommand }) {
   const [isEditing, setIsEditing] = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  const API_URL = 'http://localhost:8080/api/shop';
+  const API_URL = `${API_BASE}/api/shop`;
 
   const fetchItems = async () => {
     try {

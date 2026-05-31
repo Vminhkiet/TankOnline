@@ -25,4 +25,9 @@ public:
 	bool updateHeartbeat(const sockaddr_in& addr);
 	std::vector<uint32_t> collectTimeouts(int timeoutSeconds);
 	size_t size() const { return _playerToAddr.size(); }
+
+	// Kiem tra slotId da co session chua (dung trong token auth)
+	bool hasPlayerID(uint32_t playerID) const { return _playerToAddr.count(playerID) > 0; }
+	// Cap nhat dia chi khi player reconnect
+	void updateAddress(uint32_t playerID, const sockaddr_in& newAddr);
 };

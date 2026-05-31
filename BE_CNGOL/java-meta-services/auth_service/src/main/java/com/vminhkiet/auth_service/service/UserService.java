@@ -14,4 +14,5 @@ public interface UserService {
     UserMeResponse getUserMe(Long userId);
     List<User> getAllUser();
     void toggleBan(Long userId);
+    void forceBan(Long userId, String reason);
 }

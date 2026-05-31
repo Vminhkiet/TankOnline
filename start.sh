@@ -2,10 +2,10 @@
 set -e
 
 MVN=/mnt/c/Users/minhk/Downloads/apache-maven-3.9.9/bin/mvn
-BASE=/home/minhk/project/SE315.Q21/BE_CNGOL/java-meta-services
-TANK_EXE=/mnt/d/Unity/TankOnline/SE315.Q21/Tank/out/build/x64-Release/server_tank/Release/server_tank.exe
-TANK_CWD=/mnt/d/Unity/TankOnline/SE315.Q21/Tank/out/build/x64-Release/server_tank/Release
-TANK_SLN="D:\\Unity\\TankOnline\\SE315.Q21\\Tank\\build_server_tank.bat"
+BASE=/home/minhk/project/new/SE315.Q21/BE_CNGOL/java-meta-services
+TANK_EXE=/mnt/d/Unity/TankOnline/game/SE315.Q21/Tank/out/build/x64-Release/server_tank/Release/server_tank.exe
+TANK_CWD=/mnt/d/Unity/TankOnline/game/SE315.Q21/Tank/out/build/x64-Release/server_tank/Release
+TANK_SLN="D:\\Unity\\TankOnline\\game\\SE315.Q21\\Tank\\build_server_tank.bat"
 
 # ── 0. Kill services cũ ───────────────────────────────────────────────────────
 echo "[0/5] Cleaning up old processes..."
@@ -58,6 +58,8 @@ docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
   --create --if-not-exists --topic match.create --partitions 1 --replication-factor 1 > /dev/null 2>&1 || true
 docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
   --create --if-not-exists --topic match.result --partitions 1 --replication-factor 1 > /dev/null 2>&1 || true
+docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --if-not-exists --topic match.cancel --partitions 1 --replication-factor 1 > /dev/null 2>&1 || true
 echo "      Kafka topics OK"
 
 # ── 2.5 Tạo PostgreSQL databases nếu chưa có ─────────────────────────────────
@@ -100,7 +102,8 @@ echo " Eureka UP"
 # Start remaining services
 java -jar "$BASE/auth_service/target/auth-service-0.0.1-SNAPSHOT.jar"                    > /tmp/auth.log        2>&1 &
 java -jar "$BASE/api_gateway/target/api_gateway-0.0.1-SNAPSHOT.jar"                       > /tmp/gateway.log     2>&1 &
-java -jar "$BASE/matchmaking_service/target/matchmaking_service-0.0.1-SNAPSHOT.jar"        > /tmp/matchmaking.log 2>&1 &
+java -Dtank.server.host=192.168.100.31 \
+     -jar "$BASE/matchmaking_service/target/matchmaking_service-0.0.1-SNAPSHOT.jar"       > /tmp/matchmaking.log 2>&1 &
 java -jar "$BASE/history_service/target/history_service-0.0.1-SNAPSHOT.jar"                > /tmp/history.log     2>&1 &
 java -jar "$BASE/monitoring_service/target/monitoring_service-0.0.1-SNAPSHOT.jar"          > /tmp/monitoring.log  2>&1 &
 java -jar "$BASE/profile_service/target/profile_service-0.0.1-SNAPSHOT.jar"                > /tmp/profile.log     2>&1 &
@@ -118,15 +121,30 @@ for svc in "Eureka:8761" "Auth:8081" "Gateway:8080" "Matchmaking:8085" "History:
     echo "      $name ($port): $status"
 done
 
-# ── 4. Build Tank server nếu EXE chưa có ─────────────────────────────────────
+# ── 4. Build Tank server ──────────────────────────────────────────────────────
 echo "[4/5] Checking Tank server..."
-if [ ! -f "$TANK_EXE" ]; then
-    echo "      server_tank.exe not found → building..."
-    cmd.exe /c "$TANK_SLN"
-    echo "      Tank server built"
-else
-    echo "      server_tank.exe found, skipping build"
-fi
+MAIN_CPP_WIN="/mnt/d/Unity/TankOnline/game/SE315.Q21/Tank/server_tank/src/main.cpp"
+MAIN_CPP_WSL="/home/minhk/project/new/SE315.Q21/Tank/server_tank/src/main.cpp"
+
+# Patch WSL2 IP vào Kafka broker default, sync cả 2 bản
+sed -i "s|getEnv(\"KAFKA_BROKERS\", \"[^\"]*\")|getEnv(\"KAFKA_BROKERS\", \"${WSL2_IP}:9092\")|g" "$MAIN_CPP_WIN"
+cp "$MAIN_CPP_WIN" "$MAIN_CPP_WSL"
+echo "      Kafka broker patched → ${WSL2_IP}:9092"
+
+# Patch WSL2 IP vào anticheat ban host
+AC_CPP_WIN="/mnt/d/Unity/TankOnline/game/SE315.Q21/tools/anticheat/anticheat.cpp"
+AC_CPP_WSL="/home/minhk/project/new/SE315.Q21/tools/anticheat/anticheat.cpp"
+sed -i "s|static const char\* AUTH_HOST  = \"[^\"]*\"|static const char* AUTH_HOST  = \"${WSL2_IP}\"|g" "$AC_CPP_WIN"
+cp "$AC_CPP_WIN" "$AC_CPP_WSL"
+echo "      Anticheat host patched → ${WSL2_IP}"
+
+# Kill old tank server
+powershell.exe -Command "Stop-Process -Name 'server_tank' -Force -ErrorAction SilentlyContinue" 2>/dev/null || true
+sleep 1
+
+echo "      Building tank server..."
+cmd.exe /c "$TANK_SLN"
+echo "      Tank server built"
 
 python3 -c "
 import subprocess, sys
