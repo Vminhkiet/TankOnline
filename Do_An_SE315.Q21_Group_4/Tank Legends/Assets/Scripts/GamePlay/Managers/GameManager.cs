@@ -490,11 +490,10 @@ namespace Complete
             m_Tanks[0].Setup();
 
             var tm = m_Tanks[0].m_Instance.GetComponent<Complete.TankMovement>();
-            if (tm != null) tm.m_IsLocalPlayer = true;
             bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
 
-            var ts = m_Tanks[0].m_Instance.GetComponent<Complete.TankShooting>();
-            if (ts != null) ts.m_IsLocalPlayer = true;
+            var tankShooting = m_Tanks[0].m_Instance.GetComponent<Complete.TankShooting>();
+            if (tankShooting != null) tankShooting.m_IsLocalPlayer = true;
 
             var rb = m_Tanks[0].m_Instance.GetComponent<Rigidbody>();
             if (rb != null) { rb.isKinematic = customPhysics; rb.useGravity = !customPhysics; }

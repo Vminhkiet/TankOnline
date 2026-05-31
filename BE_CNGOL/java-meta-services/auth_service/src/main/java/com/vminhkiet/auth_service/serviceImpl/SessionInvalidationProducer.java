@@ -16,6 +16,9 @@ public class SessionInvalidationProducer {
     private static final String TOPIC = "user.session.invalidated";
     private static final int DUPLICATE_LOGIN_CODE = 1003;
     private static final String DUPLICATE_LOGIN_MESSAGE = "Logged in from another device";
+    
+    private static final int BANNED_LOGIN_CODE = 1004;
+    private static final String BANNED_LOGIN_MESSAGE = "Tài khoản của bạn đã bị cấm.";
 
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
@@ -35,6 +38,21 @@ public class SessionInvalidationProducer {
             kafkaTemplate.send(TOPIC, String.valueOf(userId), payload);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize session invalidation event", e);
+        }
+    }
+
+    public void publishBanKick(Long userId) {
+        SessionInvalidatedEvent event = new SessionInvalidatedEvent(
+                userId,
+                BANNED_LOGIN_CODE,
+                BANNED_LOGIN_MESSAGE,
+                Instant.now());
+
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(TOPIC, String.valueOf(userId), payload);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to serialize session invalidation event for ban", e);
         }
     }
 }

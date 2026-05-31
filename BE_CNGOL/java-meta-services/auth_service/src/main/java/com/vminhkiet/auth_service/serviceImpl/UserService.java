@@ -9,6 +9,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.util.Map;
 
@@ -40,6 +42,9 @@ public class UserService implements com.vminhkiet.auth_service.service.UserServi
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
 
+    @Autowired
+    private SessionInvalidationProducer sessionInvalidationProducer;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -65,6 +70,13 @@ public class UserService implements com.vminhkiet.auth_service.service.UserServi
 
         if (!passwordEncoder.matches(passWord, userDetails.getPassword()))
             throw new BadCredentialsException("Invalid username or password");
+
+        // The id is used as the username in the UserDetails
+        Long userId = Long.parseLong(userDetails.getUsername());
+        User user = userRepository.findById(userId).orElseThrow();
+        if (Boolean.TRUE.equals(user.getIsBanned())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Tài khoản của bạn đã bị cấm.");
+        }
 
         Authentication authObj = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         return authObj;
@@ -124,5 +136,18 @@ public class UserService implements com.vminhkiet.auth_service.service.UserServi
     @Override
     public List<User> getAllUser(){
         return userRepository.findAll();
+    }
+
+    @Override
+    public void toggleBan(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        user.setIsBanned(!Boolean.TRUE.equals(user.getIsBanned()));
+        userRepository.save(user);
+
+        if (Boolean.TRUE.equals(user.getIsBanned())) {
+            sessionService.logout(userId);
+            sessionInvalidationProducer.publishBanKick(userId);
+        }
     }
 }

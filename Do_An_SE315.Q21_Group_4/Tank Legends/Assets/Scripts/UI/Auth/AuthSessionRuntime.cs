@@ -13,6 +13,10 @@ public class AuthSessionRuntime : MonoBehaviour
     public GameObject warningPanel;
     public UnityEngine.UI.Button okButton;
 
+    [Header("Ban UI Runtime")]
+    public GameObject banWarningPanel;
+    public UnityEngine.UI.Button banOkButton;
+
     [Header("Auth Settings")]
     public string logoutApiPath = "/api/auth/logout";
     public string loginSceneName = "Authentication";
@@ -100,8 +104,16 @@ public class AuthSessionRuntime : MonoBehaviour
                     string errBody = req.downloadHandler != null ? req.downloadHandler.text : "";
                     Debug.Log($"[AuthSession] PHÁT HIỆN SESSION BỊ HỦY! HTTP {statusCode}: {req.error}\nPhản hồi server: {errBody}");
                     
-                    // Thực hiện kick người chơi cũ ra ngay lập tức
-                    HandleForceLogout(1003, "Tài khoản của bạn đã được đăng nhập từ một thiết bị khác.");
+                    if (statusCode == 403)
+                    {
+                        // Người dùng bị ban
+                        HandleForceLogout(1004, "Tài khoản của bạn đã bị cấm.");
+                    }
+                    else
+                    {
+                        // Thực hiện kick người chơi cũ ra ngay lập tức
+                        HandleForceLogout(1003, "Tài khoản của bạn đã được đăng nhập từ một thiết bị khác.");
+                    }
                 }
             }
             catch (System.Exception ex)
@@ -217,17 +229,30 @@ public class AuthSessionRuntime : MonoBehaviour
     {
         _isHandlingForceLogout = true;
 
-        // Đảm bảo Warning UI hoạt động
-        EnsureWarningUI();
+        GameObject activePanel = null;
+        UnityEngine.UI.Button activeButton = null;
 
-        if (warningPanel != null)
-            warningPanel.SetActive(true);
+        if (code == 1004 && banWarningPanel != null)
+        {
+            activePanel = banWarningPanel;
+            activeButton = banOkButton;
+        }
+        else
+        {
+            // Đảm bảo Warning UI hoạt động
+            EnsureWarningUI();
+            activePanel = warningPanel;
+            activeButton = okButton;
+        }
+
+        if (activePanel != null)
+            activePanel.SetActive(true);
 
         _userClickedOk = false;
-        if (okButton != null)
+        if (activeButton != null)
         {
-            okButton.onClick.RemoveAllListeners();
-            okButton.onClick.AddListener(() => { _userClickedOk = true; });
+            activeButton.onClick.RemoveAllListeners();
+            activeButton.onClick.AddListener(() => { _userClickedOk = true; });
         }
 
         while (!_userClickedOk)
@@ -247,8 +272,8 @@ public class AuthSessionRuntime : MonoBehaviour
         yield return new WaitForSeconds(0.2f);
 
         // Ẩn panel cảnh báo thay vì hủy để tái sử dụng sạch sẽ
-        if (warningPanel != null)
-            warningPanel.SetActive(false);
+        if (activePanel != null)
+            activePanel.SetActive(false);
 
         if (!string.IsNullOrEmpty(loginSceneName))
             SceneManager.LoadScene(loginSceneName);
