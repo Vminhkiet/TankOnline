@@ -69,7 +69,7 @@ public class UserService implements com.vminhkiet.auth_service.service.UserServi
         UserDetails userDetails  = customUsersDetailService.loadUserByUsername(userName);
 
         if (!passwordEncoder.matches(passWord, userDetails.getPassword()))
-            throw new BadCredentialsException("Invalid username or password");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
 
         // The id is used as the username in the UserDetails
         Long userId = Long.parseLong(userDetails.getUsername());
