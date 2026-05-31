@@ -15,7 +15,7 @@ public static class GameApiClient
     private const string LocalhostUrl = "http://localhost:8080";
     public static string LanManualIp
     {
-        get => PlayerPrefs.GetString("manual_ipv4_ip", "172.30.7.7");
+        get => PlayerPrefs.GetString("manual_ipv4_ip", "192.168.100.31");
         set { PlayerPrefs.SetString("manual_ipv4_ip", value); PlayerPrefs.Save(); }
     }
     public static string LanManualUrl => $"http://{LanManualIp}:8080";
@@ -43,8 +43,8 @@ public static class GameApiClient
                 if (!string.IsNullOrEmpty(_cachedAutoUrl))
                     return _cachedAutoUrl;
 
-                // Fallback: chưa tìm thấy server
-                return "http://not-found";
+                // Fallback: UDP discovery chưa xong → dùng IP thủ công
+                return LanManualUrl;
             }
 
             if (mode == "lan_manual")

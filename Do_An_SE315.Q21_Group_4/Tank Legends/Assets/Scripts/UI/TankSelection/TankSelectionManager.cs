@@ -146,7 +146,8 @@ public class TankSelectionManager : MonoBehaviour
 
     private IEnumerator RefreshShopIfNeeded()
     {
-        // Step 1: Ask the server for the current version number (very lightweight)
+        Debug.Log($"[Shop] BaseUrl={GameApiClient.BaseUrl} | URL={GameApiClient.BuildUrl(ShopVersionPath)}");
+
         long serverVersion = -1;
         using (UnityWebRequest versionRequest = GameApiClient.CreateRequest(ShopVersionPath, UnityWebRequest.kHttpVerbGET))
         {
@@ -167,18 +168,18 @@ public class TankSelectionManager : MonoBehaviour
             }
             else
             {
-                Debug.LogWarning($"Failed to check shop version: {versionResult.Error}. Will re-fetch items.");
+                Debug.LogWarning($"[Shop] Version check FAILED: {versionResult.Error} | HTTP {versionResult.StatusCode}");
             }
         }
 
-        // Step 2: Compare with cached version
         if (serverVersion >= 0 && serverVersion == cachedShopVersion && shopDataLoaded)
         {
             Debug.Log($"Shop data is up-to-date (version {cachedShopVersion}). Skipping fetch.");
+            // Gọi lại để update button visibility — Start() có thể chạy khi panel còn ẩn
+            TryLoadCachedShopItems();
             yield break;
         }
 
-        // Step 3: Version changed or no cache — do a full fetch
         Debug.Log($"Shop data changed (cached={cachedShopVersion}, server={serverVersion}). Fetching new items...");
         yield return StartCoroutine(FetchAvailableTanksFromAPI(serverVersion));
     }
@@ -194,10 +195,24 @@ public class TankSelectionManager : MonoBehaviour
         if (long.TryParse(cachedVersionStr, out long ver))
             cachedShopVersion = ver;
 
-        bool success = TryApplyShopItemsJson(cachedJson);
-        if (success)
-            shopDataLoaded = true;
-        return success;
+        int matched = TryApplyShopItemsJson(cachedJson);
+        if (matched < 0)
+            return false;
+
+        shopDataLoaded = true;
+
+        // Cache cũ không match button nào → xóa để force re-fetch lần sau
+        if (matched == 0 && shopItemsByName.Count > 0)
+        {
+            Debug.LogWarning("[Shop] Cache stale (0 matches) — clearing for re-fetch.");
+            PlayerPrefs.DeleteKey(ShopItemsCacheJsonKey);
+            PlayerPrefs.DeleteKey(ShopVersionCacheKey);
+            cachedShopVersion = -1;
+            shopDataLoaded = false;
+            return false;
+        }
+
+        return true;
     }
 
     private IEnumerator FetchAvailableTanksFromAPI(long newVersion)
@@ -211,7 +226,7 @@ public class TankSelectionManager : MonoBehaviour
             {
                 string json = fetchResult.Body;
 
-                if (TryApplyShopItemsJson(json))
+                if (TryApplyShopItemsJson(json) >= 0)
                 {
                     shopDataLoaded = true;
                     cachedShopVersion = newVersion;
@@ -237,7 +252,8 @@ public class TankSelectionManager : MonoBehaviour
         }
     }
 
-    private bool TryApplyShopItemsJson(string json)
+    // Trả về số button matched (< 0 = parse error)
+    private int TryApplyShopItemsJson(string json)
     {
         try
         {
@@ -245,19 +261,19 @@ public class TankSelectionManager : MonoBehaviour
             ShopItemArrayWrapper wrapper = JsonUtility.FromJson<ShopItemArrayWrapper>(wrappedJson);
 
             if (wrapper == null || wrapper.array == null)
-                return false;
+                return -1;
 
-            UpdateAvailableTanks(wrapper.array);
-            return true;
+            return UpdateAvailableTanks(wrapper.array);
         }
         catch (Exception e)
         {
             Debug.LogError("Failed to parse shop items: " + e.Message);
-            return false;
+            return -1;
         }
     }
 
-    private void UpdateAvailableTanks(ShopItemDTO[] apiItems)
+    // Trả về số button được match thành công
+    private int UpdateAvailableTanks(ShopItemDTO[] apiItems)
     {
         TankSelectionButton[] allButtons = FindObjectsOfType<TankSelectionButton>(true);
         shopItemsByName.Clear();
@@ -265,25 +281,25 @@ public class TankSelectionManager : MonoBehaviour
         foreach (var apiItem in apiItems)
         {
             if (apiItem != null && !string.IsNullOrWhiteSpace(apiItem.name))
-            {
                 shopItemsByName[apiItem.name] = apiItem;
-            }
         }
 
+        Debug.Log($"[Shop] UpdateAvailableTanks: {allButtons.Length} buttons, {shopItemsByName.Count} API items");
+
+        int matchCount = 0;
         foreach (var button in allButtons)
         {
-            if (button.TankData != null)
-            {
-                bool isAvailable = false;
+            if (button.TankData == null) continue;
 
-                if (shopItemsByName.TryGetValue(button.TankData.TankName, out ShopItemDTO apiItem))
-                {
-                    isAvailable = apiItem.available;
-                }
+            bool isAvailable = shopItemsByName.TryGetValue(button.TankData.TankName, out ShopItemDTO apiItem)
+                && apiItem.available;
 
-                button.gameObject.SetActive(isAvailable);
-            }
+            if (isAvailable) matchCount++;
+            button.gameObject.SetActive(isAvailable);
         }
+
+        Debug.Log($"[Shop] {matchCount}/{allButtons.Length} buttons matched");
+        return matchCount;
     }
 
     private void OnDestroy()

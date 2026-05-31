@@ -75,12 +75,14 @@ namespace Complete
         // ── Snapshot interpolation ───────────────────────────────────────────
         private struct SnapEntry { public float t; public Vector3 pos; public Quaternion rot; public float turretYaw; }
 
-        // Delay behind real-time to interpolate. 2 snapshot intervals @ 60Hz = ~33ms.
-        private const float INTERP_DELAY = 0.033f;
+        // Server gửi 20Hz (50ms/snapshot). Delay = 2 intervals để luôn có prev+next bracketing.
+        private const float INTERP_DELAY = 0.1f;
         private const int   SNAP_BUFFER  = 8;
 
         private readonly List<SnapEntry> _localSnaps  = new();
-        private readonly Dictionary<uint, List<SnapEntry>> _remoteSnaps = new();
+        private readonly Dictionary<uint, List<SnapEntry>>          _remoteSnaps     = new();
+        private readonly Dictionary<uint, Complete.TankShooting>    _remoteShooting  = new();
+        private readonly Dictionary<uint, Complete.TankAnimation>   _remoteAnimation = new();
 
         private int m_RoundNumber;                  // Which round the game is currently on.
         private WaitForSeconds m_StartWait;         // Used to have a delay whilst the round starts.
@@ -171,6 +173,8 @@ namespace Complete
                         if (go != null) Destroy(go);
                     _remoteTanks.Clear();
                     _remoteSnaps.Clear();
+                    _remoteShooting.Clear();
+                    _remoteAnimation.Clear();
 
                     TankNetClient.Instance.OnSnapshot    += HandleSnapshot;
                     TankNetClient.Instance.OnMatchEnd    += HandleMatchEnd;
@@ -200,14 +204,14 @@ namespace Complete
                 if (kvp.Value == null) continue;
                 if (_remoteSnaps.TryGetValue(kvp.Key, out var buf))
                 {
+                    _remoteShooting.TryGetValue(kvp.Key, out var shooting);
                     Vector3 oldPos = kvp.Value.transform.position;
-                    ApplyInterp(buf, kvp.Value.transform, renderTime);
+                    ApplyInterp(buf, kvp.Value.transform, renderTime, shooting);
                     Vector3 newPos = kvp.Value.transform.position;
 
-                    // Sync animation chạy bằng cách đo khoảng cách dịch chuyển
                     bool isMoving = Vector3.Distance(oldPos, newPos) > 0.01f;
-                    var anim = kvp.Value.GetComponent<TankAnimation>();
-                    if (anim != null) anim.SetMoving(isMoving);
+                    if (_remoteAnimation.TryGetValue(kvp.Key, out var anim) && anim != null)
+                        anim.SetMoving(isMoving);
                 }
             }
 
@@ -243,7 +247,7 @@ namespace Complete
             }
         }
 
-        private static void ApplyInterp(List<SnapEntry> buf, Transform tr, float renderTime)
+        private static void ApplyInterp(List<SnapEntry> buf, Transform tr, float renderTime, Complete.TankShooting shooting)
         {
             if (buf.Count == 0) return;
 
@@ -286,11 +290,8 @@ namespace Complete
                 currentTurretYaw = Mathf.Lerp(prevYaw, nextYaw, f);
             }
 
-            var shooting = tr.GetComponent<Complete.TankShooting>();
             if (shooting != null)
-            {
                 shooting.SetRemoteTurretYaw(currentTurretYaw);
-            }
 
             // Trim entries older than renderTime - 0.2s (keep a small tail)
             while (buf.Count > 2 && buf[1].t < renderTime - 0.2f)
@@ -1294,11 +1295,11 @@ namespace Complete
                 _remoteTanks[ts.tankId] = go;
 
                 var remoteRb = go.GetComponent<Rigidbody>();
-                if (remoteRb != null) 
-                { 
-                    remoteRb.isKinematic = true; 
+                if (remoteRb != null)
+                {
+                    remoteRb.isKinematic = true;
                     remoteRb.useGravity = false;
-                    remoteRb.interpolation = RigidbodyInterpolation.None;
+                    remoteRb.interpolation = RigidbodyInterpolation.Interpolate;
                 }
 
                 AddBulletHitTrigger(go);
@@ -1307,12 +1308,15 @@ namespace Complete
                 bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
                 if (customPhysics) DisablePhysicsColliders(go);
 
-                // Remote tank is driven purely by snapshots — disable all local input components
-                // so they don't read keyboard input or send packets to the server.
+                // Remote tank driven purely by snapshots — disable local input
                 var remoteShooting = go.GetComponent<TankShooting>();
                 if (remoteShooting != null) remoteShooting.m_IsLocalPlayer = false;
                 var remoteMovement = go.GetComponent<TankMovement>();
                 if (remoteMovement != null) remoteMovement.enabled = false;
+
+                // Cache components — tránh GetComponent mỗi Update
+                _remoteShooting[ts.tankId]  = remoteShooting;
+                _remoteAnimation[ts.tankId] = go.GetComponent<TankAnimation>();
 
                 // Bush stealth for remote tank (server-driven)
                 var remoteStealth = go.GetComponent<TankStealth>()
@@ -1381,6 +1385,8 @@ namespace Complete
             Destroy(go);
             _remoteTanks.Remove(tankId);
             _remoteSnaps.Remove(tankId);
+            _remoteShooting.Remove(tankId);
+            _remoteAnimation.Remove(tankId);
 
             // Re-register particle trigger colliders after removing a tank
             RegisterParticleTriggerColliders();
