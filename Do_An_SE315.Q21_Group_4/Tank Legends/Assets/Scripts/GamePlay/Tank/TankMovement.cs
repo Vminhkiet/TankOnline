@@ -27,6 +27,7 @@ namespace Complete
         public bool m_UseCustomOnlinePhysics = true;
 
         private TankAnimation m_TankAnimation;      // Reference to the external TankAnimation component.
+        private TankShooting m_TankShooting;        // Cached — GetComponent mỗi FixedUpdate = thủ phạm 35ms
 
         private string m_MovementAxisName;          // The name of the input axis for moving forward and back.
         private string m_TurnAxisName;              // The name of the input axis for turning.
@@ -46,6 +47,14 @@ namespace Complete
 
         private static readonly RaycastHit[] s_HitBuffer = new RaycastHit[8];
 
+        // Physics throttle: trên thiết bị yếu, cast mỗi 2 FixedUpdate thay vì mỗi frame
+        private int m_PhysicsTickCounter = 0;
+        private Vector3 m_CachedWallSlideMove = Vector3.zero;
+        private float  m_CachedTerrainY = 0f;
+        private static bool s_LowEndPhysics = false;
+
+        public static void SetLowEndPhysicsMode(bool enabled) { s_LowEndPhysics = enabled; }
+
         [HideInInspector] public bool m_HasNetworkCorrection = false;
         [HideInInspector] public Vector3 m_NetworkTargetPosition;
         [HideInInspector] public Quaternion m_NetworkTargetRotation;
@@ -57,6 +66,7 @@ namespace Complete
             m_Rigidbody = GetComponent<Rigidbody>();
             m_Collider = GetComponent<Collider>();
             m_TankAnimation = GetComponent<TankAnimation>();
+            m_TankShooting = GetComponent<TankShooting>();
             if (m_Collider is BoxCollider box)
             {
                 m_CachedColliderCenter = box.center;
@@ -296,19 +306,34 @@ namespace Complete
             if (mz != 0)
             {
                 Vector3 move = transform.forward * mz * m_Speed * Time.fixedDeltaTime;
-                move = ResolveWallSlide(move);
-                if (move.sqrMagnitude > 0.0001f)
+
+                // Throttle: thiết bị yếu chỉ cast mỗi 2 tick, tick xen kẽ dùng kết quả cache
+                bool doFullCast = !s_LowEndPhysics || (m_PhysicsTickCounter % 2 == 0);
+                m_PhysicsTickCounter++;
+
+                if (doFullCast)
                 {
-                    pos += move;
-                    float sampledY = SampleTerrainHeight(pos);
-                    // Match server STEP_HEIGHT = 0.3f
+                    m_CachedWallSlideMove = ResolveWallSlide(move);
+                    if (m_CachedWallSlideMove.sqrMagnitude > 0.0001f)
+                        m_CachedTerrainY = SampleTerrainHeight(pos + m_CachedWallSlideMove);
+                }
+
+                // Scale cache theo direction hiện tại (tốc độ thay đổi nhưng hướng giữ nguyên)
+                Vector3 finalMove = m_CachedWallSlideMove.sqrMagnitude > 0.0001f
+                    ? m_CachedWallSlideMove.normalized * move.magnitude
+                    : Vector3.zero;
+
+                if (finalMove.sqrMagnitude > 0.0001f)
+                {
+                    pos += finalMove;
+                    float sampledY = doFullCast ? m_CachedTerrainY : m_CachedTerrainY;
                     if (sampledY > pos.y && sampledY - pos.y <= 0.85f)
                         pos.y = sampledY;
                     else if (sampledY < pos.y)
-                        pos.y = sampledY; // Allow falling down
+                        pos.y = sampledY;
                 }
                 else
-                    mz = 0; // fully blocked — server should not move either
+                    mz = 0;
             }
 
             // 5. Soft lerp XZ position towards server if drifted too far
@@ -513,10 +538,9 @@ namespace Complete
             {
                 float turretYaw = 0f;
                 bool reload = false;
-                var shooting = GetComponent<TankShooting>();
-                if (shooting != null) {
-                    turretYaw = shooting.GetCurrentTurretYaw();
-                    reload = shooting.ConsumeReloadIntent();
+                if (m_TankShooting != null) {
+                    turretYaw = m_TankShooting.GetCurrentTurretYaw();
+                    reload = m_TankShooting.ConsumeReloadIntent();
                 }
                 net.SetMove(moveX, moveZ, turretYaw, m_Rigidbody.rotation.eulerAngles.y, reload);
             }
@@ -530,10 +554,9 @@ namespace Complete
 
             float turretYaw = 0f;
             bool reload = false;
-            var shooting = GetComponent<TankShooting>();
-            if (shooting != null) {
-                turretYaw = shooting.GetCurrentTurretYaw();
-                reload = shooting.ConsumeReloadIntent();
+            if (m_TankShooting != null) {
+                turretYaw = m_TankShooting.GetCurrentTurretYaw();
+                reload = m_TankShooting.ConsumeReloadIntent();
             }
 
             GetMobileDiscreteMove(out int mx, out int mz);
