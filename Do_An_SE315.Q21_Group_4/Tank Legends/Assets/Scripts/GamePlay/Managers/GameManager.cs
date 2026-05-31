@@ -70,6 +70,7 @@ namespace Complete
         private readonly Dictionary<uint, GameObject> _remoteTanks   = new();
         private readonly Dictionary<uint, GameObject> _remoteBullets = new();
         private readonly Dictionary<uint, GameObject> _remoteItems   = new();
+        private readonly Queue<GameObject> _itemPool = new Queue<GameObject>();
 
         // ── Snapshot interpolation ───────────────────────────────────────────
         private struct SnapEntry { public float t; public Vector3 pos; public Quaternion rot; public float turretYaw; }
@@ -136,6 +137,24 @@ namespace Complete
 
             SpawnAllTanks();
             SetCameraTargets();
+
+            // Pre-warm item pool
+            if (m_HealthItemPrefab != null)
+            {
+                Transform poolContainer = new GameObject("ItemPool").transform;
+                for (int i = 0; i < 5; i++)
+                {
+                    GameObject go = Instantiate(m_HealthItemPrefab, poolContainer);
+                    var viapix = go.GetComponent<Viapix_HealingItem.Viapix_HealingItem>();
+                    if (viapix != null) Destroy(viapix);
+                    var rotator = go.AddComponent<ItemRotator>();
+                    rotator.rotationSpeed = new Vector3(0, 100f, 0);
+                    var col = go.GetComponent<Collider>();
+                    if (col != null) Destroy(col);
+                    go.SetActive(false);
+                    _itemPool.Enqueue(go);
+                }
+            }
 
             if (m_OnlineMode)
             {
@@ -927,7 +946,26 @@ namespace Complete
         {
             if (m_HealthItemPrefab != null)
             {
-                return Instantiate(m_HealthItemPrefab, pos, Quaternion.identity);
+                GameObject go;
+                if (_itemPool.Count > 0)
+                {
+                    go = _itemPool.Dequeue();
+                    go.transform.position = pos;
+                    go.transform.rotation = Quaternion.identity;
+                }
+                else
+                {
+                    go = Instantiate(m_HealthItemPrefab, pos, Quaternion.identity);
+                    var viapix = go.GetComponent<Viapix_HealingItem.Viapix_HealingItem>();
+                    if (viapix != null) Destroy(viapix);
+                    var rotator = go.AddComponent<ItemRotator>();
+                    rotator.rotationSpeed = new Vector3(0, 100f, 0);
+                    var col = go.GetComponent<Collider>();
+                    if (col != null) Destroy(col);
+                }
+                go.name = $"RemoteItem_{itemId}";
+                go.SetActive(true);
+                return go;
             }
             else
             {
@@ -947,7 +985,18 @@ namespace Complete
         {
             if (_remoteItems.TryGetValue(itemId, out var go))
             {
-                if (go != null) Destroy(go);
+                if (go != null) 
+                {
+                    if (go.name.StartsWith("Item_")) // Fallback visual cross
+                    {
+                        Destroy(go);
+                    }
+                    else
+                    {
+                        go.SetActive(false);
+                        _itemPool.Enqueue(go);
+                    }
+                }
                 _remoteItems.Remove(itemId);
             }
         }
@@ -1485,6 +1534,15 @@ namespace Complete
         public void SkipEndDelay()
         {
             _skipEndDelay = true;
+        }
+    }
+
+    public class ItemRotator : MonoBehaviour
+    {
+        public Vector3 rotationSpeed = new Vector3(0, 100f, 0);
+        void Update()
+        {
+            transform.Rotate(rotationSpeed * Time.deltaTime);
         }
     }
 }
