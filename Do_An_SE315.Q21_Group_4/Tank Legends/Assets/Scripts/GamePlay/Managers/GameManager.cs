@@ -24,6 +24,8 @@ namespace Complete
         public GameObject m_RemoteTankPrefab;
         public GameObject m_RemoteBulletPrefab;
         public GameObject m_HealthItemPrefab;
+        public GameObject m_LoadingScreen;
+        public int m_ExpectedPlayers = 2;
 
         [System.Serializable]
         public struct TankPrefabMapping
@@ -122,6 +124,14 @@ namespace Complete
                     Debug.Log($"[GameManager] playerid từ args: {id}");
                 }
             }
+
+            if (m_LoadingScreen == null)
+            {
+                m_LoadingScreen = GameObject.Find("LoadingCanvas") 
+                                  ?? GameObject.Find("LoadingScreen") 
+                                  ?? GameObject.Find("LoadingPanel")
+                                  ?? GameObject.Find("Loading UI");
+            }
         }
 
         private void Start()
@@ -143,16 +153,17 @@ namespace Complete
             // Pre-warm item pool
             if (m_HealthItemPrefab != null)
             {
+                _itemPool.Clear(); // Make sure we clear any stale destroyed items from previous matches!
                 Transform poolContainer = new GameObject("ItemPool").transform;
                 for (int i = 0; i < 5; i++)
                 {
                     GameObject go = Instantiate(m_HealthItemPrefab, poolContainer);
                     var viapix = go.GetComponent<Viapix_HealingItem.Viapix_HealingItem>();
-                    if (viapix != null) Destroy(viapix);
+                    if (viapix != null) SafeDestroy(viapix);
                     var rotator = go.AddComponent<ItemRotator>();
                     rotator.rotationSpeed = new Vector3(0, 100f, 0);
                     var col = go.GetComponent<Collider>();
-                    if (col != null) Destroy(col);
+                    if (col != null) SafeDestroy(col);
                     go.SetActive(false);
                     _itemPool.Enqueue(go);
                 }
@@ -175,6 +186,11 @@ namespace Complete
                     _remoteSnaps.Clear();
                     _remoteShooting.Clear();
                     _remoteAnimation.Clear();
+
+                    // Clear stale remote items from any previous session
+                    foreach (var go in _remoteItems.Values)
+                        if (go != null) Destroy(go);
+                    _remoteItems.Clear();
 
                     TankNetClient.Instance.OnSnapshot    += HandleSnapshot;
                     TankNetClient.Instance.OnMatchEnd    += HandleMatchEnd;
@@ -217,20 +233,7 @@ namespace Complete
 
             if (m_OnlineMode && GameUIManager.Instance != null && _serverTimeRemaining >= 0f)
             {
-                if (_serverTimeRemaining > _highestTimeRemaining)
-                {
-                    _highestTimeRemaining = _serverTimeRemaining;
-                }
-
-                if (!_isPlaying)
-                {
-                    // Freeze timer at max seen time during cinematic
-                    GameUIManager.Instance.SetMatchTimer(_highestTimeRemaining);
-                }
-                else
-                {
-                    GameUIManager.Instance.SetMatchTimer(_serverTimeRemaining);
-                }
+                GameUIManager.Instance.SetMatchTimer(_serverTimeRemaining);
             }
 
             if (m_OnlineMode && GameUIManager.Instance != null && TankNetClient.Instance != null)
@@ -583,6 +586,34 @@ namespace Complete
             ResetAllTanks ();
             DisableTankControl ();
 
+            if (m_OnlineMode)
+            {
+                // Wait for both the local tank and all other tanks to spawn
+                float loadTimeout = 15f; // 15 seconds safeguard
+                while (loadTimeout > 0)
+                {
+                    bool localSpawned = m_Tanks[0].m_Instance != null && m_Tanks[0].m_Instance.activeSelf;
+                    int totalPlayers = (localSpawned ? 1 : 0) + _remoteTanks.Count;
+
+                    if (localSpawned && totalPlayers >= m_ExpectedPlayers)
+                    {
+                        Debug.Log($"[GameManager] All expected players loaded! ({totalPlayers}/{m_ExpectedPlayers})");
+                        break;
+                    }
+
+                    loadTimeout -= Time.deltaTime;
+                    yield return null;
+                }
+
+                if (loadTimeout <= 0)
+                {
+                    Debug.LogWarning("[GameManager] Loading timeout reached. Starting cinematic intro anyway.");
+                }
+
+                // Smoothly fade from black (mờ dần màn hình đen chuyển tiếp từ Lobby)
+                yield return StartCoroutine(FadeFromBlack(0.75f));
+            }
+
             // Wait for tank to spawn (especially in online mode where it waits for server snapshot)
             Transform targetTank = null;
             float waitSpawnTimeout = 5f;
@@ -886,21 +917,21 @@ namespace Complete
                 if (!seen.Contains(id)) DespawnRemote(id);
 
             // Item Synchronization
-            var seenItems = new HashSet<uint>();
             if (snap.Items != null)
             {
+                var seenItems = new HashSet<uint>();
                 foreach (var st in snap.Items)
                 {
                     seenItems.Add(st.itemId);
-                    if (!_remoteItems.TryGetValue(st.itemId, out var go))
+                    if (!_remoteItems.TryGetValue(st.itemId, out var go) || go == null)
                     {
                         go = InstantiateItem(st.itemId, new Vector3(st.x, st.y, st.z));
                         _remoteItems[st.itemId] = go;
                     }
                 }
+                foreach (var id in new List<uint>(_remoteItems.Keys))
+                    if (!seenItems.Contains(id)) DespawnItem(id);
             }
-            foreach (var id in new List<uint>(_remoteItems.Keys))
-                if (!seenItems.Contains(id)) DespawnItem(id);
 
             // Render bullets fired by opponent tanks (skip own bullets — already shown locally)
             UpdateRemoteBullets(snap.Bullets);
@@ -931,9 +962,9 @@ namespace Complete
 
         private void HandleItemSpawn(PacketSpawnItem pkt)
         {
-            if (!_remoteItems.ContainsKey(pkt.itemId))
+            if (!_remoteItems.TryGetValue(pkt.itemId, out var go) || go == null)
             {
-                var go = InstantiateItem(pkt.itemId, new Vector3(pkt.x, pkt.y, pkt.z));
+                go = InstantiateItem(pkt.itemId, new Vector3(pkt.x, pkt.y, pkt.z));
                 _remoteItems[pkt.itemId] = go;
             }
         }
@@ -958,11 +989,11 @@ namespace Complete
                 {
                     go = Instantiate(m_HealthItemPrefab, pos, Quaternion.identity);
                     var viapix = go.GetComponent<Viapix_HealingItem.Viapix_HealingItem>();
-                    if (viapix != null) Destroy(viapix);
+                    if (viapix != null) SafeDestroy(viapix);
                     var rotator = go.AddComponent<ItemRotator>();
                     rotator.rotationSpeed = new Vector3(0, 100f, 0);
                     var col = go.GetComponent<Collider>();
-                    if (col != null) Destroy(col);
+                    if (col != null) SafeDestroy(col);
                 }
                 go.name = $"RemoteItem_{itemId}";
                 go.SetActive(true);
@@ -990,7 +1021,7 @@ namespace Complete
                 {
                     if (go.name.StartsWith("Item_")) // Fallback visual cross
                     {
-                        Destroy(go);
+                        SafeDestroy(go);
                     }
                     else
                     {
@@ -1540,6 +1571,63 @@ namespace Complete
         public void SkipEndDelay()
         {
             _skipEndDelay = true;
+        }
+
+        private IEnumerator FadeFromBlack(float duration)
+        {
+            GameObject fadeCanvasGo = GameObject.Find("TransitionFadeCanvas") ?? GameObject.Find("FadeCanvas");
+            if (fadeCanvasGo == null) yield break;
+
+            CanvasGroup group = fadeCanvasGo.GetComponent<CanvasGroup>();
+            if (group == null)
+            {
+                group = fadeCanvasGo.AddComponent<CanvasGroup>();
+            }
+
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                group.alpha = Mathf.Clamp01(1f - (elapsed / duration));
+                yield return null;
+            }
+
+            Destroy(fadeCanvasGo);
+        }
+
+        private IEnumerator FadeOutLoadingScreen(float duration)
+        {
+            if (m_LoadingScreen == null) yield break;
+
+            CanvasGroup group = m_LoadingScreen.GetComponent<CanvasGroup>();
+            if (group == null)
+            {
+                group = m_LoadingScreen.AddComponent<CanvasGroup>();
+            }
+
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                group.alpha = Mathf.Clamp01(1f - (elapsed / duration));
+                yield return null;
+            }
+
+            m_LoadingScreen.SetActive(false);
+            group.alpha = 1f; // reset for next time
+        }
+
+        private static void SafeDestroy(UnityEngine.Object obj)
+        {
+            if (obj == null) return;
+            if (Application.isPlaying)
+            {
+                Destroy(obj);
+            }
+            else
+            {
+                DestroyImmediate(obj);
+            }
         }
     }
 

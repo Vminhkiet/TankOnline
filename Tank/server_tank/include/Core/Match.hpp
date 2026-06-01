@@ -61,6 +61,8 @@ private:
     std::mutex               _queueMutex;
     std::atomic<bool>        _running{true};
     float                    _elapsed = 0.f;
+    bool                     _introStarted = false;
+    float                    _introTimer = 0.f;
 
     TickBreakdown _lastBreakdown{};
 

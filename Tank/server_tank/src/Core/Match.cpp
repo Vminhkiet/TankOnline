@@ -286,7 +286,23 @@ void Match::tick(float dt, int64_t budgetUs, MetricsCollector& metrics) {
     }
 
     // 6. Win condition
-    _elapsed += dt;
+    // Only start counting match time after all expected players have connected AND the intro (5.5s) has finished
+    bool allPlayersReady = (_sessions.size() >= _config.playerIds.size());
+    if (allPlayersReady) {
+        if (!_introStarted) {
+            _introStarted = true;
+            _introTimer = 0.f;
+        }
+    }
+
+    if (_introStarted) {
+        if (_introTimer < 11.5f) {
+            _introTimer += dt;
+        } else {
+            _elapsed += dt;
+        }
+    }
+
     MatchResult result;
     result.matchId = _config.matchId;
 
@@ -462,6 +478,8 @@ bool Match::resolvePlayer(const sockaddr_in& addr, uint32_t& outPid, const std::
 // ────────────────────────────────────────────────────────────────────────────
 
 void Match::handleMove(GameCommand& cmd) {
+    if (_introStarted && _introTimer < 5.5f) return; // Chặn di chuyển trong intro
+
     uint32_t pid = 0;
     if (!resolvePlayer(cmd.sender, pid)) return;
     _sessions.updateHeartbeat(cmd.sender);
@@ -567,6 +585,8 @@ bool Match::forceLogoutByUserId(const std::string& userId, uint16_t code,
 }
 
 void Match::handleShoot(GameCommand& cmd) {
+    if (_introStarted && _introTimer < 5.5f) return; // Chặn bắn trong intro
+
     uint32_t pid = 0;
     if (!resolvePlayer(cmd.sender, pid)) return;
     _sessions.updateHeartbeat(cmd.sender);
