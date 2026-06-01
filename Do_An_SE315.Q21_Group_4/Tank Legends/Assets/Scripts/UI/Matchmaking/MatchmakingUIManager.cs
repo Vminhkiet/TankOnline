@@ -208,8 +208,7 @@ public class MatchmakingUIManager : MonoBehaviour
                     yield break;
                 }
 
-                yield return new WaitForSeconds(0.5f);
-                SceneManager.LoadScene(gameSceneName);
+                StartCoroutine(FadeToBlackAndLoadScene());
             }
             else
             {
@@ -228,5 +227,54 @@ public class MatchmakingUIManager : MonoBehaviour
                 if (findMatchPanel != null) findMatchPanel.SetActive(false);
             }
         }
+    }
+
+    private IEnumerator FadeToBlackAndLoadScene()
+    {
+        // Create a temporary Canvas for the fade effect
+        GameObject fadeCanvasGo = new GameObject("TransitionFadeCanvas");
+        Canvas canvas = fadeCanvasGo.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 9999;
+        
+        fadeCanvasGo.AddComponent<UnityEngine.UI.CanvasScaler>();
+        fadeCanvasGo.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+        GameObject panelGo = new GameObject("FadePanel");
+        panelGo.transform.SetParent(fadeCanvasGo.transform, false);
+        
+        UnityEngine.UI.Image image = panelGo.AddComponent<UnityEngine.UI.Image>();
+        image.color = new Color(0, 0, 0, 0);
+        
+        // Make panel stretch to fill the screen
+        RectTransform rect = image.rectTransform;
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.sizeDelta = Vector2.zero;
+
+        // Keep this canvas alive during scene load so the fade stays smooth
+        DontDestroyOnLoad(fadeCanvasGo);
+
+        // Fade in (from transparent to black)
+        float elapsed = 0f;
+        float duration = 0.5f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            image.color = new Color(0, 0, 0, Mathf.Clamp01(elapsed / duration));
+            yield return null;
+        }
+        image.color = Color.black;
+
+        // Start loading game scene asynchronously
+        AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(gameSceneName);
+        while (!asyncLoad.isDone)
+        {
+            yield return null;
+        }
+
+        // Scene is loaded! Now in game scene.
+        // We do NOT destroy the fade canvas here anymore.
+        // GameManager in the gameplay scene will handle the "Fade From Black" transition and clean it up.
     }
 }

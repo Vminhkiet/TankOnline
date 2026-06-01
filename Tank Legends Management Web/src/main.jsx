@@ -32,11 +32,23 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
-const API_BASE = 'http://172.25.203.168:8080';
+let API_BASE = localStorage.getItem('api_base') || `http://${window.location.hostname || 'localhost'}:8080`;
+
+function setGlobalApiBase(newUrl) {
+  API_BASE = newUrl;
+  localStorage.setItem('api_base', newUrl);
+}
 
 
 
 function App() {
+  const [apiBase, setApiBase] = useState(API_BASE);
+
+  function handleApiBaseChange(newUrl) {
+    setApiBase(newUrl);
+    setGlobalApiBase(newUrl);
+  }
+
   const [session, setSession] = useState(null);
   const [players, setPlayers] = useState([]);
   const [playersLoading, setPlayersLoading] = useState(false);
@@ -155,7 +167,7 @@ function App() {
   }
 
   if (!session) {
-    return <LoginScreen onLogin={setSession} />;
+    return <LoginScreen onLogin={setSession} apiBase={apiBase} onApiBaseChange={handleApiBaseChange} />;
   }
 
   function pushCommand(text) {
@@ -238,9 +250,31 @@ function App() {
             <h1>Tank Legends Management</h1>
           </div>
           <div className="topbar-actions">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255, 255, 255, 0.05)', padding: '0.35rem 0.65rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.1)', marginRight: '0.5rem' }} title="Tự động dò IP hoặc nhập thủ công">
+              <Server size={15} style={{ color: '#818cf8' }} />
+              <input
+                type="text"
+                value={apiBase}
+                onChange={(e) => handleApiBaseChange(e.target.value)}
+                placeholder="Backend Auth API"
+                style={{ background: 'none', border: 'none', color: '#fff', fontSize: '0.8rem', width: '170px', outline: 'none', fontFamily: 'monospace' }}
+              />
+              <button 
+                type="button"
+                onClick={() => {
+                  const autoUrl = `http://${window.location.hostname || 'localhost'}:8080`;
+                  handleApiBaseChange(autoUrl);
+                  pushCommand('Reset to Auto-discovered backend: ' + autoUrl);
+                }}
+                style={{ background: 'rgba(99, 102, 241, 0.2)', border: 'none', color: '#a5b4fc', fontSize: '0.7rem', padding: '0.15rem 0.35rem', borderRadius: '3px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}
+                title="Tự động dò tìm lại IP máy chủ"
+              >
+                <Radar size={11} /> Auto
+              </button>
+            </div>
             <span className={`role-pill ${session.role}`}>{session.role}</span>
             <span className="live-pill"><span /> Live telemetry</span>
-            <button className="icon-button" aria-label="Refresh telemetry" onClick={() => pushCommand('Telemetry refreshed')}>
+            <button className="icon-button" aria-label="Refresh telemetry" onClick={() => { fetchPlayers(); fetchLeaderboard(); pushCommand('Telemetry & Data refreshed from ' + apiBase); }}>
               <RefreshCcw size={18} />
             </button>
             <button onClick={() => setSession(null)}>Logout</button>
@@ -422,7 +456,7 @@ function App() {
   );
 }
 
-function LoginScreen({ onLogin }) {
+function LoginScreen({ onLogin, apiBase, onApiBaseChange }) {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('tanklegends');
   const [role, setRole] = useState('admin');
@@ -435,7 +469,7 @@ function LoginScreen({ onLogin }) {
     setError('');
 
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const res = await fetch(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
@@ -483,6 +517,23 @@ function LoginScreen({ onLogin }) {
         <form onSubmit={handleSubmit} className="login-form">
           <p className="eyebrow">Secure game ops</p>
           <h1>Login console</h1>
+          <label>
+            Backend API Server
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input value={apiBase} onChange={(event) => onApiBaseChange(event.target.value)} placeholder="http://127.0.0.1:8080" style={{ flex: 1 }} />
+              <button
+                type="button"
+                onClick={() => {
+                  const autoUrl = `http://${window.location.hostname || 'localhost'}:8080`;
+                  onApiBaseChange(autoUrl);
+                }}
+                style={{ padding: '0.5rem 0.75rem', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                title="Tự động dò tìm lại IP"
+              >
+                <Radar size={14} /> Auto
+              </button>
+            </div>
+          </label>
           <label>
             Username
             <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="your username" />
