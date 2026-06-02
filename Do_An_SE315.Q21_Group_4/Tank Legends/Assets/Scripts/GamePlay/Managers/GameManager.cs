@@ -105,7 +105,9 @@ namespace Complete
                 m_ServerPort  = GlobalMatchState.ServerPort;
                 if (GlobalMatchState.PlayerId > 0)
                     m_MyPlayerId = GlobalMatchState.PlayerId;
-                Debug.Log($"[GameManager] Loaded MatchInfo: MatchId={m_MatchId}, {m_ServerHost}:{m_ServerPort}, playerId={m_MyPlayerId}");
+                if (GlobalMatchState.PlayerCount > 0)
+                    m_ExpectedPlayers = GlobalMatchState.PlayerCount;
+                Debug.Log($"[GameManager] Loaded MatchInfo: MatchId={m_MatchId}, {m_ServerHost}:{m_ServerPort}, playerId={m_MyPlayerId}, expectedPlayers={m_ExpectedPlayers}");
             }
 
             if (GlobalMatchState.LocalTankPrefab != null)

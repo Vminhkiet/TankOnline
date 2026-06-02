@@ -10,6 +10,7 @@ public static class GlobalMatchState
     public static uint PlayerId { get; set; } = 0;
     public static string Token { get; set; } = "";
     public static GameObject LocalTankPrefab { get; set; } = null;
+    public static int PlayerCount { get; set; } = 2; // Default to 2 players
 
     public static void SetMatchInfo(uint matchId, string host, int port, uint playerId = 0, string token = "")
     {
@@ -30,5 +31,6 @@ public static class GlobalMatchState
         PlayerId = 0;
         Token = "";
         LocalTankPrefab = null;
+        PlayerCount = 2;
     }
 }
