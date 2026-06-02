@@ -4,297 +4,452 @@ Game bắn tank online nhiều người chơi, kiến trúc microservices + game
 
 ---
 
+## Mục lục
+
+1. [Kiến trúc tổng quan](#kiến-trúc-tổng-quan)
+2. [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
+3. [Cài đặt môi trường](#cài-đặt-môi-trường)
+4. [Cấu hình IP](#cấu-hình-ip)
+5. [Khởi động nhanh](#khởi-động-nhanh)
+6. [Khởi động thủ công](#khởi-động-thủ-công)
+7. [Benchmark & Đo hiệu năng](#benchmark--đo-hiệu-năng)
+8. [Dừng hệ thống](#dừng-hệ-thống)
+9. [Logs & Monitoring](#logs--monitoring)
+10. [Troubleshooting](#troubleshooting)
+
+---
+
 ## Kiến trúc tổng quan
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  WINDOWS HOST (192.168.x.x WiFi)                                    │
+│  WINDOWS HOST                                                        │
 │                                                                     │
 │  Unity Client (Tank Legends.exe)                                    │
 │    HTTP  → API Gateway :8080          (đăng nhập, matchmaking)      │
 │    UDP   → Game Server :8080          (gameplay realtime)           │
 │                                                                     │
-│  C++ Game Server (server_tank.exe)                                  │
+│  C++ Game Server (server_tank.exe)          [IOCP, 60Hz tick]       │
 │    UDP  ← Unity clients              (nhận input, gửi snapshot)    │
 │    Kafka → WSL2 :9092                (match.create / match.result)  │
 │                                                                     │
-│  anticheat.exe (Admin)                                              │
-│    ReadProcessMemory ← Unity.exe     (scan JWT, matchId, handles)  │
-│    HTTP  → API Gateway :8080         (ban user, cancel match)       │
-│                                                                     │
-│  Admin Web (browser → :5173)                                        │
-│    HTTP  → API Gateway :8080         (quản lý user, lịch sử)       │
+│  anticheat.exe   — scan process + memory, ban qua HTTP              │
+│  Admin Web       — Vite+React :5173, quản lý user/shop/leaderboard  │
 └──────────────────────────────────┬──────────────────────────────────┘
-                                   │ WSL2 bridge (172.25.x.x)
+                                   │ WSL2 bridge
 ┌──────────────────────────────────▼──────────────────────────────────┐
 │  WSL2 (Ubuntu)                                                      │
 │                                                                     │
-│  Docker:                                                            │
-│    Zookeeper       :2181                                            │
-│    Kafka           :9092    ←→ tất cả Java services + C++ server   │
-│    PostgreSQL      :5432    ← auth, history, profile                │
-│    Redis           :6379    ← matchmaking, history, shop, profile   │
-│    MySQL           :3307    ← shop                                  │
+│  Docker:  Zookeeper:2181  Kafka:9092  PostgreSQL:5432               │
+│           Redis:6379       MySQL:3307                               │
 │                                                                     │
-│  Java Services (Spring Boot):                                       │
-│    Eureka          :8761    (service discovery)                     │
-│    API Gateway     :8080    (entry point duy nhất cho client)       │
-│    auth_service    :8081                                            │
-│    matchmaking     :8085                                            │
-│    history         :8086                                            │
-│    profile         :8087                                            │
-│    shop            :8088                                            │
-│    monitoring      :8090                                            │
+│  Java (Spring Boot):                                                │
+│    Eureka          :8761   API Gateway  :8080   auth_service :8081  │
+│    matchmaking     :8085   history      :8086   profile      :8087  │
+│    shop            :8088   monitoring   :8090                       │
+│                                                                     │
+│  Monitoring:  Prometheus:9090   Grafana:3000                        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Luồng hoạt động
+## Yêu cầu hệ thống
 
-### 1. Đăng nhập
-
-```
-Unity → POST /api/auth/login  { username, password }
-           ↓
-      API Gateway → auth_service
-           ↓
-      Trả về { jwt, refreshToken }
-           ↓
-      Unity lưu JWT, dùng cho mọi request sau
-```
-
-**auth_service** dùng **BCrypt** để hash password, **JWT (HS256)** cho token.  
-JWT payload chứa `userId`, `authorities`, `iat`, `exp` (15 phút TTL).
+| Thành phần | Yêu cầu |
+|-----------|---------|
+| OS | Windows 10/11 + WSL2 (Ubuntu 20.04+) |
+| CPU | ≥ 4 core (khuyến nghị 8+ core cho benchmark) |
+| RAM | ≥ 8 GB |
+| Disk | ≥ 10 GB trống |
+| Java | JDK 17+ |
+| Maven | 3.9+ |
+| Docker | Docker Desktop hoặc Docker Engine trong WSL2 |
+| Visual Studio | 2022 Community (C++ build tools, MSBuild) |
+| Node.js | v18+ (cho Admin Web) |
+| Python | 3.8+ |
 
 ---
 
-### 2. Tìm trận (Matchmaking)
+## Cài đặt môi trường
 
-```
-Player1 + Player2 cùng gọi:
-POST /api/matchmaking/find  (Authorization: Bearer JWT)
-           ↓
-      matchmaking_service thêm vào LobbyManager
-           ↓
-      Khi đủ 2 người → tạo match:
-        - Gán slotId (1, 2, ...)
-        - Tạo token cho mỗi người
-        - Publish Kafka: match.create → C++ server
-           ↓
-      C++ server nhận, tạo match trong memory
-        - Publish Kafka: match.ready → matchmaking_service
-           ↓
-      matchmaking_service complete CompletableFuture của 2 player
-           ↓
-      Cả 2 player nhận response:
-        { matchId, serverHost, serverPort, playerId }
+### 1. WSL2
+
+```powershell
+# Chạy PowerShell với quyền Admin
+wsl --install -d Ubuntu
+wsl --set-default-version 2
 ```
 
-**Redis** lưu trạng thái tìm trận (`matchmaking:searching:{userId}`) với TTL 120s.  
-Timeout ACK là 30s — nếu C++ server không trả `match.ready` → trả HTTP 503.
-
----
-
-### 3. Gameplay (UDP Realtime)
-
-```
-Unity → UDP packet đến C++ server (serverHost:serverPort)
-
-Packet đầu tiên từ mỗi player:
-  server.resolvePlayer() → spawn tank tại vị trí spawn
-  
-Mỗi 50ms (20Hz), server broadcast:
-  S2C_SNAPSHOT → tất cả player trong match
-    Header: matchId | opcode=2000 | tick | tankCount | localPlayerId | timeLeft
-    Body:   [TankState × n] [BulletState × m] [ItemState × k]
-
-TankState (31 bytes, packed):
-  tankId(4) x(4) y(4) z(4) yaw(4) turretYaw(4) health(2) flags(1) score(2) placement(1) bushRegion(1)
-
-Client gửi lên:
-  C2S_MOVE  (opcode 1001) — hướng di chuyển (bit-packed)
-  C2S_SHOOT (opcode 1002) — bắn đạn (bit-packed)
-  C2S_PING  (opcode 1003) — keep-alive
-```
-
-C++ server dùng **IOCP** (Windows I/O Completion Port) làm network backend, **60Hz tick rate**.  
-Physics: AABB collision detection, UniformGrid cho spatial query.
-
----
-
-### 4. Kết thúc trận
-
-```
-C++ server (khi có người chết hoặc timeout):
-  broadcast S2C_MATCH_END → tất cả player
-  publish Kafka: match.result {
-    matchId, outcome, winnerId, durationSecs, kills, deaths, userIds
-  }
-       ↓ fan-out (2 consumer groups độc lập)
-       │
-       ├─→ history_service: lưu MatchHistory vào PostgreSQL
-       │                    cập nhật leaderboard ZSET trong Redis
-       │
-       └─→ profile_service: cộng RP, cập nhật win/loss stats
-```
-
-**Outcome có thể là:** `win` | `draw` | `timeout` | `cheat_void`  
-Nếu outcome = `cheat_void` → history_service bỏ qua, không lưu lịch sử.
-
----
-
-### 5. AntiCheat
-
-```
-anticheat.exe chạy liên tục (2s/lần scan):
-
-[1] Handle Scan:
-    NtQuerySystemInformation → lấy toàn bộ handle trong hệ thống
-    → tìm process nào đang giữ PROCESS_VM_READ handle đến Tank Legends.exe
-    → không phải whitelist → DETECTED
-
-[2] Known Cheat Scan:
-    Snapshot tất cả process đang chạy
-    → khớp tên với danh sách cheat đã biết (tank_hp_hack.exe, cheatengine, x64dbg...)
-    → DETECTED
-
-Khi phát hiện cheat:
-    ReadProcessMemory(Tank Legends.exe):
-      scanJwtUserId()  → quét memory tìm chuỗi JWT "eyJ..." → decode base64 → lấy userId
-      scanMatchId()    → quét memory tìm snapshot header (opcode=2000) → lấy matchId
-
-    POST /api/user/anticheat/ban      { userId, reason }  (Header: X-Anticheat-Key)
-    POST /api/matchmaking/admin/cancel-cheat { matchId, reason }
-         ↓
-    matchmaking_service publish Kafka: match.cancel { matchId }
-         ↓
-    C++ server nhận → cancelMatch(matchId) → broadcast S2C_MATCH_END (cheat_void)
-         ↓
-    match.result { outcome: "cheat_void" } → history bỏ qua
-```
-
-**Whitelist:** explorer.exe, svchost.exe, taskmgr.exe, dwm.exe, gamebar.exe, msmpeng.exe, ...
-
----
-
-### 6. ESP Cheat Tool (Demo)
-
-```
-tank_hp_hack.exe (Admin):
-  Attach vào Tank Legends.exe
-  
-  fullScan() mỗi 50ms:
-    Quét tất cả memory region (PAGE_READWRITE | PAGE_EXECUTE_READWRITE)
-    Tìm pattern: bytes[+4..+5] = 0x07D0 (opcode 2000)
-    parseStrict() validate:
-      - matchId != 0, tankCount in [1..8], localId != 0
-      - HP >= 0, vị trí isfinite() và trong bounds map
-      - localId phải có trong danh sách tank (foundLocal)
-    betterSnap() chọn snapshot tốt nhất: ưu tiên matchId cao hơn, tie-break bằng tick
-  
-  Overlay GDI (WS_EX_TOPMOST | WS_EX_LAYERED):
-    Minimap: dot đỏ = enemy, dot xanh = bản thân
-    HP số màu vàng bên cạnh enemy
-    Line từ tâm đến enemy trên minimap
-  
-  F8: toggle hiện/ẩn overlay
-  ESC: thoát
-```
-
----
-
-### 7. Admin Web
-
-```
-Vite + React, chạy tại localhost:5173
-
-Tính năng:
-  - Đăng nhập bằng tài khoản ROLE_ADMIN
-  - Danh sách người chơi: xem thông tin, ban/unban
-  - Leaderboard: top player theo kills (từ Redis ZSET)
-  - Lịch sử trận đấu: tra cứu theo userId
-  - Quản lý shop: thêm/sửa/xóa item
-  - Gift code: tạo, kích hoạt vĩnh viễn, xóa
-```
-
----
-
-## Kafka Topics
-
-| Topic | Producer | Consumer | Mục đích |
-|-------|----------|----------|---------|
-| `match.create` | matchmaking_service | C++ server | Tạo match mới trong game server |
-| `match.ready` | C++ server | matchmaking_service | ACK match đã sẵn sàng |
-| `match.result` | C++ server | history_service, profile_service | Kết quả trận đấu |
-| `match.cancel` | matchmaking_service | C++ server | Hủy match (anticheat) |
-| `user.created` | auth_service | profile_service | Tạo profile sau đăng ký |
-| `user.profile.failed` | profile_service | auth_service | Compensation: xóa user mồ côi |
-| `user.session.invalidated` | auth_service | matchmaking_service, C++ server | Kick player bị ban/duplicate login |
-| `game.perf` | C++ server | monitoring_service | Metrics hiệu năng game server |
-
----
-
-## Cơ sở dữ liệu
-
-| Service | DB | Bảng chính |
-|---------|-----|-----------|
-| auth_service | PostgreSQL :5432 `auth_service_db` | `users` (id, username, password BCrypt, email, role, is_banned) |
-| history_service | PostgreSQL :5432 `history_service_db` | `match_history` (matchId, playerId, result, kills, deaths, duration) |
-| profile_service | PostgreSQL :5432 `profile_service_db` | `profiles` (userId, displayName, rp, wins, losses) |
-| shop | MySQL :3307 `shoptank_db` | `items`, `purchases`, `player_items` |
-| matchmaking | Redis :6379 DB1 | Keys: `matchmaking:searching:{id}`, `matchmaking:token:{token}`, `matchmaking:match:{id}` |
-| history | Redis :6379 | ZSET `leaderboard:kills` (userId → totalKills) |
-| shop | Redis :6379 | Cache |
-
----
-
-## Service Discovery & Load Balancing
-
-**Eureka** (:8761) làm service registry. Tất cả Java service tự đăng ký khi khởi động.  
-API Gateway dùng **Spring Cloud LoadBalancer** (`lb://service-name`) để resolve địa chỉ từ Eureka.  
-Shop service được route trực tiếp bằng IP thay vì Eureka do cấu hình riêng.
-
----
-
-## Bảo mật
-
-| Cơ chế | Chi tiết |
-|--------|---------|
-| JWT (HS256) | TTL 15 phút, secret key trong application.yaml |
-| BCrypt (rounds=10) | Hash password trong PostgreSQL |
-| `X-Gateway-Origin` header | Gateway thêm header secret vào request đến shop, matchmaking, profile |
-| `X-Anticheat-Key` header | anticheat.exe xác thực khi gọi ban/cancel API |
-| Role-based | `ROLE_USER` và `ROLE_ADMIN` |
-| Ban mechanism | `is_banned=true` → login trả 403, kick session qua Kafka |
-
----
-
-## Khởi động hệ thống
+### 2. Docker
 
 ```bash
-# WSL2
+# Trong WSL2
+sudo apt update && sudo apt install -y docker.io docker-compose
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+Kiểm tra:
+```bash
+docker run hello-world
+```
+
+### 3. Java & Maven
+
+```bash
+# Java 17
+sudo apt install -y openjdk-17-jdk
+java -version   # phải thấy openjdk 17
+
+# Maven — tải bản 3.9.x
+wget https://dlcdn.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz -P /tmp
+tar -xzf /tmp/apache-maven-3.9.9-bin.tar.gz -C ~/Downloads/
+# Sửa MVN path trong start.sh nếu cần
+```
+
+### 4. Visual Studio 2022
+
+Cài **Visual Studio 2022 Community** với workload:
+- **Desktop development with C++**
+- MSBuild tools
+- Windows SDK (10.0.x)
+
+### 5. Node.js (Admin Web)
+
+```bash
+# Dùng nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+source ~/.bashrc
+nvm install 20
+node -v   # v20.x.x
+```
+
+Cài dependencies Admin Web:
+```bash
+cd "Tank Legends Management Web"
+npm install
+```
+
+### 6. Python packages
+
+```bash
+pip3 install prometheus-client requests
+```
+
+### 7. Prometheus & Grafana (Docker)
+
+```bash
+cd monitoring
+bash start_monitoring_stack.sh
+# Grafana: http://localhost:3000  (admin/admin)
+# Prometheus: http://localhost:9090
+```
+
+---
+
+## Cấu hình IP
+
+> **QUAN TRỌNG:** WSL2 IP thay đổi sau mỗi lần reboot Windows. Phải cập nhật trước khi chạy.
+
+### Lấy IP hiện tại
+
+```bash
+ip addr show eth0 | grep "inet " | awk '{print $2}' | cut -d/ -f1
+```
+
+### Cập nhật IP tự động
+
+`start.sh` tự động patch IP vào `main.cpp` và `anticheat.cpp`. Tuy nhiên nếu chạy thủ công:
+
+```bash
+# Xem IP_CONFIG.md để biết tất cả chỗ cần đổi
+cat IP_CONFIG.md
+```
+
+Các file cần cập nhật thủ công:
+
+| File | Biến cần đổi |
+|------|-------------|
+| `Tank/server_tank/src/main.cpp` | `getEnv("KAFKA_BROKERS", "<WSL2_IP>:9092")` |
+| `tools/anticheat/anticheat.cpp` | `AUTH_HOST = "<WSL2_IP>"` |
+| `start.sh` | Tự động patch (không cần đổi tay) |
+
+---
+
+## Khởi động nhanh
+
+```bash
+# Khởi động toàn bộ hệ thống (Docker + Java + Tank server + Admin Web)
 ./start.sh
-
-# Thứ tự khởi động tự động:
-# 1. Docker: Zookeeper → Kafka → PostgreSQL → Redis → MySQL
-# 2. Kafka topics: match.create, match.result, match.cancel
-# 3. Build Java JARs nếu chưa có
-# 4. Eureka → (auth, gateway, matchmaking, history, profile, shop, monitoring)
-# 5. Build C++ server (CMake + MSBuild) → chạy server_tank.exe
 ```
 
+Script sẽ tự động:
+1. Kill các process cũ
+2. Khởi động Docker: Zookeeper → Kafka → PostgreSQL → Redis → MySQL
+3. Tạo Kafka topics: `match.create`, `match.result`, `match.cancel`
+4. Tạo PostgreSQL databases
+5. Build Java JARs (nếu chưa có)
+6. Khởi động Eureka → các service còn lại
+7. Patch IP, build và chạy `server_tank.exe`
+8. Khởi động Admin Web (:5173)
+
+**Dừng hệ thống:**
 ```bash
-# Cheat tool demo
-bash tools/run_cheat.sh
+./stop.sh
+```
 
-# AntiCheat
-bash tools/anticheat/run_anticheat.sh
+---
 
-# Admin Frontend
-cd "Tank Legends Management Web" && npm run dev -- --host
-# Mở: http://172.25.203.168:5173  (hoặc localhost:5173 từ Windows)
+## Khởi động thủ công
+
+### Bước 1: Docker containers
+
+```bash
+WSL2_IP=$(ip addr show eth0 | grep "inet " | awk '{print $2}' | cut -d/ -f1)
+
+docker run -d --name zookeeper \
+  -e ZOOKEEPER_CLIENT_PORT=2181 -e ZOOKEEPER_TICK_TIME=2000 \
+  -p 2181:2181 confluentinc/cp-zookeeper:7.3.0
+
+docker run -d --name kafka --hostname kafka --link zookeeper:zookeeper \
+  -p 9092:9092 \
+  -e KAFKA_BROKER_ID=1 \
+  -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
+  -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT \
+  -e KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092 \
+  -e "KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://${WSL2_IP}:9092" \
+  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+  confluentinc/cp-kafka:7.3.0
+
+docker run -d --name postgres_container \
+  -e POSTGRES_DB=auth_service_db -e POSTGRES_USER=auth_user \
+  -e POSTGRES_PASSWORD=userpassword -p 5432:5432 postgres:16.0
+
+docker run -d --name redis \
+  -p 6379:6379 redis:alpine redis-server --requirepass 123456
+
+docker run -d --name mysql_container \
+  -e MYSQL_DATABASE=shoptank_db -e MYSQL_ROOT_PASSWORD=Ts171201@ \
+  -p 3307:3306 mysql:8.0
+```
+
+### Bước 2: Kafka topics
+
+```bash
+# Đợi ~15s cho Kafka khởi động
+sleep 15
+docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --if-not-exists --topic match.create  --partitions 1 --replication-factor 1
+docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --if-not-exists --topic match.result  --partitions 1 --replication-factor 1
+docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+  --create --if-not-exists --topic match.cancel  --partitions 1 --replication-factor 1
+```
+
+### Bước 3: Java services
+
+```bash
+BASE=/home/minhk/project/new/SE315.Q21/BE_CNGOL/java-meta-services
+MVN=/mnt/c/Users/minhk/Downloads/apache-maven-3.9.9/bin/mvn
+
+# Build (chỉ cần làm 1 lần)
+cd $BASE && $MVN package -DskipTests -q
+
+# Start Eureka trước, đợi UP
+java -jar $BASE/discovery_service/target/discovery_service-0.0.1-SNAPSHOT.jar \
+  > /tmp/eureka.log 2>&1 &
+sleep 20
+
+# Start các service còn lại
+java -jar $BASE/auth_service/target/auth-service-0.0.1-SNAPSHOT.jar          > /tmp/auth.log        2>&1 &
+java -jar $BASE/api_gateway/target/api_gateway-0.0.1-SNAPSHOT.jar             > /tmp/gateway.log     2>&1 &
+java -jar $BASE/matchmaking_service/target/matchmaking_service-0.0.1-SNAPSHOT.jar > /tmp/matchmaking.log 2>&1 &
+java -jar $BASE/history_service/target/history_service-0.0.1-SNAPSHOT.jar     > /tmp/history.log     2>&1 &
+java -jar $BASE/profile_service/target/profile_service-0.0.1-SNAPSHOT.jar     > /tmp/profile.log     2>&1 &
+java -jar $BASE/shop/target/shop_service-0.0.1-SNAPSHOT.jar                   > /tmp/shop.log        2>&1 &
+java -jar $BASE/monitoring_service/target/monitoring_service-0.0.1-SNAPSHOT.jar > /tmp/monitoring.log 2>&1 &
+```
+
+Kiểm tra:
+```bash
+curl -s http://localhost:8761/actuator/health   # Eureka
+curl -s http://localhost:8080/actuator/health   # Gateway
+```
+
+### Bước 4: Tank server (Windows)
+
+```bash
+# Build
+cmd.exe /c "D:\\Unity\\TankOnline\\game\\SE315.Q21\\Tank\\build_server_tank.bat"
+
+# Chạy
+python3 -c "
+import subprocess
+exe = '/mnt/d/Unity/TankOnline/game/SE315.Q21/Tank/out/build/x64-Release/server_tank/Release/server_tank.exe'
+cwd = '/mnt/d/Unity/TankOnline/game/SE315.Q21/Tank/out/build/x64-Release/server_tank/Release'
+p = subprocess.Popen([exe, '--backend=iocp'], cwd=cwd,
+                     stdout=open(cwd+'/server.log','w'), stderr=subprocess.STDOUT)
+print('Tank server PID:', p.pid)
+"
+```
+
+### Bước 5: Admin Web
+
+```bash
+cd "Tank Legends Management Web"
+npm run dev -- --host
+# Mở: http://<WSL2_IP>:5173
 # Login: admin / admin123
+```
+
+---
+
+## Benchmark & Đo hiệu năng
+
+### Chạy Real GPC benchmark
+
+```bash
+# Cú pháp
+./run_real_gpc.sh [backend] [players/match] [số match] [thời gian giây] [rebuild]
+
+# Ví dụ
+./run_real_gpc.sh iocp 5 10 300          # 10 match × 5 player, 5 phút
+./run_real_gpc.sh iocp 5 20 300          # 20 match × 5 player
+./run_real_gpc.sh blocking 5 10 300       # so sánh blocking backend
+./run_real_gpc.sh iocp rebuild 5 10 300  # rebuild trước khi chạy
+```
+
+**Luồng tự động:**
+1. Phase 1: Benchmark baseline (bench_wc_live.exe, ~45s, core sạch)
+2. Phase 2: Real server (server_tank.exe + 100 load_client instances)
+3. Kết quả live trên Grafana: `http://localhost:3000/d/wc-live-bench/`
+
+**Chỉ số cần quan tâm:**
+
+| Metric | Bình thường | Cảnh báo | Nguy hiểm |
+|--------|------------|---------|----------|
+| `budget_pct` | < 30% | 30–70% | > 80% |
+| `overrun_pct` | 0% | > 0.1% | > 1% |
+| `pool_pending` | 0 | > 0 liên tục | tăng dần |
+
+### Tìm điểm gãy
+
+```bash
+./run_real_gpc.sh iocp 5 20  120
+./run_real_gpc.sh iocp 5 40  120
+./run_real_gpc.sh iocp 5 80  120
+./run_real_gpc.sh iocp 5 100 120   # điểm gãy ~100 match trên laptop 4-core
+```
+
+### Worst-case benchmark độc lập
+
+```bash
+# Benchmark in-process (không cần server chạy)
+./run_wc_benchmark.sh
+
+# Hoặc Windows
+run_wc_benchmark.bat
+```
+
+---
+
+## Dừng hệ thống
+
+```bash
+./stop.sh
+```
+
+Hoặc thủ công:
+```bash
+pkill -f "java -jar"
+docker rm -f zookeeper kafka postgres_container redis mysql_container
+powershell.exe -Command "Stop-Process -Name server_tank -Force -ErrorAction SilentlyContinue"
+```
+
+---
+
+## Logs & Monitoring
+
+### Service logs
+
+| Service | Log file |
+|---------|---------|
+| Eureka | `/tmp/eureka.log` |
+| Auth | `/tmp/auth.log` |
+| API Gateway | `/tmp/gateway.log` |
+| Matchmaking | `/tmp/matchmaking.log` |
+| History | `/tmp/history.log` |
+| Profile | `/tmp/profile.log` |
+| Shop | `/tmp/shop.log` |
+| Tank server | `<build_dir>/server.log` |
+| Admin Web | `/tmp/admin.log` |
+
+### Grafana dashboards
+
+URL: `http://localhost:3000` (admin/admin)
+
+| Dashboard | Nội dung |
+|-----------|---------|
+| Worst-Case Live Benchmark | GPC, P99, overruns, bullet count real-time |
+| Benchmark vs Production | So sánh benchmark lý thuyết vs real server |
+
+### Prometheus metrics
+
+| Port | Agent | Nội dung |
+|------|-------|---------|
+| `:9103` | bench_wc_live_agent | GPC, P99, budget từ benchmark |
+| `:9104` | real_gpc_agent | GPC, P99, overrun từ production |
+
+---
+
+## Troubleshooting
+
+### Kafka `INVALID_REPLICATION_FACTOR`
+```bash
+# Restart kafka với --hostname kafka
+docker rm -f kafka
+# Chạy lại lệnh docker run kafka ở trên
+```
+
+### Login trả HTTP 403 (BCrypt mismatch)
+```python
+import bcrypt, subprocess
+new_hash = bcrypt.hashpw(b'password123', bcrypt.gensalt(rounds=10)).decode()
+sql = f"UPDATE users SET password = '{new_hash}' WHERE username IN ('player1','player2');"
+subprocess.run(['docker','exec','postgres_container','psql',
+                '-U','auth_user','-d','auth_service_db','-c', sql], check=True)
+```
+
+### WSL2 IP thay đổi sau reboot
+```bash
+# Chỉ cần chạy lại start.sh — script tự patch IP
+./start.sh
+```
+
+### Tank server không nhận Kafka
+Kafka broker hardcode trong `main.cpp`:
+```cpp
+const std::string kafkaBrokers = getEnv("KAFKA_BROKERS", "<WSL2_IP>:9092");
+```
+Sửa IP và rebuild, hoặc để `start.sh` tự patch.
+
+### Grafana không hiện data
+```bash
+# Kiểm tra agents đang chạy
+curl -s http://localhost:9104/metrics/prometheus | grep real_gpc
+curl -s http://localhost:9103/metrics/prometheus | grep wc_gpc
+
+# Đổi time range sang "Last 30 minutes"
+```
+
+### `docker-compose up` lỗi `KeyError: ContainerConfig`
+Đây là bug của docker-compose v1.29.2. Dùng `docker run` riêng từng container như hướng dẫn ở trên.
+
+### Benchmark hiện `matches=0`
+Exe chưa được rebuild sau khi sửa code:
+```bash
+./run_real_gpc.sh iocp rebuild 5 10 300
 ```
 
 ---
@@ -304,29 +459,53 @@ cd "Tank Legends Management Web" && npm run dev -- --host
 ```
 SE315.Q21/
 ├── start.sh                          # Khởi động toàn bộ hệ thống
-├── IP_CONFIG.md                      # Hướng dẫn đổi IP khi đổi WiFi
+├── stop.sh                           # Dừng toàn bộ hệ thống
+├── run_real_gpc.sh                   # Benchmark Real GPC
+├── run_wc_benchmark.sh               # Worst-case benchmark
+├── IP_CONFIG.md                      # Hướng dẫn đổi IP
+│
 ├── BE_CNGOL/
-│   ├── SAGA_PATTERN.md               # Tài liệu Saga pattern
 │   └── java-meta-services/
 │       ├── discovery_service/        # Eureka :8761
 │       ├── api_gateway/              # Spring Cloud Gateway :8080
-│       ├── auth_service/             # Đăng nhập, đăng ký, ban :8081
-│       ├── matchmaking_service/      # Tìm trận :8085
-│       ├── history_service/          # Lịch sử trận đấu :8086
-│       ├── profile_service/          # RP, stats người chơi :8087
-│       ├── shop/                     # Cửa hàng item :8088
+│       ├── auth_service/             # Auth :8081
+│       ├── matchmaking_service/      # Matchmaking :8085
+│       ├── history_service/          # Lịch sử :8086
+│       ├── profile_service/          # Profile :8087
+│       ├── shop/                     # Shop :8088
 │       └── monitoring_service/       # Spring Boot Admin :8090
+│
 ├── Tank/
-│   └── server_tank/                  # C++ UDP game server (Windows .exe)
-│       └── src/main.cpp              # Entry point: Kafka + IOCP + MatchScheduler
+│   ├── server_tank/                  # C++ game server source
+│   │   ├── src/
+│   │   │   ├── main.cpp              # Entry point
+│   │   │   ├── Core/                 # Match, MatchScheduler
+│   │   │   └── Network/              # IOCP, BlockingBackend
+│   │   └── include/
+│   ├── load_client/                  # UDP load client (benchmark)
+│   ├── bench_worst_case/             # In-process benchmark
+│   ├── real_gpc_agent.py             # Parse [Real_GPC] → Prometheus :9104
+│   └── bench_wc_live_agent.py        # Parse [WC_Final] → Prometheus :9103
+│
 ├── tools/
-│   ├── tank_hp_hack.cpp              # ESP cheat tool (demo)
-│   ├── run_cheat.sh                  # Build + chạy cheat tool
-│   ├── anticheat/
-│   │   ├── anticheat.cpp             # AntiCheat: handle scan + process scan
-│   │   └── run_anticheat.sh          # Build + chạy anticheat
-│   └── anticheat_km/                 # Kernel-mode anticheat (demo flag file)
+│   ├── anticheat/anticheat.cpp       # AntiCheat client
+│   └── tank_hp_hack.cpp              # ESP demo (educational)
+│
 ├── Tank Legends Management Web/      # Admin frontend (Vite + React)
 └── monitoring/
-    └── prometheus.yml                # Prometheus scrape config
+    ├── prometheus.yml                # Prometheus scrape config
+    ├── grafana_wc_live_dashboard.json
+    └── start_monitoring_stack.sh
 ```
+
+---
+
+## Tài khoản mặc định
+
+| Service | Username | Password |
+|---------|---------|---------|
+| Admin Web | admin | admin123 |
+| Grafana | admin | admin |
+| PostgreSQL | auth_user | userpassword |
+| Redis | — | 123456 |
+| MySQL root | root | Ts171201@ |
