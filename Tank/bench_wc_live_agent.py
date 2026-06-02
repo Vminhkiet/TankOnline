@@ -35,8 +35,12 @@ CONFIG_FILE  = "bench_wc_config.json"
 
 # Tìm exe theo thứ tự ưu tiên
 EXE_CANDIDATES = [
+    # WSL2 mount paths (Linux-accessible Windows drives)
+    "/mnt/d/Unity/TankOnline/game/SE315.Q21/Tank/out/build/x64-Release/bench_worst_case/bench_wc_live.exe",
+    "/mnt/d/Unity/TankOnline/game/SE315.Q21/Tank/out/build/x64-Release/bench_worst_case/Release/bench_wc_live.exe",
+    # Windows-style relative paths (fallback nếu chạy từ Windows)
     r"Tank\out\build\x64-Release\bench_worst_case\bench_wc_live.exe",
-    r"Tank\out\build\x64-Release\bench_worst_case\Release\bench_worst_case.exe",  # fallback: MSBuild output name
+    r"Tank\out\build\x64-Release\bench_worst_case\Release\bench_worst_case.exe",
     r"Tank\bench_worst_case\Release\bench_wc_live.exe",
     r"bench_wc_live.exe",
     # WSL path nếu chạy từ WSL2
@@ -180,6 +184,20 @@ def _start_benchmark(players: int):
             text=True,
             bufsize=1
         )
+
+    # Pin process vào core cụ thể nếu --core N được chỉ định
+    affinity_core = _config.get("core", -1)
+    if affinity_core >= 0 and _process is not None:
+        affinity_mask = 1 << affinity_core
+        try:
+            subprocess.run(
+                ["powershell.exe", "-NoProfile", "-Command",
+                 f"(Get-Process -Id {_process.pid}).ProcessorAffinity = {affinity_mask}"],
+                capture_output=True, timeout=5
+            )
+            print(f"[agent] Pinned PID {_process.pid} to core {affinity_core} (mask=0x{affinity_mask:X})")
+        except Exception as e:
+            print(f"[agent] Warning: could not set affinity: {e}")
 
     with _metrics_lock:
         _metrics["active"] = 1
@@ -663,6 +681,7 @@ def main():
     parser.add_argument("--port",    type=int, default=AGENT_PORT)
     parser.add_argument("--no-start", action="store_true", help="Dung tu dong start exe")
     parser.add_argument("--config",  default=CONFIG_FILE)
+    parser.add_argument("--core",    type=int, default=-1,  help="Pin benchmark to CPU core N (-1 = no pinning)")
     args = parser.parse_args()
 
     CONFIG_FILE = args.config
@@ -672,6 +691,8 @@ def main():
         _config["players"] = args.players
     if args.matches is not None:
         _config["matches"] = args.matches
+    if args.core >= 0:
+        _config["core"] = args.core
     if args.players is not None or args.matches is not None:
         _save_config()
 
