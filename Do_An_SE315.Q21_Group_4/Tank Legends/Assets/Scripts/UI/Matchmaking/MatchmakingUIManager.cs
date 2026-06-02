@@ -13,6 +13,7 @@ public class MatchmakingResponseData
     public int serverPort;
     public uint playerId;
     public string token;
+    public int playerCount;
 }
 
 [System.Serializable]
@@ -31,6 +32,7 @@ public class MatchmakingUIManager : MonoBehaviour
     [Header("UI Elements")]
     public TextMeshProUGUI statusText;
     public TextMeshProUGUI timerText;
+    public TMP_Dropdown modeDropdown;
 
     [Header("API Settings")]
     [Tooltip("Path or full URL. Default: /api/matchmaking/find")]
@@ -175,7 +177,29 @@ public class MatchmakingUIManager : MonoBehaviour
             Debug.LogError("[Matchmaking] Could not find TankSelectionManager even in inactive objects!");
         }
 
-        _activeRequest = GameApiClient.CreateRequest(matchmakingPath, "POST");
+        int selectedMode = 2;
+        if (modeDropdown != null)
+        {
+            switch (modeDropdown.value)
+            {
+                case 0: selectedMode = 2; break;
+                case 1: selectedMode = 3; break;
+                case 2: selectedMode = 5; break;
+                default: selectedMode = 2; break;
+            }
+        }
+
+        string requestPath = matchmakingPath;
+        if (selectedMode == 3 || selectedMode == 5)
+        {
+            requestPath += "?mode=" + selectedMode;
+        }
+        else
+        {
+            requestPath += "?mode=2";
+        }
+
+        _activeRequest = GameApiClient.CreateRequest(requestPath, "POST");
         var request = _activeRequest;
 
         using (request)
@@ -195,9 +219,12 @@ public class MatchmakingUIManager : MonoBehaviour
                 {
                     MatchmakingResponseData response = JsonUtility.FromJson<MatchmakingResponseData>(result.Body);
                     
+                    int pCount = response.playerCount > 0 ? response.playerCount : selectedMode;
+                    GlobalMatchState.PlayerCount = pCount;
+
                     GlobalMatchState.SetMatchInfo(response.matchId, response.serverHost, response.serverPort, response.playerId, response.token);
                     
-                    Debug.Log($"Match Found! ID: {response.matchId}, Host: {response.serverHost}:{response.serverPort}, PlayerId: {response.playerId}");
+                    Debug.Log($"Match Found! ID: {response.matchId}, Host: {response.serverHost}:{response.serverPort}, PlayerId: {response.playerId}, ExpectedPlayers: {pCount}");
                 }
                 catch (System.Exception e)
                 {

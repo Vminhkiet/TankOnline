@@ -34,9 +34,9 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
     private static final Logger log = LoggerFactory.getLogger(MatchMakingService.class);
 
     // Queue lưu userId dạng String — đơn giản, so sánh chính xác trong Redis
-    private static final String QUEUE_KEY           = "matchmaking:queue";
-    private static final long   WAIT_FOR_OPPONENT_MS = 10_000L;
-    private static final long   POLL_MS              = 500L;
+    private static final String QUEUE_KEY = "matchmaking:queue";
+    private static final long WAIT_FOR_OPPONENT_MS = 10_000L;
+    private static final long POLL_MS = 500L;
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -100,7 +100,8 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
     @Override
     public Match createMatch(List<String> players) {
         Long matchId = redisTemplate.opsForValue().increment("matchmaking:counter", 1);
-        if (matchId == null) matchId = 1L;
+        if (matchId == null)
+            matchId = 1L;
 
         String hostIp = getAutoDetectedIp();
         Match match = new Match(matchId, players, Instant.now(), hostIp, tankUdpPort);
@@ -126,7 +127,8 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
             Long size = redisTemplate.opsForList().size(QUEUE_KEY);
             if (size != null && size >= 2) {
                 Match match = tryFormMatch(userId);
-                if (match != null) return match;
+                if (match != null)
+                    return match;
             }
             Thread.sleep(POLL_MS);
         }
@@ -145,7 +147,8 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
         // Duyệt tối đa 10 entry để lọc bỏ stale
         for (int attempt = 0; attempt < 10 && validPlayers.size() < 2; attempt++) {
             Object raw = redisTemplate.opsForList().leftPop(QUEUE_KEY);
-            if (raw == null) break;
+            if (raw == null)
+                break;
 
             String pid = raw.toString();
             if ("waiting".equals(getStatus(pid)) && !validPlayers.contains(pid)) {
@@ -171,16 +174,18 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
 
     private void notifyTankServer(long matchId, List<String> playerStrIds) {
         try {
-            // userId từ auth service là username string (vd: "player1"), không phải số nguyên.
-            // Integer.parseInt("player1") → NumberFormatException → bị filter → players=[] rỗng
+            // userId từ auth service là username string (vd: "player1"), không phải số
+            // nguyên.
+            // Integer.parseInt("player1") → NumberFormatException → bị filter → players=[]
+            // rỗng
             // → server nhận empty playerIds → resolvePlayer luôn fail → không spawn tank.
             //
             List<Integer> playerIntIds = new ArrayList<>();
             Map<String, String> userIdMap = new HashMap<>();
             Map<String, Object> tanksMap = new HashMap<>();
-            
+
             for (int i = 0; i < playerStrIds.size(); i++) {
-                int slotId = i + 1;          // slot 0 -> playerId 1, slot 1 -> playerId 2, ...
+                int slotId = i + 1; // slot 0 -> playerId 1, slot 1 -> playerId 2, ...
                 playerIntIds.add(slotId);
                 String userId = playerStrIds.get(i);
                 userIdMap.put(String.valueOf(slotId), userId);
@@ -190,24 +195,28 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
                     HttpHeaders headers = new HttpHeaders();
                     headers.set("X-User-Id", userId);
                     HttpEntity<String> entity = new HttpEntity<>(headers);
-                    
+
                     // Lấy ID xe tăng
                     ResponseEntity<String> deployedRes = restTemplate.exchange(
                             "http://localhost:8088/api/shop/deployed-tank",
                             HttpMethod.GET, entity, String.class);
-                            
+
                     if (deployedRes.getStatusCode().is2xxSuccessful() && deployedRes.getBody() != null) {
-                        Map<String, Object> deployedBody = new ObjectMapper().readValue(deployedRes.getBody(), new TypeReference<Map<String,Object>>(){});
+                        Map<String, Object> deployedBody = new ObjectMapper().readValue(deployedRes.getBody(),
+                                new TypeReference<Map<String, Object>>() {
+                                });
                         if (deployedBody.containsKey("itemId")) {
                             Object itemId = deployedBody.get("itemId");
-                            
+
                             // Lấy chi tiết xe tăng
                             ResponseEntity<String> itemRes = restTemplate.getForEntity(
                                     "http://localhost:8088/api/shop/items/" + itemId, String.class);
-                            
+
                             if (itemRes.getStatusCode().is2xxSuccessful() && itemRes.getBody() != null) {
-                                Map<String, Object> itemBody = new ObjectMapper().readValue(itemRes.getBody(), new TypeReference<Map<String,Object>>(){});
-                                
+                                Map<String, Object> itemBody = new ObjectMapper().readValue(itemRes.getBody(),
+                                        new TypeReference<Map<String, Object>>() {
+                                        });
+
                                 Map<String, Object> tankStats = new HashMap<>();
                                 tankStats.put("name", itemBody.getOrDefault("name", "BULLDOG"));
                                 tankStats.put("damage", itemBody.getOrDefault("damage", 7));
@@ -216,7 +225,7 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
                                 tankStats.put("health", itemBody.getOrDefault("health", 100));
                                 tankStats.put("fireRate", itemBody.getOrDefault("fireRate", 4));
                                 tankStats.put("fireRange", itemBody.getOrDefault("fireRange", 6));
-                                
+
                                 tanksMap.put(String.valueOf(slotId), tankStats);
                             }
                         }
@@ -227,11 +236,11 @@ public class MatchMakingService implements com.vminhkiet.matchmaking_service.ser
             }
 
             Map<String, Object> bodyMap = new HashMap<>();
-            bodyMap.put("matchId",     (int) matchId);
-            bodyMap.put("players",     playerIntIds);
-            bodyMap.put("userIds",     userIdMap);   // {1:"player1", 2:"player2"} cho match.result
-            bodyMap.put("tanks",       tanksMap);    // Thêm tanks stats
-            bodyMap.put("mapName",     "world");
+            bodyMap.put("matchId", (int) matchId);
+            bodyMap.put("players", playerIntIds);
+            bodyMap.put("userIds", userIdMap); // {1:"player1", 2:"player2"} cho match.result
+            bodyMap.put("tanks", tanksMap); // Thêm tanks stats
+            bodyMap.put("mapName", "world");
             bodyMap.put("maxDuration", 180);
 
             String json = new ObjectMapper().writeValueAsString(bodyMap);
