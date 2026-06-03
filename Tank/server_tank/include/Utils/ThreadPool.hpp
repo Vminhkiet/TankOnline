@@ -8,12 +8,27 @@
 #include <functional>
 #include <atomic>
 #include <stdexcept>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 class ThreadPool {
 public:
-    explicit ThreadPool(size_t n = std::thread::hardware_concurrency()) {
-        for (size_t i = 0; i < n; ++i)
+    // coreAffinityMask = 0 → không pin (OS scheduler tự quyết)
+    // coreAffinityMask = 0x3C → pin vào core 2,3,4,5 (bit 2–5)
+    explicit ThreadPool(size_t n = std::thread::hardware_concurrency(),
+                        DWORD_PTR coreAffinityMask = 0) {
+        for (size_t i = 0; i < n; ++i) {
             _workers.emplace_back([this] { workerLoop(); });
+            if (coreAffinityMask != 0) {
+#ifdef _WIN32
+                SetThreadAffinityMask(
+                    _workers.back().native_handle(), coreAffinityMask);
+                SetThreadPriority(
+                    _workers.back().native_handle(), THREAD_PRIORITY_TIME_CRITICAL);
+#endif
+            }
+        }
     }
 
     ~ThreadPool() {

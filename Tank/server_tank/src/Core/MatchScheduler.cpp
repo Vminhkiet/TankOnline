@@ -13,16 +13,31 @@ static size_t resolvePoolSize() {
     const char* v = std::getenv("NUM_WORKERS");
     if (v && std::atoi(v) > 0) return static_cast<size_t>(std::atoi(v));
 #ifdef PROFILING_SINGLE_CORE
-    return 1;   // PROFILING: pin to 1 worker → isolate GPC limit per core
+    return 1;
 #else
-    return std::thread::hardware_concurrency();
+    // Dành core 0–1 cho recv, core 6+ cho misc
+    // Worker pool dùng tối đa (total - 3) core, tối thiểu 1
+    int total = static_cast<int>(std::thread::hardware_concurrency());
+    return static_cast<size_t>(std::max(1, total - 3));
 #endif
 }
 
+// Tính affinity mask cho core [startCore .. startCore+count-1]
+static DWORD_PTR makeAffinityMask(int startCore, int count) {
+    DWORD_PTR mask = 0;
+    for (int i = startCore; i < startCore + count; ++i)
+        mask |= (DWORD_PTR)1 << i;
+    return mask;
+}
+
 MatchScheduler::MatchScheduler(INetworkBackend& network)
-    : _pool(resolvePoolSize())
+    : _pool(resolvePoolSize(),
+            // Pin worker pool vào core 2..(total-2) → tách khỏi recv (core 0-1)
+            makeAffinityMask(2, static_cast<int>(resolvePoolSize())))
     , _network(network)
-{}
+{
+    // Pin tickThread sau khi tạo (trong start())
+}
 
 MatchScheduler::~MatchScheduler() { stop(); }
 
@@ -34,10 +49,19 @@ void MatchScheduler::start(const std::string& kafkaBrokers) {
 
     _running = true;
     _tickThread = std::jthread([this](std::stop_token st) {
+        // Pin tickThread vào core cuối (tránh tranh với worker pool và recv)
+        int lastCore = static_cast<int>(std::thread::hardware_concurrency()) - 1;
+        if (lastCore >= 0) {
+            SetThreadAffinityMask(GetCurrentThread(), (DWORD_PTR)1 << lastCore);
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+        }
         while (!st.stop_requested()) tickDispatcher();
     });
 
-    LOG_INFO("MatchScheduler: started ({} pool workers)", _pool.size());
+    LOG_INFO("MatchScheduler: started ({} pool workers, tick workers on core 2–{}, tickThread on core {})",
+             _pool.size(),
+             1 + static_cast<int>(_pool.size()),
+             static_cast<int>(std::thread::hardware_concurrency()) - 1);
 }
 
 void MatchScheduler::stop() {

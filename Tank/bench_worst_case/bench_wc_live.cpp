@@ -19,6 +19,7 @@
 #include <mmsystem.h>
 
 #include "Core/Match.hpp"
+#include "Core/MetricsCollector.hpp"
 #include "Network/INetworkBackend.hpp"
 #include "Network/GameCommand.hpp"
 #include "Network/Opcode.hpp"
@@ -233,13 +234,16 @@ int main(int argc, char** argv)
     using Clock = std::chrono::high_resolution_clock;
     using us    = std::chrono::microseconds;
 
+    MetricsCollector benchMetrics;
+    static constexpr int64_t BUDGET_US = (int64_t)(1'000'000.0 / 60.0); // 16,667 µs @ 60Hz
+
     // ── Warmup ────────────────────────────────────────────────────────────────
     logLine("[WC_Live] players=%d matches=%d Starting warmup (%d ticks)...",
             g_players, g_matches, WARMUP_TICKS);
     auto loop_start = Clock::now();
     for (int t = 0; t < WARMUP_TICKS; ++t) {
         injectAll(t);
-        for (auto& mp : matches) mp->tick(DT);
+        for (auto& mp : matches) mp->tick(DT, BUDGET_US, benchMetrics);
         auto next = loop_start + us((long long)((t+1) * (1000000.0/60.0)));
         std::this_thread::sleep_until(next);
     }
@@ -268,7 +272,7 @@ int main(int argc, char** argv)
 
         // ── Tick all K matches, measure wall time ─────────────────────────────
         auto tick_wall_start = Clock::now();
-        for (auto& mp : matches) mp->tick(DT);
+        for (auto& mp : matches) mp->tick(DT, BUDGET_US, benchMetrics);
         auto tick_wall_end   = Clock::now();
 
         int64_t wall_us = std::chrono::duration_cast<us>(

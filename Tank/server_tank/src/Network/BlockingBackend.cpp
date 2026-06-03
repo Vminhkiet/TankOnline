@@ -44,8 +44,13 @@ bool BlockingBackend::start(int port) {
 
     _running = true;
     _recvThreads.reserve(_numReceivers);
-    for (int i = 0; i < _numReceivers; ++i)
+    // Pin recvThreads vào core 0–1 (tránh core 2+ dành cho match tick workers)
+    // recvfrom() blocking = hầu hết thời gian ngủ → không waste core
+    static constexpr DWORD_PTR RECV_CORE_MASK = 0x3; // core 0 và 1
+    for (int i = 0; i < _numReceivers; ++i) {
         _recvThreads.emplace_back(&BlockingBackend::recvLoop, this);
+        SetThreadAffinityMask(_recvThreads.back().native_handle(), RECV_CORE_MASK);
+    }
 
     LOG_INFO("BlockingBackend: listening on port {} ({} blocking-recv threads)",
              port, _numReceivers);
