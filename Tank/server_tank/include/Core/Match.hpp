@@ -90,7 +90,8 @@ private:
     void broadcastSnapshot();
     void broadcastMatchEnd(const MatchResult& r);
 
-    void handleMove (GameCommand& cmd);
+    void handleMove(GameCommand& cmd);
     void handleShoot(GameCommand& cmd);
     void handlePing(GameCommand& cmd);
+    void handleCastSkill(GameCommand& cmd);
 };

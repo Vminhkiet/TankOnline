@@ -16,7 +16,8 @@ namespace Complete.Skills
             {
                 // Simple teleport for dash logic. 
                 // A better approach would be applying velocity or using a Server-side lerp.
-                Vector3 newPos = rb.position + targetDirection.normalized * DashDistance;
+                float dashDist = (Data.parameters != null && Data.parameters.Length > 0 && Data.parameters[0] > 0f) ? Data.parameters[0] : DashDistance;
+                Vector3 newPos = rb.position + targetDirection.normalized * dashDist;
                 rb.MovePosition(newPos);
             }
         }

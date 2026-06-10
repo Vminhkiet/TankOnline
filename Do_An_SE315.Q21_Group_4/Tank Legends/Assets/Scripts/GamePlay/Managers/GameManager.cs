@@ -198,6 +198,7 @@ namespace Complete
                     TankNetClient.Instance.OnMatchEnd    += HandleMatchEnd;
                     TankNetClient.Instance.OnForceLogout += HandleForceLogout;
                     TankNetClient.Instance.OnEventShoot  += HandleEventShoot;
+                    TankNetClient.Instance.OnEventSkillCast += HandleEventSkillCast;
                     TankNetClient.Instance.OnItemSpawn   += HandleItemSpawn;
                     TankNetClient.Instance.OnItemDespawn += HandleItemDespawn;
 
@@ -317,6 +318,7 @@ namespace Complete
                 TankNetClient.Instance.OnMatchEnd    -= HandleMatchEnd;
                 TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
                 TankNetClient.Instance.OnEventShoot  -= HandleEventShoot;
+                TankNetClient.Instance.OnEventSkillCast -= HandleEventSkillCast;
                 TankNetClient.Instance.OnItemSpawn   -= HandleItemSpawn;
                 TankNetClient.Instance.OnItemDespawn -= HandleItemDespawn;
                 TankNetClient.Instance.Disconnect();
@@ -450,7 +452,7 @@ namespace Complete
                 if (kvp.Value != null) allTanks.Add(kvp.Value);
             }
 
-            // Collect all BulletHitVolume colliders
+            // Collect all BulletHitVolume colliders and pre-spawned Shield colliders
             var allHitColliders = new List<Collider>();
             for (int i = 0; i < allTanks.Count; i++)
             {
@@ -458,6 +460,21 @@ namespace Complete
                 if (hitVol != null)
                 {
                     var col = hitVol.GetComponent<Collider>();
+                    if (col != null) allHitColliders.Add(col);
+                }
+
+                // We don't collect shields per tank anymore because they are unparented
+            }
+
+            // Collect any pre-spawned shields anywhere in the scene (even if inactive)
+            var shields = Resources.FindObjectsOfTypeAll<Complete.Shield>();
+            for (int s = 0; s < shields.Length; s++)
+            {
+                // Only consider shields that are instantiated in the scene (not prefabs)
+                if (shields[s].gameObject.hideFlags == HideFlags.NotEditable || shields[s].gameObject.hideFlags == HideFlags.HideAndDontSave) continue;
+                if (shields[s].gameObject.scene.isLoaded)
+                {
+                    var col = shields[s].GetComponent<Collider>();
                     if (col != null) allHitColliders.Add(col);
                 }
             }
@@ -976,6 +993,37 @@ namespace Complete
             }
         }
 
+        private void HandleEventSkillCast(EventSkillCastPacket pkt)
+        {
+            Debug.Log($"[GameManager] Received S2C_EVENT_SKILL_CAST from Server for player {pkt.casterId}, skill: {pkt.skillName}");
+            if (pkt.casterId == m_MyPlayerId) return; // We already spawned our own skill visually
+
+            if (_remoteTanks.TryGetValue(pkt.casterId, out var go))
+            {
+                var skills = go.GetComponent<Complete.TankSkills>();
+                if (skills != null)
+                {
+                    Debug.Log($"[GameManager] Found TankSkills on remote tank {pkt.casterId}, calling RemoteCastSkill");
+                    if (pkt.isCharging != 0)
+                    {
+                        skills.RemoteStartChargeSkill(pkt.skillName, new Vector3(pkt.targetX, pkt.targetY, pkt.targetZ), new Vector3(pkt.dirX, 0f, pkt.dirZ));
+                    }
+                    else
+                    {
+                        skills.RemoteCastSkill(pkt.skillName, new Vector3(pkt.targetX, pkt.targetY, pkt.targetZ), new Vector3(pkt.dirX, 0f, pkt.dirZ));
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning($"[GameManager] TankSkills is NULL on remote tank {pkt.casterId}!");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[GameManager] Could not find remote tank with ID {pkt.casterId}");
+            }
+        }
+
         private void HandleItemSpawn(PacketSpawnItem pkt)
         {
             if (!_remoteItems.TryGetValue(pkt.itemId, out var go) || go == null)
@@ -1104,7 +1152,7 @@ namespace Complete
                     var explosion = go.GetComponent<ShellExplosion>();
                     if (explosion != null) explosion.enabled = false;
                     var col = go.GetComponent<Collider>();
-                    if (col != null) col.enabled = false;
+                    if (col != null) { col.enabled = true; col.isTrigger = true; }
 
                     _remoteBullets[bs.bulletId] = go;
 
@@ -1127,7 +1175,7 @@ namespace Complete
                                 var shellExplosion = go.GetComponent<ShellExplosion>();
                                 if (shellExplosion != null) shellExplosion.enabled = false;
                                 var shellCol = go.GetComponent<Collider>();
-                                if (shellCol != null) shellCol.enabled = false;
+                                if (shellCol != null) { shellCol.enabled = true; shellCol.isTrigger = true; }
                                 _remoteBullets[bs.bulletId] = go;
                             }
 
@@ -1176,6 +1224,10 @@ namespace Complete
         private void DestroyRemoteBullet(GameObject go)
         {
             if (go == null) return;
+
+            // Delegate to Shield to check if the bullet was despawned because it hit a shield
+            // We call this so the shield can play its block effect/ripple.
+            Complete.Shield.HandleRemoteBulletDespawn(go.transform.position, go.transform.forward);
 
             // Bullet's last snapshot position lags ~1 snapshot (50ms) behind the actual hit.
             // At 20-30 m/s that is 1-1.5 m of visual offset.
@@ -1234,6 +1286,7 @@ namespace Complete
             {
                 tm.m_NetworkTargetY = serverPos.y;
                 tm.m_HasNetworkTargetY = true;
+                tm.m_ServerSpeedMultiplier = ts.speedMultiplier / 100f;
             }
 
             // XZ error = khoảng cách giữa client prediction và server position.
@@ -1369,6 +1422,11 @@ namespace Complete
                 var remoteStealth = go.GetComponent<TankStealth>()
                                  ?? go.AddComponent<TankStealth>();
                 remoteStealth.IsLocalTank = false;
+
+                // TankSkills for remote tank (server-driven effects)
+                var remoteSkills = go.GetComponent<Complete.TankSkills>();
+                if (remoteSkills == null) remoteSkills = go.AddComponent<Complete.TankSkills>();
+                remoteSkills.m_IsLocalPlayer = false;
 
                 // Register BulletHitVolume colliders into particle system triggers
                 RegisterParticleTriggerColliders();

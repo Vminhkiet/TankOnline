@@ -25,6 +25,8 @@ namespace Complete
 
         private void OnTriggerEnter (Collider other)
         {
+            if (!enabled) return; // Prevent remote bullets from exploding locally
+
             // Prevent the shell from exploding if it hits the tank that fired it
             if (m_Owner != null && (other.gameObject == m_Owner || other.transform.IsChildOf(m_Owner.transform)))
             {

@@ -20,6 +20,7 @@ namespace Complete
         public GameObject m_OutOfAmmoUI;
 
         [Header("Match Overlay UI")]
+        public GameObject m_InGameUI;
         public Text m_MessageText;
         public TextMeshProUGUI matchTimerText;
         public TextMeshProUGUI pingText;
@@ -174,16 +175,19 @@ namespace Complete
         public void ShowVictoryScreen(bool show)
         {
             if (m_VictoryScreen != null) m_VictoryScreen.SetActive(show);
+            if (show && m_InGameUI != null) m_InGameUI.SetActive(false);
         }
 
         public void ShowYouDiedScreen(bool show)
         {
             if (m_YouDiedScreen != null) m_YouDiedScreen.SetActive(show);
+            if (show && m_InGameUI != null) m_InGameUI.SetActive(false);
         }
 
         public void ShowMatchEndPanel(bool won, bool draw, int myKills, int myDeaths, int durationSecs, MatchEndData end)
         {
             if (matchEndPanel != null) matchEndPanel.SetActive(true);
+            if (m_InGameUI != null) m_InGameUI.SetActive(false);
 
             string resultText = draw ? "DRAW!" : (won ? "YOU WIN!" : "YOU LOSE!");
             if (matchEndResultText != null) matchEndResultText.text = resultText;

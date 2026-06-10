@@ -17,10 +17,16 @@ namespace Complete.Skills
                 var tankHealth = Owner.GetComponent<TankHealth>();
                 if (tankHealth != null) maxHp = tankHealth.m_StartingHealth;
 
-                var buff = new StatModifier("BuffSkill", 8f)
+                float buffDuration = Data.duration > 0f ? Data.duration : 8f;
+                // Nhập 20 nghĩa là +20% sát thương (1.2x)
+                float dmgMult = (Data.parameters != null && Data.parameters.Length > 0 && Data.parameters[0] > 0f) ? (1f + Data.parameters[0] / 100f) : 1.15f;
+                // Nhập 5 nghĩa là 5% máu mỗi giây (0.05)
+                float hpRegenPct = (Data.parameters != null && Data.parameters.Length > 1 && Data.parameters[1] > 0f) ? (Data.parameters[1] / 100f) : 0.05f;
+
+                var buff = new StatModifier("BuffSkill", buffDuration)
                 {
-                    DamageMultiplier = 1.15f,
-                    HpRegenPerSecond = maxHp * 0.05f
+                    DamageMultiplier = dmgMult,
+                    HpRegenPerSecond = maxHp * hpRegenPct
                 };
                 modifierSys.AddModifier(buff);
             }

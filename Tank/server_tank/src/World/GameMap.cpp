@@ -164,6 +164,32 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
         }
     }
 
+    if (data.contains("skills")) {
+        for (const auto& s : data["skills"]) {
+            if (s.contains("name")) {
+                SkillConfig sc;
+                sc.name = s["name"].get<std::string>();
+                if (s.contains("skill_type")) sc.skillType = s["skill_type"].get<int>();
+                if (s.contains("cooldown")) sc.cooldown = s["cooldown"].get<float>();
+                if (s.contains("cast_range")) sc.castRange = s["cast_range"].get<float>();
+                if (s.contains("radius")) sc.radius = s["radius"].get<float>();
+                if (s.contains("length")) sc.length = s["length"].get<float>();
+                if (s.contains("angle")) sc.angle = s["angle"].get<float>();
+                if (s.contains("duration")) sc.duration = s["duration"].get<float>();
+                if (s.contains("charge_time")) sc.chargeTime = s["charge_time"].get<float>();
+                if (s.contains("speed_reduction_percent")) sc.speedReductionPercent = s["speed_reduction_percent"].get<float>();
+                
+                if (s.contains("parameters")) {
+                    for (const auto& p : s["parameters"]) {
+                        sc.parameters.push_back(p.get<float>());
+                    }
+                }
+                
+                _skillConfigs[sc.name] = sc;
+            }
+        }
+    }
+
     if (data.contains("bullet")) {
         const auto& b = data["bullet"];
         if (b.contains("collider_radius"))
@@ -172,8 +198,8 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
             _bulletConfig.hitRadius = b["hit_radius"].get<float>();
     }
 
-    LOG_INFO("GameMap: loaded {} tank configs, bullet_r={:.3f} hit_r={:.3f}",
-             _tankConfigs.size(), _bulletConfig.radius, _bulletConfig.hitRadius);
+    LOG_INFO("GameMap: loaded {} tank configs, {} skill configs, bullet_r={:.3f} hit_r={:.3f}",
+             _tankConfigs.size(), _skillConfigs.size(), _bulletConfig.radius, _bulletConfig.hitRadius);
 
     if (data.contains("spawns")) {
         for (const auto& sp : data["spawns"]) {

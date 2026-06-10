@@ -67,6 +67,24 @@ void Tank::update(float deltaTime)
         }
     }
 
+    for (auto it = activeBuffs.begin(); it != activeBuffs.end(); ) {
+        it->timeToLive -= deltaTime;
+        if (it->hpRegenPerSec > 0.f) {
+            it->tickTimer += deltaTime;
+            if (it->tickTimer >= 1.0f) {
+                int healAmt = static_cast<int>(it->hpRegenPerSec);
+                health += healAmt;
+                it->tickTimer -= 1.0f;
+            }
+        }
+        if (it->timeToLive <= 0.f) {
+            it = activeBuffs.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    if (health > stats.health) health = stats.health;
+
     // Anti-spinbot rotation sync
     float angleDiff = targetYaw - yaw;
     while (angleDiff > 3.14159265f)  angleDiff -= 6.2831853f;

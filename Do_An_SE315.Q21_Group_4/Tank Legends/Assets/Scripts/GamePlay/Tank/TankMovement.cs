@@ -43,8 +43,9 @@ namespace Complete
         [HideInInspector] public bool m_IsInputFrozen = false;
         [HideInInspector] public float m_SkillSpeedMultiplier = 1f;
         [HideInInspector] public float m_ShootSpeedMultiplier = 1f;
+        [HideInInspector] public float m_ServerSpeedMultiplier = 1f;
         
-        public float EffectiveSpeedMultiplier => Mathf.Min(m_SkillSpeedMultiplier, m_ShootSpeedMultiplier);
+        public float EffectiveSpeedMultiplier => Mathf.Min(m_SkillSpeedMultiplier, m_ShootSpeedMultiplier) * m_ServerSpeedMultiplier;
 
         private Vector3 m_CachedColliderCenter = new Vector3(0, 0.85f, 0);
         private Vector3 m_CachedColliderExtents = new Vector3(0.75f, 0.85f, 0.9f);

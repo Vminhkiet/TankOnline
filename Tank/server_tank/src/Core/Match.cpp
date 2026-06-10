@@ -47,6 +47,8 @@ void Match::registerHandlers() {
         [this](GameCommand& cmd) { handleShoot(cmd); });
     _dispatcher.registerHandler(Opcode::C2S_PING,
         [this](GameCommand& cmd) { handlePing(cmd); });
+    _dispatcher.registerHandler(Opcode::C2S_CAST_SKILL,
+        [this](GameCommand& cmd) { handleCastSkill(cmd); });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -179,6 +181,19 @@ void Match::tick(float dt, int64_t budgetUs, MetricsCollector& metrics) {
                 sockaddr_in addr{};
                 if (_sessions.getAddress(pid, addr)) {
                     _network.send(addr, reinterpret_cast<const uint8_t*>(&ev), sizeof(PacketDespawnItem));
+                }
+            }
+        }
+    }
+
+    auto skillEvents = _world.getSkillCastEvents();
+    if (!skillEvents.empty()) {
+        for (auto& ev : skillEvents) {
+            ev.matchId = _config.matchId;
+            for (uint32_t pid : _config.playerIds) {
+                sockaddr_in addr{};
+                if (_sessions.getAddress(pid, addr)) {
+                    _network.send(addr, reinterpret_cast<const uint8_t*>(&ev), sizeof(EventSkillCastPacket));
                 }
             }
         }
@@ -603,4 +618,25 @@ void Match::handleShoot(GameCommand& cmd) {
             ci = pkt.toClientInput();
     }
     _world.processInput(pid, ci);
+}
+
+void Match::handleCastSkill(GameCommand& cmd) {
+    if (_introStarted && _introTimer < 5.5f) return; // Không cho dùng chiêu khi chưa bắt đầu
+
+    uint32_t pid = 0;
+    if (!resolvePlayer(cmd.sender, pid)) return;
+    _sessions.updateHeartbeat(cmd.sender);
+
+    const auto& buf = cmd.rawBuffer;
+    if (buf.empty()) return;
+
+    ReadStream rs(reinterpret_cast<const uint32_t*>(buf.data()), static_cast<int>(buf.size()));
+    PacketHeader hdr{};
+    if (!hdr.Serialize(rs)) return;
+
+    PacketCastSkill pkt{};
+    if (!pkt.Serialize(rs)) return;
+
+    // Delegate to GameWorld to execute the skill logic
+    _world.castSkill(pid, pkt);
 }

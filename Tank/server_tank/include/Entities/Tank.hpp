@@ -4,12 +4,22 @@
 #include "Network/Packets.hpp"
 #include "Core/MatchConfig.hpp"
 
+struct ActiveBuff {
+    float timeToLive = 0.f;
+    float dmgMultiplier = 1.0f;
+    float hpRegenPerSec = 0.f;
+    float tickTimer = 0.f;
+};
+
 class Tank {
 public:
     static constexpr float TURN_SPEED   = 3.14159f; // radians / second (= 180 deg/s, matches Unity client)
 
     uint32_t id;
     TankStats stats;
+    std::vector<ActiveBuff> activeBuffs;
+    float accumulatedRegen = 0.f;
+
     
     Vector3  position;    // bottom-center of capsule
     float    yaw = 0.f;   // rotation around Y axis (radians)

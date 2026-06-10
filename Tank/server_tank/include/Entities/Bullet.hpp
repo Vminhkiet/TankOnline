@@ -11,6 +11,7 @@ struct Bullet {
     uint32_t ownerTankId = 0;
     int      damage      = 25;
     Vector3  position;
+    Vector3  spawnPosition; // Store where the bullet was fired
     Vector3  velocity;      // world-space, magnitude == SPEED
     float    timeToLive   = TTL;
     bool     isActive     = false;

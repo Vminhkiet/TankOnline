@@ -43,6 +43,20 @@ public:
         float hitRadius = 0.80f;  // tank hit-detection radius (compensates network lag)
     };
 
+    struct SkillConfig {
+        std::string name;
+        int skillType = 0;
+        float cooldown = 0.f;
+        float castRange = 0.f;
+        float radius = 0.f;
+        float length = 0.f;
+        float angle = 0.f;
+        float duration = 0.f;
+        std::vector<float> parameters;
+        float chargeTime = 0.f;
+        float speedReductionPercent = 0.f;
+    };
+
     GameMap() = default;
     ~GameMap() = default;
 
@@ -62,6 +76,14 @@ public:
         return TankConfig{};
     }
     const BulletConfig& getBulletConfig() const { return _bulletConfig; }
+
+    const SkillConfig* getSkillConfig(const std::string& name) const {
+        auto it = _skillConfigs.find(name);
+        if (it != _skillConfigs.end()) {
+            return &it->second;
+        }
+        return nullptr;
+    }
 
     uint8_t getTankTypeIndex(const std::string& name) const {
         auto it = _tankNameToIndex.find(name);
@@ -104,5 +126,6 @@ private:
     std::vector<Bush>        _bushes;
     std::unordered_map<std::string, TankConfig> _tankConfigs;
     std::unordered_map<std::string, uint8_t>    _tankNameToIndex;
+    std::unordered_map<std::string, SkillConfig> _skillConfigs;
     BulletConfig             _bulletConfig;
 };

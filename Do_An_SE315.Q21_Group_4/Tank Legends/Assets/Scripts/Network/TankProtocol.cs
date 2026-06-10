@@ -9,6 +9,7 @@ namespace TankNet
         C2S_MOVE         = 1001,
         C2S_SHOOT        = 1002,
         C2S_PING         = 1003,
+        C2S_CAST_SKILL   = 1004,
 
         S2C_SNAPSHOT     = 2000,
         S2C_STATE_SYNC   = 2001,
@@ -20,6 +21,7 @@ namespace TankNet
         S2C_PONG         = 2007,
         S2C_EVENT_SPAWN_ITEM = 2008,
         S2C_EVENT_DESPAWN_ITEM = 2009,
+        S2C_EVENT_SKILL_CAST = 2010,
     }
 
     // Must match server NetworkConstants.h exactly
@@ -58,6 +60,7 @@ namespace TankNet
         public ushort score;
         public byte   placement;
         public byte   bushRegion;
+        public byte   speedMultiplier; // 100 = 1.0x, 50 = 0.5x
 
         public bool IsAlive => (flags & 1) != 0;
         public bool IsInBush => (flags & 2) != 0;
@@ -166,6 +169,22 @@ namespace TankNet
         public string userId;
     }
 
+    [StructLayout(LayoutKind.Sequential, Pack = 1, CharSet = CharSet.Ansi)]
+    public struct EventSkillCastPacket
+    {
+        public uint   matchId;
+        public ushort opcode;       // = 2010
+        public uint   casterId;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string skillName;
+        public float  targetX;
+        public float  targetY;
+        public float  targetZ;
+        public float  dirX;
+        public float  dirZ;
+        public byte   isCharging;
+    }
+
     public class MatchEndData
     {
         public uint   MatchId;
@@ -251,6 +270,32 @@ namespace TankNet
             var w = new BitWriter(12);
             WriteHeader(w, Opcode.C2S_PING, matchId, 16, playerId, 0, 0); // 16 bytes limit
             w.WriteInt((int)clientTimeMs, 0, unchecked((int)0xFFFFFFFF));
+            return w.ToBytes();
+        }
+
+        public static byte[] BuildCastSkill(uint matchId, string skillName, UnityEngine.Vector3 target, UnityEngine.Vector3 dir, bool isCharging = false, uint playerId = 0)
+        {
+            var w = new BitWriter(64);
+            WriteHeader(w, Opcode.C2S_CAST_SKILL, matchId, 64, playerId, 0, 0);
+            
+            // Write string (32 bytes max)
+            byte[] nameBytes = System.Text.Encoding.ASCII.GetBytes(skillName);
+            for (int i = 0; i < 32; i++) {
+                int b = (i < nameBytes.Length) ? (sbyte)nameBytes[i] : 0;
+                w.WriteInt(b, -128, 127);
+            }
+
+            // Write target pos
+            w.WriteInt(UnityEngine.Mathf.RoundToInt(target.x * 100f), -1000000, 1000000);
+            w.WriteInt(UnityEngine.Mathf.RoundToInt(target.y * 100f), -1000000, 1000000);
+            w.WriteInt(UnityEngine.Mathf.RoundToInt(target.z * 100f), -1000000, 1000000);
+
+            // Write direction
+            w.WriteInt(UnityEngine.Mathf.RoundToInt(dir.x * 1000f), -1000, 1000);
+            w.WriteInt(UnityEngine.Mathf.RoundToInt(dir.z * 1000f), -1000, 1000);
+
+            w.WriteInt(isCharging ? 1 : 0, 0, 1);
+
             return w.ToBytes();
         }
     }

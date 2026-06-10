@@ -5,7 +5,26 @@ namespace Complete.Skills
 {
     public class ShieldDomeSkill : SkillBase
     {
-        public ShieldDomeSkill(SkillData data, GameObject owner) : base(data, owner) { }
+        private GameObject[] m_ShieldPool;
+        private int m_PoolIndex = 0;
+
+        public ShieldDomeSkill(SkillData data, GameObject owner) : base(data, owner) 
+        { 
+            if (Data.vfxPrefab != null && owner != null)
+            {
+                m_ShieldPool = new GameObject[2];
+                for (int i = 0; i < 2; i++)
+                {
+                    m_ShieldPool[i] = UnityEngine.Object.Instantiate(Data.vfxPrefab);
+                    
+                    // Scale it based on Data.radius
+                    float scaleFactor = Data.vfxBaseSize > 0f ? (Data.radius / Data.vfxBaseSize) : 1f;
+                    m_ShieldPool[i].transform.localScale = Vector3.one * scaleFactor;
+                    
+                    m_ShieldPool[i].SetActive(false);
+                }
+            }
+        }
 
         public override void ServerExecute(Vector3 targetPosition, Vector3 targetDirection)
         {
@@ -24,42 +43,30 @@ namespace Complete.Skills
 
         public override void ClientExecute(Vector3 targetPosition, Vector3 targetDirection)
         {
-            if (Data.vfxPrefab != null)
+            if (m_ShieldPool != null && m_ShieldPool.Length > 0)
             {
+                GameObject vfx = m_ShieldPool[m_PoolIndex];
+                m_PoolIndex = (m_PoolIndex + 1) % m_ShieldPool.Length;
+
                 var ts = Owner.GetComponent<TankSkills>();
                 Transform pivot = (ts != null && ts.m_SkillSpawnPoint != null) ? ts.m_SkillSpawnPoint : Owner.transform;
 
-                bool shouldParent = (Data.targetingType == TargetingType.Self);
                 Vector3 spawnLocation = (Data.targetingType == TargetingType.Self || Data.targetingType == TargetingType.Direction) ? pivot.position : targetPosition;
 
-                // Spawn the visual dome at the target position, keeping original prefab rotation
-                var vfx = UnityEngine.Object.Instantiate(Data.vfxPrefab, spawnLocation, Data.vfxPrefab.transform.rotation);
+                // Reset position/rotation just in case
+                vfx.transform.position = spawnLocation;
+                vfx.transform.rotation = Data.vfxPrefab.transform.rotation;
                 
-                if (shouldParent)
-                {
-                    vfx.transform.SetParent(pivot);
-                    vfx.transform.localPosition = Vector3.zero;
-                }
-
-                // Scale it based on Data.radius normalized by vfxBaseSize
-                float scaleFactor = Data.vfxBaseSize > 0f ? (Data.radius / Data.vfxBaseSize) : 1f;
-
-                if (shouldParent)
-                {
-                    Vector3 pScale = pivot.lossyScale;
-                    vfx.transform.localScale = new Vector3(
-                        scaleFactor / pScale.x,
-                        scaleFactor / pScale.y,
-                        scaleFactor / pScale.z
-                    );
-                }
-                else
-                {
-                    vfx.transform.localScale = Vector3.one * scaleFactor;
-                }
+                // Toggle active to trigger OnEnable
+                vfx.SetActive(false);
+                vfx.SetActive(true);
 
                 float destroyTime = Data.vfxDuration > 0f ? Data.vfxDuration : 3f;
-                UnityEngine.Object.Destroy(vfx, destroyTime);
+                var shieldScript = vfx.GetComponent<Complete.Shield>();
+                if (shieldScript != null)
+                {
+                    shieldScript.DeactivateAfter(destroyTime);
+                }
             }
 
             if (Data.castSound != null)

@@ -53,6 +53,7 @@ public class MapExporter
             heightmaps = heightmaps,
             spawns    = spawns,
             tanks     = BuildTanksConfig(),
+            skills    = BuildSkillsConfig(),
             bullet    = BuildBulletConfig()
         };
 
@@ -434,6 +435,38 @@ public class MapExporter
         return list;
     }
 
+    static List<SkillConfigData> BuildSkillsConfig()
+    {
+        List<SkillConfigData> list = new List<SkillConfigData>();
+        string[] guids = AssetDatabase.FindAssets("t:SkillData");
+        foreach (string guid in guids)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            Complete.Skills.SkillData skill = AssetDatabase.LoadAssetAtPath<Complete.Skills.SkillData>(path);
+            if (skill != null)
+            {
+                List<float> pList = new List<float>();
+                if (skill.parameters != null) pList.AddRange(skill.parameters);
+
+                list.Add(new SkillConfigData
+                {
+                    name = skill.name,
+                    skill_type = (int)skill.skillType,
+                    cooldown = skill.cooldown,
+                    cast_range = skill.castRange,
+                    radius = skill.radius,
+                    length = skill.length,
+                    angle = skill.angle,
+                    duration = skill.duration,
+                    parameters = pList,
+                    charge_time = skill.chargeTime,
+                    speed_reduction_percent = skill.speedReductionPercent
+                });
+            }
+        }
+        return list;
+    }
+
     static BulletConfigData BuildBulletConfig()
     {
         GameObject shell = GameObject.FindWithTag("Shell");
@@ -463,6 +496,7 @@ public class MapExporter
         public List<HeightmapData> heightmaps;
         public List<SpawnData> spawns;
         public List<TankConfigData> tanks;
+        public List<SkillConfigData> skills;
         public BulletConfigData bullet;
     }
 
@@ -490,6 +524,21 @@ public class MapExporter
         public float reload_time;
         public float speed_reduction_while_shooting;
         public float turret_rotation_speed;
+    }
+
+    [System.Serializable]
+    public class SkillConfigData {
+        public string name;
+        public int skill_type;
+        public float cooldown;
+        public float cast_range;
+        public float radius;
+        public float length;
+        public float angle;
+        public float duration;
+        public List<float> parameters;
+        public float charge_time;
+        public float speed_reduction_percent;
     }
 
     [System.Serializable]

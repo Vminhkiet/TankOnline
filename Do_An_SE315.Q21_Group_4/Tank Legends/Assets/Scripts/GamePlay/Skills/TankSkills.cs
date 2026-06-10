@@ -21,7 +21,7 @@ namespace Complete
         private float m_PostFireLockTimer = 0f;
         private Vector3 m_LockedTurretDir = Vector3.zero;
 
-        private void Start()
+        private void Awake()
         {
             m_Movement = GetComponent<TankMovement>();
 
@@ -153,6 +153,44 @@ namespace Complete
             }
         }
 
+        private void OnDestroy()
+        {
+            if (m_Indicator != null)
+            {
+                Destroy(m_Indicator.gameObject);
+            }
+        }
+
+        public void RemoteCastSkill(string skillName, Vector3 targetPos, Vector3 targetDir)
+        {
+            Debug.Log($"[TankSkills] RemoteCastSkill called for {skillName}. Current skillData is: {(skillData != null ? skillData.name : "NULL")}. m_SkillInstance: {(m_SkillInstance != null ? "NOT NULL" : "NULL")}");
+            if (skillData != null && skillData.name == skillName && m_SkillInstance != null)
+            {
+                Debug.Log($"[TankSkills] Executing ClientExecute for {skillName}");
+                
+                m_SkillInstance.ClientCancelCharge(); // Turn off charging VFX for remote
+
+                // Mới dùng chiêu (remote player)
+                m_SkillInstance.ClientExecute(targetPos, targetDir);
+                
+                // M_SkillInstance.ServerExecute should NOT be called on clients for remote players
+            }
+            else
+            {
+                Debug.LogWarning($"[TankSkills] RemoteCastSkill FAILED check! skillData: {skillData != null}, nameMatch: {(skillData != null ? skillData.name == skillName : false)}, m_SkillInstance: {m_SkillInstance != null}");
+            }
+        }
+
+        public void RemoteStartChargeSkill(string skillName, Vector3 targetPos, Vector3 targetDir)
+        {
+            if (skillData != null && skillData.name == skillName && m_SkillInstance != null)
+            {
+                Debug.Log($"[TankSkills] Executing ClientStartCharge for {skillName}");
+                // Indicator is local-only, so we don't enable it for remote players
+                m_SkillInstance.ClientStartCharge(targetPos, targetDir);
+            }
+        }
+
         private void Update()
         {
             if (m_SkillInstance != null)
@@ -169,6 +207,20 @@ namespace Complete
             }
 
             if (m_SkillInstance == null) return;
+
+            // Nếu Tank bị khóa điều khiển (Cinematic đầu game, kết thúc game...)
+            if (m_Movement != null && m_Movement.m_IsInputFrozen)
+            {
+                if (m_IsAiming)
+                {
+                    m_IsAiming = false;
+                    m_Indicator.DisableIndicator();
+                    m_SkillInstance.ClientCancelCharge();
+                    var ts = GetComponent<TankShooting>();
+                    if (ts != null) ts.OverrideTurretTarget(Vector3.zero);
+                }
+                return;
+            }
 
             // Get Input from InputManager
             bool skillDown, skillHeld, skillUp;
@@ -253,6 +305,9 @@ namespace Complete
                     m_Indicator.EnableIndicator(skillData);
                     // Kích hoạt Charging VFX ngay lúc bắt đầu giữ phím (Hold to Charge)
                     m_SkillInstance.ClientStartCharge(targetPos, targetDir);
+
+                    // Sync charging VFX to other clients
+                    TankNet.TankNetClient.Instance.SendCastSkill(skillData.name, targetPos, targetDir, true);
                 }
             }
 
@@ -345,8 +400,19 @@ namespace Complete
 
                         Vector3 finalPos = spawnPos + finalDir * skillData.castRange;
 
-                        m_SkillInstance.ServerExecute(finalPos, finalDir);
-                        m_SkillInstance.ClientExecute(finalPos, finalDir);
+                        if (TankNet.TankNetClient.Instance != null && TankNet.TankNetClient.Instance.IsConnected)
+                        {
+                            TankNet.TankNetClient.Instance.SendCastSkill(skillData.name, finalPos, finalDir);
+                            // We do not wait for the server to confirm if we want prediction for local player
+                            // But usually skills are sent to server and we simulate them locally right away
+                            m_SkillInstance.ClientExecute(finalPos, finalDir);
+                        }
+                        else
+                        {
+                            m_SkillInstance.ServerExecute(finalPos, finalDir);
+                            m_SkillInstance.ClientExecute(finalPos, finalDir);
+                        }
+
                         m_SkillInstance.StartCooldown();
                     }
                     else

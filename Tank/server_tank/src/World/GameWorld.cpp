@@ -35,6 +35,157 @@ bool GameWorld::loadMap(const std::string& mapPath)
     return true;
 }
 
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// Skills
+// ════════════════════════════════════════════════════════════════════════════
+
+void GameWorld::castSkill(uint32_t playerId, const PacketCastSkill& pkt)
+{
+    auto it = _tanks.find(playerId);
+    if (it == _tanks.end()) return;
+    Tank& tank = it->second;
+    if (!tank.isAlive) return;
+
+    std::string skillName(pkt.skillName);
+    const GameMap::SkillConfig* config = _map.getSkillConfig(skillName);
+    if (!config) {
+        LOG_WARN("GameWorld: player {} tried to cast unknown skill '{}'", playerId, skillName);
+        return;
+    }
+
+    // Cooldown check ONLY if not charging
+    float now = _elapsedTime;
+    if (!pkt.isCharging) {
+        if (now < _skillCooldowns[playerId][skillName]) {
+            LOG_WARN("GameWorld: player {} tried to cast '{}' on cooldown", playerId, skillName);
+            return;
+        }
+        // Set cooldown
+        _skillCooldowns[playerId][skillName] = now + config->cooldown;
+    }
+
+    if (!pkt.isCharging) {
+        // Logic based on skillType
+    // 1: Dash, 2: Buff, 3: ShieldDome, 4: Laser
+    if (config->skillType == 1) { // Dash
+        float dashDist = config->parameters.size() > 0 ? config->parameters[0] : 10.f;
+        Vector3 dir = {pkt.dirX, 0.f, pkt.dirZ};
+        if (dir.x == 0.f && dir.z == 0.f) dir = { std::sin(tank.yaw), 0.f, std::cos(tank.yaw) };
+        tank.position.x += dir.x * dashDist;
+        tank.position.z += dir.z * dashDist;
+        tank.position.z += dir.z * dashDist;
+    } 
+    else if (config->skillType == 2) { // Buff
+        // Nhập 20 nghĩa là +20% sát thương (1.2x)
+        float dmgMult = config->parameters.size() > 0 ? (1.0f + config->parameters[0] / 100.0f) : 1.15f;
+        // Nhập 5 nghĩa là 5% máu mỗi giây (0.05)
+        float hpRegenPct = config->parameters.size() > 1 ? (config->parameters[1] / 100.0f) : 0.05f;
+        float maxHp = static_cast<float>(_maxHealth[playerId]);
+        
+        ActiveBuff buff;
+        buff.timeToLive = config->duration > 0.f ? config->duration : 8.f;
+        buff.dmgMultiplier = dmgMult;
+        buff.hpRegenPerSec = maxHp * hpRegenPct;
+        tank.activeBuffs.push_back(buff);
+    }
+    else if (config->skillType == 3) { // ShieldDome
+        ActiveShield shield;
+        shield.ownerId = playerId;
+        shield.position = tank.position; // Dome spawns at caster
+        shield.radius = config->radius > 0.f ? config->radius : 5.f;
+        shield.health = config->parameters.size() > 0 ? config->parameters[0] : 1000.f;
+        shield.timeToLive = config->duration > 0.f ? config->duration : 5.f;
+        // Nhập 50 nghĩa là 50% slow (0.5)
+        shield.slowPercent = config->parameters.size() > 1 ? (config->parameters[1] / 100.0f) : 0.2f;
+        _activeShields.push_back(shield);
+        LOG_INFO("GameWorld: player {} spawned shield (hp={}, radius={})", playerId, shield.health, shield.radius);
+    }
+    else if (config->skillType == 4) { // Laser (Hitscan)
+        float damage = config->parameters.size() > 0 ? config->parameters[0] : 50.f;
+        float length = config->length > 0.f ? config->length : 20.f;
+        Vector3 dir = {pkt.dirX, 0.f, pkt.dirZ};
+        if (dir.x == 0.f && dir.z == 0.f) dir = { std::sin(tank.turretYaw), 0.f, std::cos(tank.turretYaw) };
+        
+        // Simple raycast against tanks
+        for (auto& [tid, target] : _tanks) {
+            if (tid == playerId || !target.isAlive) continue;
+            
+            float dx = target.position.x - tank.position.x;
+            float dz = target.position.z - tank.position.z;
+            float distSq = dx*dx + dz*dz;
+            
+            // Fast check if within laser length (approx)
+            if (distSq <= length*length) {
+                // Project target onto laser ray
+                float t = dx*dir.x + dz*dir.z;
+                if (t > 0 && t <= length) {
+                    float px = t * dir.x;
+                    float pz = t * dir.z;
+                    float distToLineSq = (dx-px)*(dx-px) + (dz-pz)*(dz-pz);
+                    if (distToLineSq <= 4.0f) { // 2m width laser approx
+                        // Hit by laser! Check if blocked by shield first
+                        bool blocked = false;
+                        for (auto& shield : _activeShields) {
+                            if (shield.ownerId == playerId) continue;
+                            
+                            // If caster is inside the shield, the laser freely passes out!
+                            float cDx = tank.position.x - shield.position.x;
+                            float cDz = tank.position.z - shield.position.z;
+                            if (cDx*cDx + cDz*cDz <= shield.radius * shield.radius) {
+                                continue;
+                            }
+
+                            float sDx = shield.position.x - tank.position.x;
+                            float sDz = shield.position.z - tank.position.z;
+                            float sT = sDx*dir.x + sDz*dir.z;
+                            if (sT > 0) { 
+                                float sPx = sT * dir.x;
+                                float sPz = sT * dir.z;
+                                float sDistToLineSq = (sDx-sPx)*(sDx-sPx) + (sDz-sPz)*(sDz-sPz);
+                                if (sDistToLineSq <= shield.radius * shield.radius) {
+                                    blocked = true;
+                                    shield.health -= damage;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!blocked) {
+                            int dmgInt = static_cast<int>(damage);
+                            target.takeDamage(dmgInt);
+                            _damageDealt[playerId] += dmgInt;
+                            _damageHistory[tid][playerId] += dmgInt;
+                            
+                            if (target.isDead()) {
+                                _kills[playerId]++;
+                                _deaths[tid]++;
+                                _matchScoreBase[playerId] += 5;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        }
+    }
+
+    // Broadcast event
+    EventSkillCastPacket ev;
+    ev.matchId = 0; // Assigned in Match.cpp
+    ev.opcode = static_cast<uint16_t>(Opcode::S2C_EVENT_SKILL_CAST);
+    ev.casterId = playerId;
+    std::strncpy(ev.skillName, pkt.skillName, sizeof(ev.skillName) - 1);
+    ev.targetX = pkt.targetX;
+    ev.targetY = pkt.targetY;
+    ev.targetZ = pkt.targetZ;
+    ev.dirX = pkt.dirX;
+    ev.dirZ = pkt.dirZ;
+    ev.isCharging = pkt.isCharging;
+    _skillCastEvents.push_back(ev);
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // Player lifecycle
 // ════════════════════════════════════════════════════════════════════════════
@@ -106,10 +257,6 @@ void GameWorld::updateBullets(float deltaTime)
 {
     constexpr float BULLET_GRAVITY = 3.0f;
 
-    // Pre-compute per-tank hit dimensions once per tick (outside bullet loop).
-    // getTankConfig() is an unordered_map<string> lookup — calling it B×P times per tick
-    // (where B=active bullets, P=players) causes O(B*P) map lookups with string hashing.
-    // Pre-computing reduces this to O(P) per tick.
     struct TankHitCache {
         uint32_t id;
         float hitX, hitZ;
@@ -131,8 +278,6 @@ void GameWorld::updateBullets(float deltaTime)
 
         b.timeToLive -= deltaTime;
         if (b.timeToLive <= 0.f) {
-            LOG_INFO("[Bullet] EXPIRE id={} owner={} pos=({:.2f},{:.2f},{:.2f}) — TTL exhausted (miss)",
-                     b.id, b.ownerTankId, b.position.x, b.position.y, b.position.z);
             b.isActive = false;
             _physics.removeSphere(b.id);
             continue;
@@ -145,17 +290,45 @@ void GameWorld::updateBullets(float deltaTime)
         Vector3 hitNorm;
 
         if (_physics.sweptSphereVsStatic(b.position, Bullet::RADIUS, delta, hitFrac, hitNorm)) {
-            Vector3 hitPos = b.position + delta * hitFrac;
-            LOG_INFO("[Bullet] HIT_WALL id={} owner={} hitPos=({:.2f},{:.2f},{:.2f}) norm=({:.2f},{:.2f},{:.2f})",
-                     b.id, b.ownerTankId, hitPos.x, hitPos.y, hitPos.z,
-                     hitNorm.x, hitNorm.y, hitNorm.z);
-            b.position = hitPos;
+            b.position = b.position + delta * hitFrac;
             b.isActive = false;
             _physics.removeSphere(b.id);
         } else {
             b.position = b.position + delta;
             _physics.updateSphere(b.id, b.position);
 
+            // 1) Check shield collisions
+            bool blockedByShield = false;
+            for (auto& shield : _activeShields) {
+                if (shield.ownerId == b.ownerTankId) continue;
+
+                // If bullet spawned inside the shield, it can freely pass through this shield!
+                float dxSpawn = b.spawnPosition.x - shield.position.x;
+                float dySpawn = b.spawnPosition.y - shield.position.y;
+                float dzSpawn = b.spawnPosition.z - shield.position.z;
+                if (dxSpawn * dxSpawn + dySpawn * dySpawn + dzSpawn * dzSpawn <= shield.radius * shield.radius) {
+                    continue; // Skip this shield, bullet originated inside it
+                }
+
+                float dxS = b.position.x - shield.position.x;
+                float dyS = b.position.y - shield.position.y;
+                float dzS = b.position.z - shield.position.z;
+                float distSq = dxS*dxS + dyS*dyS + dzS*dzS;
+                float rSum = shield.radius + Bullet::RADIUS;
+                if (distSq <= rSum * rSum) {
+                    blockedByShield = true;
+                    shield.health -= b.damage;
+                    break;
+                }
+            }
+
+            if (blockedByShield) {
+                b.isActive = false;
+                _physics.removeSphere(b.id);
+                continue;
+            }
+
+            // 2) Check tank collisions
             for (const auto& tc : tankCache) {
                 if (tc.id == b.ownerTankId) continue;
                 auto& tank = _tanks.at(tc.id);
@@ -163,7 +336,6 @@ void GameWorld::updateBullets(float deltaTime)
                 float bulletHitX = tc.hitX, bulletHitZ = tc.hitZ;
                 float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
                 
-                // Calculate OBB center in world space (uses pre-cached offset)
                 float centerX = tank.position.x + tc.offsetX * cy + tc.offsetZ * sy;
                 float centerZ = tank.position.z - tc.offsetX * sy + tc.offsetZ * cy;
                 
@@ -175,42 +347,31 @@ void GameWorld::updateBullets(float deltaTime)
                 bool wasAlive = tank.isAlive;
                 tank.takeDamage(b.damage);
                 
-                // Track damage for score and assist
                 const uint32_t hitTid = tc.id;
                 _damageDealt[b.ownerTankId] += b.damage;
                 _damageHistory[hitTid][b.ownerTankId] += b.damage;
 
-                // Update combat time for anti-camp
                 _lastCombatTime[b.ownerTankId] = _elapsedTime;
                 _lastCombatTime[hitTid] = _elapsedTime;
 
                 if (tank.isDead() && wasAlive) {
-                    LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} KILLED (dealt {} dmg)",
-                             b.id, b.ownerTankId, hitTid, b.damage);
                     _kills[b.ownerTankId]++;
                     _deaths[hitTid]++;
-
-                    // Kill bonus
                     _matchScoreBase[b.ownerTankId] += 5;
 
-                    // Assist bonus
                     float maxHp = _maxHealth[hitTid] > 0 ? _maxHealth[hitTid] : 100.0f;
                     float assistThreshold = maxHp * 0.3f;
                     for (auto const& [attacker, dmg] : _damageHistory[hitTid]) {
                         if (attacker != b.ownerTankId && dmg >= assistThreshold) {
-                            _matchScoreBase[attacker] += 2; // Assist!
+                            _matchScoreBase[attacker] += 2;
                         }
                     }
 
-                    // Assign survival placement dynamically based on CURRENT number of alive players
                     int aliveCount = 0;
                     for (auto const& [otherId, otherTank] : _tanks) {
                         if (otherTank.isAlive) aliveCount++;
                     }
                     _survivalPlacement[hitTid] = aliveCount + 1;
-                } else {
-                    LOG_INFO("[Bullet] HIT_TANK id={} owner={} → tank={} hp={} (dealt {} dmg)",
-                             b.id, b.ownerTankId, hitTid, tank.health, b.damage);
                 }
                 b.isActive = false;
                 _physics.removeSphere(b.id);
@@ -219,20 +380,15 @@ void GameWorld::updateBullets(float deltaTime)
         }
     }
 
-    // Ground check — deferred from bullet move (after physics manifolds processed)
     for (auto& b : _bullets) {
         if (!b.isActive) continue;
         float groundY = surfaceHeight(b.position.x, b.position.z);
         if (b.position.y <= groundY + Bullet::RADIUS) {
-            LOG_INFO("[Bullet] LAND id={} owner={} pos=({:.2f},{:.2f},{:.2f})",
-                     b.id, b.ownerTankId, b.position.x, b.position.y, b.position.z);
             b.isActive = false;
             _physics.removeSphere(b.id);
         }
     }
 
-    // Compact: xóa inactive bullets khỏi vector để giữ loop O(active) không O(total_ever).
-    // Không có erase này, vector tăng vô hạn → benchmark/production đều bị ảnh hưởng.
     _bullets.erase(
         std::remove_if(_bullets.begin(), _bullets.end(),
                        [](const Bullet& b){ return !b.isActive; }),
@@ -241,29 +397,40 @@ void GameWorld::updateBullets(float deltaTime)
 
 void GameWorld::runPhysics(float deltaTime)
 {
+    _elapsedTime += deltaTime;
     constexpr float GRAVITY = 20.f;
 
-    // Tank input integration
     for (auto& [id, tank] : _tanks)
         if (tank.isAlive) tank.update(deltaTime);
 
-    // Apply gravity and snap to terrain
+    for (auto it = _activeShields.begin(); it != _activeShields.end(); ) {
+        it->timeToLive -= deltaTime;
+        if (it->timeToLive <= 0.f || it->health <= 0.f) {
+            it = _activeShields.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    for (auto& [id, tank] : _tanks) {
+        if (!tank.isAlive) continue;
+        tank.stats.speed = _map.getTankConfig(tank.stats.name).movementSpeed;
+        for (const auto& shield : _activeShields) {
+            if (shield.ownerId == id) continue;
+            float dx = tank.position.x - shield.position.x;
+            float dz = tank.position.z - shield.position.z;
+            if (dx*dx + dz*dz <= shield.radius * shield.radius) {
+                tank.stats.speed *= (1.0f - shield.slowPercent);
+            }
+        }
+    }
+
     for (auto& [id, tank] : _tanks) {
         if (!tank.isAlive) continue;
         uint32_t boxId  = 0;
         float groundY   = surfaceHeight(tank.position.x, tank.position.z, &boxId);
         uint32_t prevBox = _tankOnBox.count(id) ? _tankOnBox.at(id) : 0;
-
-        if (boxId != prevBox) {
-            if (boxId != 0)
-                LOG_INFO("[Surface] tank {} entered walkable box {} (top={:.3f}) pos=({:.2f},{:.2f},{:.2f})",
-                         id, boxId, groundY,
-                         tank.position.x, tank.position.y, tank.position.z);
-            else
-                LOG_INFO("[Surface] tank {} left walkable box {} back to terrain y={:.3f}",
-                         id, prevBox, groundY);
-            _tankOnBox[id] = boxId;
-        }
+        if (boxId != prevBox) _tankOnBox[id] = boxId;
 
         if (tank.position.y <= groundY) {
             tank.position.y = groundY;
@@ -278,23 +445,17 @@ void GameWorld::runPhysics(float deltaTime)
         }
     }
 
-    // Push tank positions into physics broadphase
     syncColliders();
-
-    // Broad-phase → narrow-phase → generate manifolds + corrections
     _physics.Tick();
-
-    // Apply position corrections and spawn bullets from wantsShoot flags
     applyPhysicsResults(deltaTime);
 
-    // Item Pickup Logic
     for (auto& [id, tank] : _tanks) {
         if (!tank.isAlive) continue;
         for (auto it = _activeItems.begin(); it != _activeItems.end(); ) {
             float dist = std::sqrt((tank.position.x - it->pos.x)*(tank.position.x - it->pos.x) + 
                                    (tank.position.z - it->pos.z)*(tank.position.z - it->pos.z));
-            if (dist < 2.5f) { // Pickup radius
-                tank.health += 500; // Heal amount
+            if (dist < 2.5f) {
+                tank.health += 500;
                 float maxHp = _maxHealth[id] > 0 ? _maxHealth[id] : 100.0f;
                 if (tank.health > maxHp) tank.health = static_cast<int>(maxHp);
 
@@ -302,9 +463,6 @@ void GameWorld::runPhysics(float deltaTime)
                 pkt.opcode = static_cast<uint16_t>(Opcode::S2C_EVENT_DESPAWN_ITEM);
                 pkt.itemId = it->id;
                 _itemDespawnEvents.push_back(pkt);
-
-                LOG_INFO("GameWorld: player {} picked up item {}", id, it->id);
-
                 it = _activeItems.erase(it);
             } else {
                 ++it;
@@ -312,7 +470,6 @@ void GameWorld::runPhysics(float deltaTime)
         }
     }
 
-    // Respawn (non-match/training mode only)
     if (_respawnOnDeath) {
         for (auto& [id, tank] : _tanks) {
             if (tank.isDead()) {
@@ -331,7 +488,6 @@ void GameWorld::runPhysics(float deltaTime)
                 obb.axisY = {0.f, 1.f, 0.f};
                 obb.axisZ = {0.f, 0.f, 1.f};
                 _physics.addDynamicBox(obb);
-                LOG_INFO("GameWorld: tank {} respawned", id);
             }
         }
     }
@@ -339,19 +495,18 @@ void GameWorld::runPhysics(float deltaTime)
 
 void GameWorld::update(float deltaTime)
 {
-    _elapsedTime += deltaTime;
+    // _elapsedTime is now updated in updateBullets or runPhysics, or we can just keep it here if someone uses update() instead
+    // But to avoid double counting if someone uses update(), we'll remove it here and put it in runPhysics
     updateBullets(deltaTime);
     runPhysics(deltaTime);
     spawnItems();
 }
 
+
 void GameWorld::spawnItems()
 {
     if (_itemSpawnPoints.empty()) return;
-
-    // Item Spawning Logic - maintain max 5 active items
     if (_activeItems.size() < 5) {
-        // Create a shuffled list of indices
         int numPoints = static_cast<int>(_itemSpawnPoints.size());
         std::vector<int> indices(numPoints);
         for (int i = 0; i < numPoints; ++i) indices[i] = i;
@@ -361,43 +516,30 @@ void GameWorld::spawnItems()
 
         int bestIndex = -1;
         float maxDist = -1.0f;
-
         for (int idx : indices) {
             Vector3 pt = _itemSpawnPoints[idx];
-            
-            // Skip if an item already exists at this exact spot
             bool occupied = false;
             for (const auto& item : _activeItems) {
                 if (std::fabs(item.pos.x - pt.x) < 0.5f && std::fabs(item.pos.z - pt.z) < 0.5f) {
-                    occupied = true;
-                    break;
+                    occupied = true; break;
                 }
             }
             if (occupied) continue;
-
-            // Find distance to closest tank
             float closestDistToTank = 999999.0f;
             for (const auto& [tid, tank] : _tanks) {
                 if (!tank.isAlive) continue;
                 float dist = std::sqrt((tank.position.x - pt.x)*(tank.position.x - pt.x) + 
                                        (tank.position.z - pt.z)*(tank.position.z - pt.z));
-                if (dist < closestDistToTank) {
-                    closestDistToTank = dist;
-                }
+                if (dist < closestDistToTank) closestDistToTank = dist;
             }
-
-            // Early exit
             if (closestDistToTank > 10.0f || _tanks.empty()) {
-                bestIndex = idx;
-                break;
+                bestIndex = idx; break;
             }
-
             if (closestDistToTank > maxDist) {
                 maxDist = closestDistToTank;
                 bestIndex = idx;
             }
         }
-
         if (bestIndex != -1) {
             Item newItem;
             newItem.id = _nextItemId++;
@@ -411,11 +553,22 @@ void GameWorld::spawnItems()
             pkt.y = newItem.pos.y;
             pkt.z = newItem.pos.z;
             _itemSpawnEvents.push_back(pkt);
-
-            LOG_INFO("GameWorld: spawned item {} at ({:.1f},{:.1f},{:.1f}), active={}",
-                     newItem.id, newItem.pos.x, newItem.pos.y, newItem.pos.z, _activeItems.size());
         }
     }
+}
+
+std::vector<EventShootPacket> GameWorld::getShootEvents()
+{
+    std::vector<EventShootPacket> res;
+    res.swap(_shootEvents);
+    return res;
+}
+
+std::vector<EventSkillCastPacket> GameWorld::getSkillCastEvents()
+{
+    std::vector<EventSkillCastPacket> res;
+    res.swap(_skillCastEvents);
+    return res;
 }
 
 std::vector<PacketSpawnItem> GameWorld::getItemSpawnEvents() {
@@ -516,7 +669,12 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
             // Calculate the local Right direction of the turret in world space:
             Vector3 localRight = { std::cos(tank.wantsShootYaw), 0.f, -std::sin(tank.wantsShootYaw) };
 
-            int bulletDamage = tank.stats.damage;
+            float totalDmgMult = 1.0f;
+            for (const auto& buff : tank.activeBuffs) {
+                totalDmgMult *= buff.dmgMultiplier;
+            }
+            
+            int bulletDamage = static_cast<int>(tank.stats.damage * totalDmgMult);
             if (tank.stats.holdsToCharge) {
                 float ratio = tank.wantsShootForce / 30.0f;
                 if (ratio < 0.1f) ratio = 0.1f;
@@ -552,7 +710,40 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
                     } else if (cfg.weaponType == 1) { // Hitscan
                         Vector3 dir = { std::sin(tank.wantsShootYaw), 0.f, std::cos(tank.wantsShootYaw) };
                         PhysicsWorld::RaycastHit hit = _physics.Raycast(muzzlePos, dir, tank.stats.fireRange, id, _map.getBulletConfig().hitRadius);
-                        if (hit.hit) {
+                        
+                        bool blockedByShield = false;
+                        float maxDist = hit.hit ? hit.distance : tank.stats.fireRange;
+                        for (auto& shield : _activeShields) {
+                            if (shield.ownerId == id) continue;
+                            float dxSpawn = muzzlePos.x - shield.position.x;
+                            float dySpawn = muzzlePos.y - shield.position.y;
+                            float dzSpawn = muzzlePos.z - shield.position.z;
+                            if (dxSpawn*dxSpawn + dySpawn*dySpawn + dzSpawn*dzSpawn <= shield.radius * shield.radius) {
+                                continue;
+                            }
+                            float sDx = shield.position.x - muzzlePos.x;
+                            float sDz = shield.position.z - muzzlePos.z;
+                            float sT = sDx*dir.x + sDz*dir.z;
+                            if (sT > 0) {
+                                float sPx = sT * dir.x;
+                                float sPz = sT * dir.z;
+                                float distToLineSq = (sDx - sPx)*(sDx - sPx) + (sDz - sPz)*(sDz - sPz);
+                                if (distToLineSq <= shield.radius * shield.radius) {
+                                    float halfChord = std::sqrt(shield.radius * shield.radius - distToLineSq);
+                                    float tEnter = sT - halfChord;
+                                    if (tEnter > 0 && tEnter < maxDist) {
+                                        blockedByShield = true;
+                                        shield.health -= bulletDamage;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (blockedByShield) {
+                            LOG_INFO("[Hitscan] BLOCKED by shield shooter={}", id);
+                            // Hit the shield, so it didn't hit the tank
+                        } else if (hit.hit) {
                             auto targetIt = _tanks.find(hit.entityId);
                             if (targetIt != _tanks.end() && targetIt->second.isAlive) {
                                 ev.hitTankId = hit.entityId;
@@ -612,7 +803,39 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
                     } else if (cfg.weaponType == 1) {
                         Vector3 dir = { std::sin(tank.wantsShootYaw), 0.f, std::cos(tank.wantsShootYaw) };
                         PhysicsWorld::RaycastHit hit = _physics.Raycast(muzzlePos, dir, tank.stats.fireRange, id, _map.getBulletConfig().hitRadius);
-                        if (hit.hit) {
+                        
+                        bool blockedByShield = false;
+                        float maxDist = hit.hit ? hit.distance : tank.stats.fireRange;
+                        for (auto& shield : _activeShields) {
+                            if (shield.ownerId == id) continue;
+                            float dxSpawn = muzzlePos.x - shield.position.x;
+                            float dySpawn = muzzlePos.y - shield.position.y;
+                            float dzSpawn = muzzlePos.z - shield.position.z;
+                            if (dxSpawn*dxSpawn + dySpawn*dySpawn + dzSpawn*dzSpawn <= shield.radius * shield.radius) {
+                                continue;
+                            }
+                            float sDx = shield.position.x - muzzlePos.x;
+                            float sDz = shield.position.z - muzzlePos.z;
+                            float sT = sDx*dir.x + sDz*dir.z;
+                            if (sT > 0) {
+                                float sPx = sT * dir.x;
+                                float sPz = sT * dir.z;
+                                float distToLineSq = (sDx - sPx)*(sDx - sPx) + (sDz - sPz)*(sDz - sPz);
+                                if (distToLineSq <= shield.radius * shield.radius) {
+                                    float halfChord = std::sqrt(shield.radius * shield.radius - distToLineSq);
+                                    float tEnter = sT - halfChord;
+                                    if (tEnter > 0 && tEnter < maxDist) {
+                                        blockedByShield = true;
+                                        shield.health -= bulletDamage;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (blockedByShield) {
+                            LOG_INFO("[Hitscan] BLOCKED by shield shooter={}", id);
+                        } else if (hit.hit) {
                             auto targetIt = _tanks.find(hit.entityId);
                             if (targetIt != _tanks.end() && targetIt->second.isAlive) {
                                 ev.hitTankId = hit.entityId;
@@ -663,11 +886,7 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
     }
 }
 
-std::vector<EventShootPacket> GameWorld::getShootEvents() {
-    auto copy = _shootEvents;
-    _shootEvents.clear();
-    return copy;
-}
+
 
 void GameWorld::spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw, float speed, int damage)
 {
@@ -676,6 +895,7 @@ void GameWorld::spawnBullet(uint32_t ownerTankId, const Vector3& pos, float yaw,
     b.ownerTankId = ownerTankId;
     b.damage      = damage;
     b.position    = pos;
+    b.spawnPosition = pos;
     b.velocity    = Vector3{ std::sin(yaw), 0.f, std::cos(yaw) } * speed;
     b.timeToLive  = Bullet::TTL;
     b.isActive    = true;
@@ -712,6 +932,13 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
         // Pack tank type index into bits 2-7 of flags
         uint8_t typeIndex = _map.getTankTypeIndex(tank.stats.name);
         t.flags |= (typeIndex << 2);
+
+        float baseSpeed = _map.getTankConfig(tank.stats.name).movementSpeed;
+        float mult = baseSpeed > 0.f ? (tank.stats.speed / baseSpeed) : 1.0f;
+        float multClamped = mult * 100.0f;
+        if (multClamped < 0.f) multClamped = 0.f;
+        if (multClamped > 255.f) multClamped = 255.f;
+        t.speedMultiplier = static_cast<uint8_t>(multClamped);
         
         // Calculate dynamic match score
         int score = _matchScoreBase.count(id) ? _matchScoreBase.at(id) : 0;

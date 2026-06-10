@@ -26,12 +26,43 @@ namespace Complete
         private int m_ImpactStrengthID;
         private Coroutine m_ImpactCoroutine;
 
+        public static System.Collections.Generic.List<Shield> ActiveShields = new System.Collections.Generic.List<Shield>();
+
+        private void OnEnable()
+        {
+            ActiveShields.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            ActiveShields.Remove(this);
+        }
+
+        public void DeactivateAfter(float delay)
+        {
+            StopAllCoroutines();
+            StartCoroutine(DeactivateRoutine(delay));
+        }
+
+        private System.Collections.IEnumerator DeactivateRoutine(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            gameObject.SetActive(false);
+        }
+
         private void Awake()
         {
             Renderer rend = GetComponent<Renderer>();
             if (rend != null)
             {
                 m_ShieldMaterial = rend.material;
+            }
+
+            // Ensure the collider is a trigger so it doesn't push tanks
+            Collider coll = GetComponent<Collider>();
+            if (coll != null)
+            {
+                coll.isTrigger = true;
             }
 
             // Resolve shader property IDs dynamically (supporting with or without underscore prefix)
@@ -84,18 +115,29 @@ namespace Complete
 
                 // If the shell was spawned outside the shield, block and explode it at the boundary
                 Rigidbody shellRb = shell.GetComponent<Rigidbody>();
-                if (shellRb != null)
-                {
-                    if (m_BlockEffect != null)
-                    {
-                        Instantiate(m_BlockEffect, hitPoint, Quaternion.LookRotation(-shellRb.velocity.normalized));
-                    }
+                bool isRemote = !shell.enabled;
 
-                    // Trigger the shader impact visual ripple
-                    TriggerImpact(hitPoint);
+                if (m_BlockEffect != null)
+                {
+                    // Use transform.forward since remote bullets have no Rigidbody velocity
+                    Instantiate(m_BlockEffect, hitPoint, Quaternion.LookRotation(-shell.transform.forward));
                 }
 
-                shell.Explode();
+                // Trigger the shader impact visual ripple
+                TriggerImpact(hitPoint);
+
+                if (!isRemote)
+                {
+                    shell.Explode();
+                }
+                else
+                {
+                    // Hide the remote bullet so it doesn't visually clip through before the server destroys it
+                    foreach (var rend in shell.GetComponentsInChildren<Renderer>())
+                    {
+                        rend.enabled = false;
+                    }
+                }
             }
             else
             {
@@ -103,6 +145,47 @@ namespace Complete
                 Vector3 hitPoint = shieldCollider.ClosestPoint(other.transform.position);
                 TriggerImpact(hitPoint);
             }
+        }
+
+        public static bool HandleRemoteBulletDespawn(Vector3 bulletPos, Vector3 bulletForward)
+        {
+            if (ActiveShields.Count == 0) return false;
+
+            foreach (var shield in ActiveShields)
+            {
+                if (shield == null) continue;
+
+                // Check distance from bullet to shield center
+                float distance = Vector3.Distance(shield.transform.position, bulletPos);
+                
+                // Assuming the shield scale/radius is roughly 5. 
+                // We add a tolerance (e.g., 3 units) to catch bullets that were despawned just before hitting.
+                // You can adjust the tolerance if the shield sizes vary drastically.
+                float estimatedRadius = shield.transform.localScale.x * 0.5f; // Assuming uniform scale and base sphere is 1x1x1
+                // Wait, if scale is handled differently, it's safer to use the collider's bounds.
+                Collider coll = shield.GetComponent<Collider>();
+                if (coll != null)
+                {
+                    estimatedRadius = coll.bounds.extents.x;
+                }
+
+                if (distance <= estimatedRadius + 3f && distance >= estimatedRadius - 1f)
+                {
+                    // Ensure the bullet was moving roughly towards or tangential to the shield, not away from it entirely
+                    Vector3 toShield = shield.transform.position - bulletPos;
+                    if (Vector3.Dot(toShield.normalized, bulletForward.normalized) > -0.5f)
+                    {
+                        Vector3 hitPoint = coll != null ? coll.ClosestPoint(bulletPos) : bulletPos;
+                        shield.TriggerImpact(hitPoint);
+                        if (shield.m_BlockEffect != null)
+                        {
+                            Instantiate(shield.m_BlockEffect, hitPoint, Quaternion.LookRotation(-bulletForward));
+                        }
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         private void TriggerImpact(Vector3 hitPoint)

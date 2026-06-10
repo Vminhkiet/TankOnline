@@ -30,6 +30,10 @@ namespace Complete.Skills
         [Tooltip("Thời gian duy trì hiệu ứng của skill (dành cho Shield, Buff...). Bằng 0 nếu là skill nổ 1 lần.")]
         public float duration = 0f;
 
+        [Header("Gameplay Effects (Server Side)")]
+        [Tooltip("Các thông số của skill. VD: Laser (0: Sát thương), Shield (0: Máu khiên, 1: % Slow), Dash (0: Khoảng cách), Buff (0: % Sát thương, 1: % Hồi máu).")]
+        public float[] parameters = new float[4];
+
         [Tooltip("Thời gian tồn tại của Execute VFX trên màn hình trước khi bị xóa. Nếu <= 0, sẽ tự động xóa sau 3s.")]
         public float vfxDuration = 3f;
 

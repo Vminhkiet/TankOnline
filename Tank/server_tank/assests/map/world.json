@@ -7400,6 +7400,80 @@
             "turret_rotation_speed": 360.0
         }
     ],
+    "skills": [
+        {
+            "name": "Bastion Field",
+            "skill_type": 3,
+            "cooldown": 5.0,
+            "cast_range": 0.0,
+            "radius": 10.0,
+            "length": 20.0,
+            "angle": 45.0,
+            "duration": 10.0,
+            "parameters": [
+                10000.0,
+                50.0,
+                0.0,
+                0.0
+            ],
+            "charge_time": 0.5,
+            "speed_reduction_percent": 100.0
+        },
+        {
+            "name": "Combat Overdrive",
+            "skill_type": 2,
+            "cooldown": 5.0,
+            "cast_range": 0.0,
+            "radius": 0.0,
+            "length": 0.0,
+            "angle": 0.0,
+            "duration": 10.0,
+            "parameters": [
+                20.0,
+                5.0,
+                0.0,
+                0.0
+            ],
+            "charge_time": 0.5,
+            "speed_reduction_percent": 100.0
+        },
+        {
+            "name": "Rail Breaker",
+            "skill_type": 4,
+            "cooldown": 2.0,
+            "cast_range": 0.0,
+            "radius": 5.0,
+            "length": 26.0,
+            "angle": 0.0,
+            "duration": 0.0,
+            "parameters": [
+                1000.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "charge_time": 1.5,
+            "speed_reduction_percent": 70.0
+        },
+        {
+            "name": "Vector Burst",
+            "skill_type": 1,
+            "cooldown": 5.0,
+            "cast_range": 0.0,
+            "radius": 5.0,
+            "length": 7.0,
+            "angle": 45.0,
+            "duration": 0.0,
+            "parameters": [
+                8.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "charge_time": 0.0,
+            "speed_reduction_percent": 0.0
+        }
+    ],
     "bullet": {
         "collider_radius": 0.25
     }

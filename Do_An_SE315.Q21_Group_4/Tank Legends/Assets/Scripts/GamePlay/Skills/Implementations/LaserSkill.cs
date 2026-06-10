@@ -23,7 +23,7 @@ namespace Complete.Skills
                 {
                     // Apply Damage
                     // If we had a StatModifierSystem on the caster, we could apply damage multipliers here.
-                    float baseDamage = 50f;
+                    float baseDamage = (Data.parameters != null && Data.parameters.Length > 0 && Data.parameters[0] > 0f) ? Data.parameters[0] : 50f;
                     float finalDamage = baseDamage;
                     
                     var modSys = Owner.GetComponent<TankStatModifierSystem>();
