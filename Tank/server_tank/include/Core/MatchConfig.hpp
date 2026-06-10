@@ -11,7 +11,8 @@ struct TankStats {
     int health = 100;
     float fireRate = 1.0f;
     float fireRange = 50.f;
-    bool canMoveWhileShooting = true;
+    float turretRotationSpeed = 180.f;
+    float speedReductionWhileShooting = 0.f;
     bool holdsToCharge = false; // New toggle for charging mechanic
     int barrelCount = 1;        // Number of barrels (default 1)
     float barrelSpacing = 0.4f; // Lateral distance between barrels

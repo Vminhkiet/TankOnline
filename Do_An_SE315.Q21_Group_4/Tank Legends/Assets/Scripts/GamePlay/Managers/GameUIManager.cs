@@ -14,10 +14,13 @@ namespace Complete
         public Image m_ReloadProgressImage;
         public Button m_ReloadButton;
         public Image specialAbilityIcon;
+        public Image m_SkillCooldownFill;
+        public TextMeshProUGUI m_SkillCooldownText;
         [Tooltip("Kéo object chữ 'Hết đạn' vào đây (Nó sẽ tự động nhấp nháy khi đạn = 0)")]
         public GameObject m_OutOfAmmoUI;
 
         [Header("Match Overlay UI")]
+        public GameObject m_InGameUI;
         public Text m_MessageText;
         public TextMeshProUGUI matchTimerText;
         public TextMeshProUGUI pingText;
@@ -86,9 +89,9 @@ namespace Complete
         {
             if (specialAbilityIcon == null || localTank == null) return;
             var tankHealth = localTank.GetComponent<Complete.TankHealth>();
-            if (tankHealth != null && tankHealth.m_Definition != null)
+            if (tankHealth != null && tankHealth.m_Definition != null && tankHealth.m_Definition.Skills != null && tankHealth.m_Definition.Skills.Count > 0 && tankHealth.m_Definition.Skills[0] != null)
             {
-                var icon = tankHealth.m_Definition.SpecialAbility.Icon;
+                var icon = tankHealth.m_Definition.Skills[0].icon;
                 specialAbilityIcon.sprite = icon;
                 specialAbilityIcon.enabled = (icon != null);
             }
@@ -112,6 +115,27 @@ namespace Complete
             if (m_ReloadProgressImage != null)
             {
                 m_ReloadProgressImage.fillAmount = progress;
+            }
+        }
+
+        public void UpdateSkillCooldown(float currentCooldown, float maxCooldown)
+        {
+            if (m_SkillCooldownFill != null)
+            {
+                m_SkillCooldownFill.fillAmount = maxCooldown > 0 ? (currentCooldown / maxCooldown) : 0;
+            }
+
+            if (m_SkillCooldownText != null)
+            {
+                if (currentCooldown > 0)
+                {
+                    m_SkillCooldownText.gameObject.SetActive(true);
+                    m_SkillCooldownText.text = Mathf.CeilToInt(currentCooldown).ToString();
+                }
+                else
+                {
+                    m_SkillCooldownText.gameObject.SetActive(false);
+                }
             }
         }
 
@@ -151,16 +175,19 @@ namespace Complete
         public void ShowVictoryScreen(bool show)
         {
             if (m_VictoryScreen != null) m_VictoryScreen.SetActive(show);
+            if (show && m_InGameUI != null) m_InGameUI.SetActive(false);
         }
 
         public void ShowYouDiedScreen(bool show)
         {
             if (m_YouDiedScreen != null) m_YouDiedScreen.SetActive(show);
+            if (show && m_InGameUI != null) m_InGameUI.SetActive(false);
         }
 
         public void ShowMatchEndPanel(bool won, bool draw, int myKills, int myDeaths, int durationSecs, MatchEndData end)
         {
             if (matchEndPanel != null) matchEndPanel.SetActive(true);
+            if (m_InGameUI != null) m_InGameUI.SetActive(false);
 
             string resultText = draw ? "DRAW!" : (won ? "YOU WIN!" : "YOU LOSE!");
             if (matchEndResultText != null) matchEndResultText.text = resultText;

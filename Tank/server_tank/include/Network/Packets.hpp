@@ -118,6 +118,45 @@ struct PacketShoot {
     }
 };
 
+// C2S_CAST_SKILL = 1004
+struct PacketCastSkill {
+    char  skillName[32] = {0}; // e.g. "ShieldDomeSkill"
+    float targetX = 0.f;
+    float targetY = 0.f;
+    float targetZ = 0.f;
+    float dirX = 0.f;
+    float dirZ = 0.f;
+    uint8_t isCharging = 0;
+
+    template<typename Stream>
+    bool Serialize(Stream& stream) {
+        // We will just serialize it manually since length is small
+        for (int i = 0; i < 32; ++i) serialize_int(stream, skillName[i], -128, 127);
+        // target
+        int32_t tX = static_cast<int32_t>(targetX * 100.f);
+        int32_t tY = static_cast<int32_t>(targetY * 100.f);
+        int32_t tZ = static_cast<int32_t>(targetZ * 100.f);
+        serialize_int(stream, tX, -1000000, 1000000);
+        serialize_int(stream, tY, -1000000, 1000000);
+        serialize_int(stream, tZ, -1000000, 1000000);
+        if constexpr (Stream::IsReading) {
+            targetX = tX / 100.f; targetY = tY / 100.f; targetZ = tZ / 100.f;
+        }
+
+        // dir
+        int32_t dX = static_cast<int32_t>(dirX * 1000.f);
+        int32_t dZ = static_cast<int32_t>(dirZ * 1000.f);
+        serialize_int(stream, dX, -1000, 1000);
+        serialize_int(stream, dZ, -1000, 1000);
+        if constexpr (Stream::IsReading) {
+            dirX = dX / 1000.f; dirZ = dZ / 1000.f;
+        }
+        serialize_int(stream, isCharging, 0, 1);
+
+        return true;
+    }
+};
+
 // ─── S2C: per-tank state entry ───────────────────────────────────────────────
 
 struct TankState {
@@ -130,6 +169,7 @@ struct TankState {
     uint16_t score  = 0;
     uint8_t  placement = 0;
     uint8_t  bushRegion = 0;
+    uint8_t  speedMultiplier = 100; // 100 = 1.0x, 50 = 0.5x
 };
 
 // ─── S2C: per-bullet state entry ─────────────────────────────────────────────
@@ -219,6 +259,20 @@ struct PacketDespawnItem {
     uint32_t matchId = 0;
     uint16_t opcode = 0; // Opcode::S2C_EVENT_DESPAWN_ITEM
     uint32_t itemId = 0;
+};
+
+// S2C_EVENT_SKILL_CAST = 2010
+struct EventSkillCastPacket {
+    uint32_t matchId = 0;
+    uint16_t opcode = 0; // Opcode::S2C_EVENT_SKILL_CAST
+    uint32_t casterId = 0;
+    char skillName[32] = {0};
+    float targetX = 0.f;
+    float targetY = 0.f;
+    float targetZ = 0.f;
+    float dirX = 0.f;
+    float dirZ = 0.f;
+    uint8_t isCharging = 0;
 };
 
 #pragma pack(pop)

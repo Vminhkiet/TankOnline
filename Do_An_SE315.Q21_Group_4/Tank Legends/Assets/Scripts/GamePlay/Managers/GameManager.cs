@@ -198,6 +198,7 @@ namespace Complete
                     TankNetClient.Instance.OnMatchEnd    += HandleMatchEnd;
                     TankNetClient.Instance.OnForceLogout += HandleForceLogout;
                     TankNetClient.Instance.OnEventShoot  += HandleEventShoot;
+                    TankNetClient.Instance.OnEventSkillCast += HandleEventSkillCast;
                     TankNetClient.Instance.OnItemSpawn   += HandleItemSpawn;
                     TankNetClient.Instance.OnItemDespawn += HandleItemDespawn;
 
@@ -223,11 +224,8 @@ namespace Complete
                 if (_remoteSnaps.TryGetValue(kvp.Key, out var buf))
                 {
                     _remoteShooting.TryGetValue(kvp.Key, out var shooting);
-                    Vector3 oldPos = kvp.Value.transform.position;
-                    ApplyInterp(buf, kvp.Value.transform, renderTime, shooting);
-                    Vector3 newPos = kvp.Value.transform.position;
+                    bool isMoving = ApplyInterp(buf, kvp.Value.transform, renderTime, shooting);
 
-                    bool isMoving = Vector3.Distance(oldPos, newPos) > 0.01f;
                     if (_remoteAnimation.TryGetValue(kvp.Key, out var anim) && anim != null)
                         anim.SetMoving(isMoving);
                 }
@@ -252,9 +250,9 @@ namespace Complete
             }
         }
 
-        private static void ApplyInterp(List<SnapEntry> buf, Transform tr, float renderTime, Complete.TankShooting shooting)
+        private static bool ApplyInterp(List<SnapEntry> buf, Transform tr, float renderTime, Complete.TankShooting shooting)
         {
-            if (buf.Count == 0) return;
+            if (buf.Count == 0) return false;
 
             // Find two entries bracketing renderTime
             int prev = -1, next = -1;
@@ -265,18 +263,21 @@ namespace Complete
             }
 
             float currentTurretYaw = 0f;
+            bool isMoving = false;
 
-            if (prev == -1)      // all entries are in the future — show oldest
+            if (prev == -1)      // all entries are in the future - show oldest
             { 
                 tr.position = buf[0].pos; 
                 tr.rotation = buf[0].rot; 
                 currentTurretYaw = buf[0].turretYaw;
+                isMoving = false;
             }
-            else if (next == -1) // all entries are in the past — show newest
+            else if (next == -1) // all entries are in the past - show newest
             { 
                 tr.position = buf[prev].pos; 
                 tr.rotation = buf[prev].rot; 
                 currentTurretYaw = buf[prev].turretYaw;
+                isMoving = false;
             }
             else                 // interpolate between prev and next
             {
@@ -293,6 +294,10 @@ namespace Complete
                 else if (prevYaw - nextYaw > Mathf.PI) nextYaw += 2f * Mathf.PI;
                 
                 currentTurretYaw = Mathf.Lerp(prevYaw, nextYaw, f);
+                
+                float dist = Vector3.Distance(buf[prev].pos, buf[next].pos);
+                float angle = Quaternion.Angle(buf[prev].rot, buf[next].rot);
+                isMoving = (dist / span) > 0.1f || (angle / span) > 5f;
             }
 
             if (shooting != null)
@@ -301,6 +306,8 @@ namespace Complete
             // Trim entries older than renderTime - 0.2s (keep a small tail)
             while (buf.Count > 2 && buf[1].t < renderTime - 0.2f)
                 buf.RemoveAt(0);
+
+            return isMoving;
         }
 
         private void OnDestroy()
@@ -311,6 +318,7 @@ namespace Complete
                 TankNetClient.Instance.OnMatchEnd    -= HandleMatchEnd;
                 TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
                 TankNetClient.Instance.OnEventShoot  -= HandleEventShoot;
+                TankNetClient.Instance.OnEventSkillCast -= HandleEventSkillCast;
                 TankNetClient.Instance.OnItemSpawn   -= HandleItemSpawn;
                 TankNetClient.Instance.OnItemDespawn -= HandleItemDespawn;
                 TankNetClient.Instance.Disconnect();
@@ -361,6 +369,10 @@ namespace Complete
             if (!m_OnlineMode && m_Tanks.Length > 0 && m_Tanks[0].m_Instance != null)
             {
                 GameUIManager.Instance.UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
+                
+                var tankSkills = m_Tanks[0].m_Instance.GetComponent<Complete.TankSkills>();
+                if (tankSkills == null) tankSkills = m_Tanks[0].m_Instance.AddComponent<Complete.TankSkills>();
+                tankSkills.m_IsLocalPlayer = true;
             }
         }
 
@@ -440,7 +452,7 @@ namespace Complete
                 if (kvp.Value != null) allTanks.Add(kvp.Value);
             }
 
-            // Collect all BulletHitVolume colliders
+            // Collect all BulletHitVolume colliders and pre-spawned Shield colliders
             var allHitColliders = new List<Collider>();
             for (int i = 0; i < allTanks.Count; i++)
             {
@@ -448,6 +460,21 @@ namespace Complete
                 if (hitVol != null)
                 {
                     var col = hitVol.GetComponent<Collider>();
+                    if (col != null) allHitColliders.Add(col);
+                }
+
+                // We don't collect shields per tank anymore because they are unparented
+            }
+
+            // Collect any pre-spawned shields anywhere in the scene (even if inactive)
+            var shields = Resources.FindObjectsOfTypeAll<Complete.Shield>();
+            for (int s = 0; s < shields.Length; s++)
+            {
+                // Only consider shields that are instantiated in the scene (not prefabs)
+                if (shields[s].gameObject.hideFlags == HideFlags.NotEditable || shields[s].gameObject.hideFlags == HideFlags.HideAndDontSave) continue;
+                if (shields[s].gameObject.scene.isLoaded)
+                {
+                    var col = shields[s].GetComponent<Collider>();
                     if (col != null) allHitColliders.Add(col);
                 }
             }
@@ -535,6 +562,10 @@ namespace Complete
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
 
             GameUIManager.Instance.UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
+
+            var tankSkills = m_Tanks[0].m_Instance.GetComponent<Complete.TankSkills>();
+            if (tankSkills == null) tankSkills = m_Tanks[0].m_Instance.AddComponent<Complete.TankSkills>();
+            tankSkills.m_IsLocalPlayer = true;
 
             // Register BulletHitVolume colliders into particle system triggers
             RegisterParticleTriggerColliders();
@@ -962,6 +993,37 @@ namespace Complete
             }
         }
 
+        private void HandleEventSkillCast(EventSkillCastPacket pkt)
+        {
+            Debug.Log($"[GameManager] Received S2C_EVENT_SKILL_CAST from Server for player {pkt.casterId}, skill: {pkt.skillName}");
+            if (pkt.casterId == m_MyPlayerId) return; // We already spawned our own skill visually
+
+            if (_remoteTanks.TryGetValue(pkt.casterId, out var go))
+            {
+                var skills = go.GetComponent<Complete.TankSkills>();
+                if (skills != null)
+                {
+                    Debug.Log($"[GameManager] Found TankSkills on remote tank {pkt.casterId}, calling RemoteCastSkill");
+                    if (pkt.isCharging != 0)
+                    {
+                        skills.RemoteStartChargeSkill(pkt.skillName, new Vector3(pkt.targetX, pkt.targetY, pkt.targetZ), new Vector3(pkt.dirX, 0f, pkt.dirZ));
+                    }
+                    else
+                    {
+                        skills.RemoteCastSkill(pkt.skillName, new Vector3(pkt.targetX, pkt.targetY, pkt.targetZ), new Vector3(pkt.dirX, 0f, pkt.dirZ));
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning($"[GameManager] TankSkills is NULL on remote tank {pkt.casterId}!");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[GameManager] Could not find remote tank with ID {pkt.casterId}");
+            }
+        }
+
         private void HandleItemSpawn(PacketSpawnItem pkt)
         {
             if (!_remoteItems.TryGetValue(pkt.itemId, out var go) || go == null)
@@ -1090,7 +1152,7 @@ namespace Complete
                     var explosion = go.GetComponent<ShellExplosion>();
                     if (explosion != null) explosion.enabled = false;
                     var col = go.GetComponent<Collider>();
-                    if (col != null) col.enabled = false;
+                    if (col != null) { col.enabled = true; col.isTrigger = true; }
 
                     _remoteBullets[bs.bulletId] = go;
 
@@ -1113,7 +1175,7 @@ namespace Complete
                                 var shellExplosion = go.GetComponent<ShellExplosion>();
                                 if (shellExplosion != null) shellExplosion.enabled = false;
                                 var shellCol = go.GetComponent<Collider>();
-                                if (shellCol != null) shellCol.enabled = false;
+                                if (shellCol != null) { shellCol.enabled = true; shellCol.isTrigger = true; }
                                 _remoteBullets[bs.bulletId] = go;
                             }
 
@@ -1162,6 +1224,10 @@ namespace Complete
         private void DestroyRemoteBullet(GameObject go)
         {
             if (go == null) return;
+
+            // Delegate to Shield to check if the bullet was despawned because it hit a shield
+            // We call this so the shield can play its block effect/ripple.
+            Complete.Shield.HandleRemoteBulletDespawn(go.transform.position, go.transform.forward);
 
             // Bullet's last snapshot position lags ~1 snapshot (50ms) behind the actual hit.
             // At 20-30 m/s that is 1-1.5 m of visual offset.
@@ -1220,6 +1286,7 @@ namespace Complete
             {
                 tm.m_NetworkTargetY = serverPos.y;
                 tm.m_HasNetworkTargetY = true;
+                tm.m_ServerSpeedMultiplier = ts.speedMultiplier / 100f;
             }
 
             // XZ error = khoảng cách giữa client prediction và server position.
@@ -1355,6 +1422,11 @@ namespace Complete
                 var remoteStealth = go.GetComponent<TankStealth>()
                                  ?? go.AddComponent<TankStealth>();
                 remoteStealth.IsLocalTank = false;
+
+                // TankSkills for remote tank (server-driven effects)
+                var remoteSkills = go.GetComponent<Complete.TankSkills>();
+                if (remoteSkills == null) remoteSkills = go.AddComponent<Complete.TankSkills>();
+                remoteSkills.m_IsLocalPlayer = false;
 
                 // Register BulletHitVolume colliders into particle system triggers
                 RegisterParticleTriggerColliders();

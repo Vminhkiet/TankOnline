@@ -12,10 +12,12 @@ namespace Complete
         public float m_MaxLifeTime = 2f;                    // The time in seconds before the shell is removed.
         public float m_ExplosionRadius = 5f;                // The maximum distance away from the explosion tanks can be and are still affected.
         [HideInInspector] public GameObject m_Owner;        // The tank that fired this shell.
+        [HideInInspector] public Vector3 m_SpawnPosition;   // The position where the shell was spawned.
 
 
         private void Start ()
         {
+            m_SpawnPosition = transform.position;
             // If it isn't destroyed by then, destroy the shell after it's lifetime.
             Destroy (gameObject, m_MaxLifeTime);
         }
@@ -23,11 +25,26 @@ namespace Complete
 
         private void OnTriggerEnter (Collider other)
         {
+            if (!enabled) return; // Prevent remote bullets from exploding locally
+
             // Prevent the shell from exploding if it hits the tank that fired it
             if (m_Owner != null && (other.gameObject == m_Owner || other.transform.IsChildOf(m_Owner.transform)))
             {
                 return;
             }
+
+            // Prevent the shell from exploding automatically on a Shield.
+            // Let the Shield script handle checking if the shell enters from outside and calling Explode() explicitly.
+            if (other.CompareTag("Shield") || other.gameObject.name.ToLower().Contains("shield") || other.GetComponent("Shield") != null)
+            {
+                return;
+            }
+
+            Explode();
+        }
+
+        public void Explode()
+        {
             // In online mode damage is server-authoritative — skip local damage to avoid
             // health bar flickering before the next snapshot corrects the value.
             bool online = TankNet.TankNetClient.Instance != null;

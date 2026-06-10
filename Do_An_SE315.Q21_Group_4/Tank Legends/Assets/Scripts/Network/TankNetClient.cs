@@ -31,6 +31,7 @@ namespace TankNet
         public event Action<SnapshotData> OnSnapshot;
         public event Action<MatchEndData> OnMatchEnd;
         public event Action<EventShootPacket> OnEventShoot;
+        public event Action<EventSkillCastPacket> OnEventSkillCast;
         public event Action<ushort, string, uint> OnForceLogout; // (code, message, disconnectAfterMs)
         public event Action<PacketSpawnItem> OnItemSpawn;
         public event Action<PacketDespawnItem> OnItemDespawn;
@@ -201,6 +202,13 @@ namespace TankNet
             // Do NOT set _pendingShoot — SendTick would double-send and fire a second bullet
         }
 
+        public void SendCastSkill(string skillName, Vector3 target, Vector3 dir, bool isCharging = false)
+        {
+            if (!_running) return;
+            byte[] pkt = PacketBuilder.BuildCastSkill(MatchId, skillName, target, dir, isCharging, PlayerId);
+            try { _udp.Send(pkt, pkt.Length, _server); } catch { }
+        }
+
         // ── Send tick (called by InvokeRepeating at 20 Hz) ───────────────────
 
         private void SendTick()
@@ -302,6 +310,16 @@ namespace TankNet
                         if (pkt.matchId != MatchId) continue;
 
                         UnityMainThread.Post(() => OnEventShoot?.Invoke(pkt));
+                        continue;
+                    }
+
+                    if ((Opcode)opcode == Opcode.S2C_EVENT_SKILL_CAST)
+                    {
+                        if (data.Length < Marshal.SizeOf<EventSkillCastPacket>()) continue;
+                        var pkt = BytesToStruct<EventSkillCastPacket>(data, 0);
+                        if (pkt.matchId != MatchId) continue;
+
+                        UnityMainThread.Post(() => OnEventSkillCast?.Invoke(pkt));
                         continue;
                     }
 

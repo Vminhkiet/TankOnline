@@ -15,6 +15,15 @@ struct Item {
     Vector3 pos;
 };
 
+struct ActiveShield {
+    uint32_t ownerId;
+    Vector3 position;
+    float radius;
+    float health;
+    float timeToLive;
+    float slowPercent;
+};
+
 class GameWorld {
 public:
     GameWorld();
@@ -29,6 +38,7 @@ public:
     void updateBullets(float deltaTime);    // bullet move + CCD wall hit + tank hit
     void runPhysics(float deltaTime);       // tank movement, gravity, PhysicsWorld::Tick, corrections
     void spawnItems();                      // item spawning logic (called after runPhysics)
+    void castSkill(uint32_t playerId, const PacketCastSkill& pkt);
 
     // Check win/timeout condition. Returns Running while game is still active.
     MatchOutcome checkOutcome(float elapsed, float maxDuration,
@@ -39,6 +49,7 @@ public:
     std::vector<EventShootPacket> getShootEvents();
     std::vector<PacketSpawnItem> getItemSpawnEvents();
     std::vector<PacketDespawnItem> getItemDespawnEvents();
+    std::vector<EventSkillCastPacket> getSkillCastEvents();
 
     size_t playerCount()      const { return _tanks.size(); }
     size_t activeBulletCount() const {
@@ -81,6 +92,11 @@ private:
     std::vector<Item>                     _activeItems;
     std::vector<PacketSpawnItem>          _itemSpawnEvents;
     std::vector<PacketDespawnItem>        _itemDespawnEvents;
+    std::vector<EventSkillCastPacket>     _skillCastEvents;
+    std::vector<ActiveShield>             _activeShields;
+
+    // Skill cooldown tracking: playerId -> skillName -> nextAvailableTime
+    std::unordered_map<uint32_t, std::unordered_map<std::string, float>> _skillCooldowns;
 
     void syncColliders();
     void applyPhysicsResults(float deltaTime);

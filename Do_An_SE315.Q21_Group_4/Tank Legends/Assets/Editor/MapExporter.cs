@@ -53,6 +53,7 @@ public class MapExporter
             heightmaps = heightmaps,
             spawns    = spawns,
             tanks     = BuildTanksConfig(),
+            skills    = BuildSkillsConfig(),
             bullet    = BuildBulletConfig()
         };
 
@@ -416,7 +417,9 @@ public class MapExporter
                         damage = def.RealStats.Damage,
                         fire_range = def.RealStats.FireRange,
                         magazine_capacity = def.RealStats.MagazineCapacity,
-                        reload_time = def.RealStats.ReloadTime
+                        reload_time = def.RealStats.ReloadTime,
+                        speed_reduction_while_shooting = def.RealStats.SpeedReductionWhileShooting,
+                        turret_rotation_speed = def.RealStats.TurretRotationSpeed
                     });
                     Debug.Log($"[MapExporter] Exported Tank {def.TankName} extents: ({ex:F4}, {ey:F4}, {ez:F4}) offset: ({localCenter.x:F4}, {localCenter.y:F4}, {localCenter.z:F4}) barrels: {barrelOffsets.Count}");
                 }
@@ -429,6 +432,38 @@ public class MapExporter
             list.Add(new TankConfigData { name = "default", collider_extents = new Vec3Data(0.9f, 1.0f, 1.2f), collider_offset = new Vec3Data(0, 1.0f, 0) });
         }
         
+        return list;
+    }
+
+    static List<SkillConfigData> BuildSkillsConfig()
+    {
+        List<SkillConfigData> list = new List<SkillConfigData>();
+        string[] guids = AssetDatabase.FindAssets("t:SkillData");
+        foreach (string guid in guids)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            Complete.Skills.SkillData skill = AssetDatabase.LoadAssetAtPath<Complete.Skills.SkillData>(path);
+            if (skill != null)
+            {
+                List<float> pList = new List<float>();
+                if (skill.parameters != null) pList.AddRange(skill.parameters);
+
+                list.Add(new SkillConfigData
+                {
+                    name = skill.name,
+                    skill_type = (int)skill.skillType,
+                    cooldown = skill.cooldown,
+                    cast_range = skill.castRange,
+                    radius = skill.radius,
+                    length = skill.length,
+                    angle = skill.angle,
+                    duration = skill.duration,
+                    parameters = pList,
+                    charge_time = skill.chargeTime,
+                    speed_reduction_percent = skill.speedReductionPercent
+                });
+            }
+        }
         return list;
     }
 
@@ -461,6 +496,7 @@ public class MapExporter
         public List<HeightmapData> heightmaps;
         public List<SpawnData> spawns;
         public List<TankConfigData> tanks;
+        public List<SkillConfigData> skills;
         public BulletConfigData bullet;
     }
 
@@ -486,6 +522,23 @@ public class MapExporter
         public float fire_range;
         public int magazine_capacity;
         public float reload_time;
+        public float speed_reduction_while_shooting;
+        public float turret_rotation_speed;
+    }
+
+    [System.Serializable]
+    public class SkillConfigData {
+        public string name;
+        public int skill_type;
+        public float cooldown;
+        public float cast_range;
+        public float radius;
+        public float length;
+        public float angle;
+        public float duration;
+        public List<float> parameters;
+        public float charge_time;
+        public float speed_reduction_percent;
     }
 
     [System.Serializable]

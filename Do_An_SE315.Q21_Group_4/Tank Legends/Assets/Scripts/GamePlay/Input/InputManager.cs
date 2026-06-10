@@ -24,6 +24,7 @@ namespace Complete
         [SerializeField] private bool m_InvertJoystickVertical;
         [SerializeField] private bool m_JoystickRelativeToCamera = true;
         [SerializeField] private VariableJoystick m_FireJoystick;
+        [SerializeField] private VariableJoystick m_SkillJoystick;
         [SerializeField] private float m_JoystickDeadZone = 0.1f;
 
         private bool m_UIFireHeld;
@@ -32,6 +33,12 @@ namespace Complete
         private bool m_FireUp;
         private bool m_FireHeld;
         private bool m_FireUiHooked;
+
+        private bool m_UISkillHeld;
+        private bool m_UISkillHeldPrev;
+        private bool m_SkillDown;
+        private bool m_SkillUp;
+        private bool m_SkillHeld;
 
         public bool IsMobileMode => m_InputMode == InputMode.Mobile;
 
@@ -78,6 +85,9 @@ namespace Complete
 
             if (m_FireJoystick != null)
                 m_FireJoystick.gameObject.SetActive (showMobileControls);
+
+            if (m_SkillJoystick != null)
+                m_SkillJoystick.gameObject.SetActive (showMobileControls);
         }
 
         private void Update ()
@@ -98,10 +108,21 @@ namespace Complete
                 m_UIFireHeld = dragMagnitude > m_JoystickDeadZone;
             }
 
+            if (m_SkillJoystick != null)
+            {
+                float skillDragMagnitude = new Vector2 (m_SkillJoystick.Horizontal, m_SkillJoystick.Vertical).magnitude;
+                m_UISkillHeld = skillDragMagnitude > m_JoystickDeadZone;
+            }
+
             m_FireHeld = m_UIFireHeld;
             m_FireDown = m_FireHeld && !m_UIFireHeldPrev;
             m_FireUp = !m_FireHeld && m_UIFireHeldPrev;
             m_UIFireHeldPrev = m_UIFireHeld;
+
+            m_SkillHeld = m_UISkillHeld;
+            m_SkillDown = m_SkillHeld && !m_UISkillHeldPrev;
+            m_SkillUp = !m_SkillHeld && m_UISkillHeldPrev;
+            m_UISkillHeldPrev = m_UISkillHeld;
         }
 
         public bool TryGetMobileFireDirection (out Vector3 direction, out float magnitude)
@@ -113,6 +134,40 @@ namespace Complete
                 return false;
 
             Vector2 joystickInput = new Vector2 (m_FireJoystick.Horizontal, m_FireJoystick.Vertical);
+            magnitude = Mathf.Clamp01 (joystickInput.magnitude);
+            if (magnitude <= m_JoystickDeadZone)
+            {
+                magnitude = 0f;
+                return false;
+            }
+
+            Vector3 right = Vector3.right;
+            Vector3 forward = Vector3.forward;
+
+            if (m_JoystickRelativeToCamera && Camera.main != null)
+            {
+                right = Camera.main.transform.right;
+                right.y = 0f;
+                right.Normalize ();
+
+                forward = Camera.main.transform.forward;
+                forward.y = 0f;
+                forward.Normalize ();
+            }
+
+            direction = (right * joystickInput.x + forward * joystickInput.y).normalized;
+            return direction.sqrMagnitude > 0.001f;
+        }
+
+        public bool TryGetMobileSkillDirection (out Vector3 direction, out float magnitude)
+        {
+            direction = Vector3.zero;
+            magnitude = 0f;
+
+            if (m_InputMode != InputMode.Mobile || m_SkillJoystick == null)
+                return false;
+
+            Vector2 joystickInput = new Vector2 (m_SkillJoystick.Horizontal, m_SkillJoystick.Vertical);
             magnitude = Mathf.Clamp01 (joystickInput.magnitude);
             if (magnitude <= m_JoystickDeadZone)
             {
@@ -219,6 +274,26 @@ namespace Complete
             fireHeld = inputFireHeld || m_FireHeld;
             fireDown = inputFireDown || m_FireDown;
             fireUp = (inputFireUp || m_FireUp) && !fireHeld;
+        }
+
+        public void GetTankSkillInput(out bool skillDown, out bool skillHeld, out bool skillUp)
+        {
+            // For PC, could bind to a specific key like 'E' or 'Space'
+            bool inputSkillDown = Input.GetKeyDown(KeyCode.E);
+            bool inputSkillHeld = Input.GetKey(KeyCode.E);
+            bool inputSkillUp = Input.GetKeyUp(KeyCode.E);
+
+            if (m_InputMode == InputMode.PC)
+            {
+                skillDown = inputSkillDown;
+                skillHeld = inputSkillHeld;
+                skillUp = inputSkillUp;
+                return;
+            }
+
+            skillHeld = inputSkillHeld || m_SkillHeld;
+            skillDown = inputSkillDown || m_SkillDown;
+            skillUp = (inputSkillUp || m_SkillUp) && !skillHeld;
         }
     }
 }
