@@ -54,6 +54,8 @@ void GameWorld::addPlayer(uint32_t playerId, const Vector3& spawnPos, const Tank
     finalStats.fireRange = cfg.fireRange;
     finalStats.magazineCapacity = cfg.magazineCapacity;
     finalStats.reloadTime = cfg.reloadTime;
+    finalStats.speedReductionWhileShooting = cfg.speedReductionWhileShooting;
+    finalStats.turretRotationSpeed = cfg.turretRotationSpeed;
 
     _tanks.emplace(playerId, Tank(playerId, spawnPos, finalStats));
 

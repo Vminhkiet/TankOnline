@@ -119,6 +119,8 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
                 if (t.contains("fire_range"))       cfg.fireRange     = t["fire_range"].get<float>();
                 if (t.contains("magazine_capacity"))cfg.magazineCapacity = t["magazine_capacity"].get<int>();
                 if (t.contains("reload_time"))      cfg.reloadTime    = t["reload_time"].get<float>();
+                if (t.contains("speed_reduction_while_shooting")) cfg.speedReductionWhileShooting = t["speed_reduction_while_shooting"].get<float>();
+                if (t.contains("turret_rotation_speed")) cfg.turretRotationSpeed = t["turret_rotation_speed"].get<float>();
                 _tankConfigs[name] = cfg;
             }
         }

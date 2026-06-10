@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -25,8 +26,9 @@ public class TankDefinitionSO : ScriptableObject
     [SerializeField] private TankStats stats;
     [SerializeField] private WeaponType weaponType = WeaponType.Projectile;
 
-    [Header("Special Ability")]
-    [SerializeField] private TankSpecialAbility specialAbility;
+    [Header("Skills")]
+    [Tooltip("Danh sách các kỹ năng của Tank này (Kéo thả các file SkillData ScriptableObject vào đây).")]
+    [SerializeField] private List<Complete.Skills.SkillData> skills = new List<Complete.Skills.SkillData>();
 
     [Header("Real Gameplay Stats")]
     [SerializeField] private RealGameplayStats realStats;
@@ -41,7 +43,7 @@ public class TankDefinitionSO : ScriptableObject
     public Vector3 PreviewLocalScale => previewLocalScale == Vector3.zero ? Vector3.one : previewLocalScale;
     public TankStats Stats => stats;
     public WeaponType WeaponType => weaponType;
-    public TankSpecialAbility SpecialAbility => specialAbility;
+    public List<Complete.Skills.SkillData> Skills => skills;
     public RealGameplayStats RealStats => realStats;
 
 #if UNITY_EDITOR
@@ -128,6 +130,15 @@ public struct RealGameplayStats
     [Tooltip("Thời gian nạp đạn đầy băng (giây)")]
     [SerializeField] private float reloadTime;
 
+    [Header("Shooting Movement")]
+    [Tooltip("Phần trăm tốc độ bị giảm khi bắn đạn thường (0 = chạy bình thường, 100 = đứng yên).")]
+    [Range(0f, 100f)]
+    [SerializeField] private float speedReductionWhileShooting;
+
+    [Header("Turret")]
+    [Tooltip("Tốc độ xoay nòng súng (độ/giây). Mặc định là 180.")]
+    [SerializeField] private float turretRotationSpeed;
+
     public float MaxHealth => maxHealth == 0f ? 100f : maxHealth;
     public float MovementSpeed => movementSpeed == 0f ? 12f : movementSpeed;
     public float FireRate => fireRate == 0f ? 1.5f : fireRate;
@@ -135,19 +146,8 @@ public struct RealGameplayStats
     public float FireRange => fireRange == 0f ? 30f : fireRange;
     public int MagazineCapacity => magazineCapacity == 0 ? 1 : magazineCapacity;
     public float ReloadTime => reloadTime == 0f ? 2.0f : reloadTime;
-}
-
-[Serializable]
-public struct TankSpecialAbility
-{
-    [SerializeField] private string abilityName;
-    [SerializeField] private Sprite icon;
-    [TextArea(2, 5)]
-    [SerializeField] private string description;
-
-    public string AbilityName => abilityName;
-    public Sprite Icon => icon;
-    public string Description => description;
+    public float SpeedReductionWhileShooting => speedReductionWhileShooting;
+    public float TurretRotationSpeed => turretRotationSpeed == 0f ? 180f : turretRotationSpeed;
 }
 
 public enum TankStatType

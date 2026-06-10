@@ -511,13 +511,27 @@ public class TankSelectionManager : MonoBehaviour
         tankNameText.SetText(tankData.TankName);
         descriptionText.SetText(GetDisplayDescription(tankData));
         priceText.SetText(FormatPrice(GetDisplayPrice(tankData)));
-        abilityNameText.SetText(tankData.SpecialAbility.AbilityName);
-        abilityDescriptionText.SetText(tankData.SpecialAbility.Description);
-
-        if (abilityIcon != null)
+        if (tankData.Skills != null && tankData.Skills.Count > 0 && tankData.Skills[0] != null)
         {
-            abilityIcon.sprite = tankData.SpecialAbility.Icon;
-            abilityIcon.enabled = tankData.SpecialAbility.Icon != null;
+            var firstSkill = tankData.Skills[0];
+            abilityNameText.SetText(firstSkill.skillName);
+            abilityDescriptionText.SetText(firstSkill.description);
+
+            if (abilityIcon != null)
+            {
+                abilityIcon.sprite = firstSkill.icon;
+                abilityIcon.enabled = firstSkill.icon != null;
+            }
+        }
+        else
+        {
+            abilityNameText.SetText("No Skill");
+            abilityDescriptionText.SetText("This tank has no special skill assigned.");
+            if (abilityIcon != null)
+            {
+                abilityIcon.sprite = null;
+                abilityIcon.enabled = false;
+            }
         }
 
         ApplyStats(tankData.Stats);

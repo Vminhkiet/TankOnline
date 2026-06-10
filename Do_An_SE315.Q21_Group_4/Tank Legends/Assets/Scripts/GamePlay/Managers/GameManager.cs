@@ -223,11 +223,8 @@ namespace Complete
                 if (_remoteSnaps.TryGetValue(kvp.Key, out var buf))
                 {
                     _remoteShooting.TryGetValue(kvp.Key, out var shooting);
-                    Vector3 oldPos = kvp.Value.transform.position;
-                    ApplyInterp(buf, kvp.Value.transform, renderTime, shooting);
-                    Vector3 newPos = kvp.Value.transform.position;
+                    bool isMoving = ApplyInterp(buf, kvp.Value.transform, renderTime, shooting);
 
-                    bool isMoving = Vector3.Distance(oldPos, newPos) > 0.01f;
                     if (_remoteAnimation.TryGetValue(kvp.Key, out var anim) && anim != null)
                         anim.SetMoving(isMoving);
                 }
@@ -252,9 +249,9 @@ namespace Complete
             }
         }
 
-        private static void ApplyInterp(List<SnapEntry> buf, Transform tr, float renderTime, Complete.TankShooting shooting)
+        private static bool ApplyInterp(List<SnapEntry> buf, Transform tr, float renderTime, Complete.TankShooting shooting)
         {
-            if (buf.Count == 0) return;
+            if (buf.Count == 0) return false;
 
             // Find two entries bracketing renderTime
             int prev = -1, next = -1;
@@ -265,18 +262,21 @@ namespace Complete
             }
 
             float currentTurretYaw = 0f;
+            bool isMoving = false;
 
-            if (prev == -1)      // all entries are in the future — show oldest
+            if (prev == -1)      // all entries are in the future - show oldest
             { 
                 tr.position = buf[0].pos; 
                 tr.rotation = buf[0].rot; 
                 currentTurretYaw = buf[0].turretYaw;
+                isMoving = false;
             }
-            else if (next == -1) // all entries are in the past — show newest
+            else if (next == -1) // all entries are in the past - show newest
             { 
                 tr.position = buf[prev].pos; 
                 tr.rotation = buf[prev].rot; 
                 currentTurretYaw = buf[prev].turretYaw;
+                isMoving = false;
             }
             else                 // interpolate between prev and next
             {
@@ -293,6 +293,10 @@ namespace Complete
                 else if (prevYaw - nextYaw > Mathf.PI) nextYaw += 2f * Mathf.PI;
                 
                 currentTurretYaw = Mathf.Lerp(prevYaw, nextYaw, f);
+                
+                float dist = Vector3.Distance(buf[prev].pos, buf[next].pos);
+                float angle = Quaternion.Angle(buf[prev].rot, buf[next].rot);
+                isMoving = (dist / span) > 0.1f || (angle / span) > 5f;
             }
 
             if (shooting != null)
@@ -301,6 +305,8 @@ namespace Complete
             // Trim entries older than renderTime - 0.2s (keep a small tail)
             while (buf.Count > 2 && buf[1].t < renderTime - 0.2f)
                 buf.RemoveAt(0);
+
+            return isMoving;
         }
 
         private void OnDestroy()
@@ -361,6 +367,10 @@ namespace Complete
             if (!m_OnlineMode && m_Tanks.Length > 0 && m_Tanks[0].m_Instance != null)
             {
                 GameUIManager.Instance.UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
+                
+                var tankSkills = m_Tanks[0].m_Instance.GetComponent<Complete.TankSkills>();
+                if (tankSkills == null) tankSkills = m_Tanks[0].m_Instance.AddComponent<Complete.TankSkills>();
+                tankSkills.m_IsLocalPlayer = true;
             }
         }
 
@@ -535,6 +545,10 @@ namespace Complete
             m_CameraControl.m_Targets = new Transform[] { m_Tanks[0].m_Instance.transform };
 
             GameUIManager.Instance.UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
+
+            var tankSkills = m_Tanks[0].m_Instance.GetComponent<Complete.TankSkills>();
+            if (tankSkills == null) tankSkills = m_Tanks[0].m_Instance.AddComponent<Complete.TankSkills>();
+            tankSkills.m_IsLocalPlayer = true;
 
             // Register BulletHitVolume colliders into particle system triggers
             RegisterParticleTriggerColliders();

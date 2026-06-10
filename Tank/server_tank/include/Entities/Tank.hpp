@@ -15,6 +15,7 @@ public:
     float    yaw = 0.f;   // rotation around Y axis (radians)
     float    targetYaw = 0.f; // authoritative yaw from client, clamped by server
     float    turretYaw = 0.f; // rotation of the turret (radians)
+    float    targetTurretYaw = 0.f; // authoritative turret yaw from client, clamped by server
     Vector3  velocity;    // world-space velocity (set from input each tick)
     float    velocityY = 0.f; // vertical velocity (gravity)
     int      health;
@@ -23,7 +24,7 @@ public:
     float    wantsShootForce = 20.f;  // bullet speed (m/s) for next shot
     float    wantsShootYaw   = 0.f;   // actual aiming yaw of the turret
     uint8_t  wantsShootBarrels = 1;   // number of barrels
-    float    shootFreezeTimer = 0.f;  // timer tracking freeze duration
+    float    shootSlowTimer = 0.f;    // timer tracking slow duration
     float    fireCooldownTimer = 0.f; // timer for strict server-side fire rate enforcement
 
     int      currentAmmo = 1;         // current shots in magazine

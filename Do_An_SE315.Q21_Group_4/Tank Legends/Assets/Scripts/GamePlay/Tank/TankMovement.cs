@@ -41,6 +41,10 @@ namespace Complete
         private float m_OriginalPitch;              // The pitch of the audio source at the start of the scene.
         private ParticleSystem[] m_particleSystems; // References to all the particles systems used by the Tanks
         [HideInInspector] public bool m_IsInputFrozen = false;
+        [HideInInspector] public float m_SkillSpeedMultiplier = 1f;
+        [HideInInspector] public float m_ShootSpeedMultiplier = 1f;
+        
+        public float EffectiveSpeedMultiplier => Mathf.Min(m_SkillSpeedMultiplier, m_ShootSpeedMultiplier);
 
         private Vector3 m_CachedColliderCenter = new Vector3(0, 0.85f, 0);
         private Vector3 m_CachedColliderExtents = new Vector3(0.75f, 0.85f, 0.9f);
@@ -299,13 +303,13 @@ namespace Complete
             if (mx != 0)
             {
                 m_Rigidbody.MoveRotation(m_Rigidbody.rotation *
-                    Quaternion.Euler(0f, mx * m_TurnSpeed * Time.fixedDeltaTime, 0f));
+                    Quaternion.Euler(0f, mx * (m_TurnSpeed * EffectiveSpeedMultiplier) * Time.fixedDeltaTime, 0f));
             }
 
             // 4. Apply player movement
             if (mz != 0)
             {
-                Vector3 move = transform.forward * mz * m_Speed * Time.fixedDeltaTime;
+                Vector3 move = transform.forward * mz * (m_Speed * EffectiveSpeedMultiplier) * Time.fixedDeltaTime;
 
                 // Throttle: thiết bị yếu chỉ cast mỗi 2 tick, tick xen kẽ dùng kết quả cache
                 bool doFullCast = !s_LowEndPhysics || (m_PhysicsTickCounter % 2 == 0);
@@ -501,24 +505,24 @@ namespace Complete
         private void MoveAndTurnInMobileDirection()
         {
             Quaternion targetRotation = Quaternion.LookRotation(m_MobileMoveDirection, Vector3.up);
-            Quaternion newRotation = Quaternion.RotateTowards(m_Rigidbody.rotation, targetRotation, m_TurnSpeed * Time.fixedDeltaTime);
+            Quaternion newRotation = Quaternion.RotateTowards(m_Rigidbody.rotation, targetRotation, (m_TurnSpeed * EffectiveSpeedMultiplier) * Time.fixedDeltaTime);
             m_Rigidbody.MoveRotation(newRotation);
 
-            Vector3 movement = (newRotation * Vector3.forward) * m_MovementInputValue * m_Speed * Time.fixedDeltaTime;
+            Vector3 movement = (newRotation * Vector3.forward) * m_MovementInputValue * (m_Speed * EffectiveSpeedMultiplier) * Time.fixedDeltaTime;
             m_Rigidbody.MovePosition(m_Rigidbody.position + movement);
         }
 
 
         private void Move()
         {
-            Vector3 movement = transform.forward * m_MovementInputValue * m_Speed * Time.fixedDeltaTime;
+            Vector3 movement = transform.forward * m_MovementInputValue * (m_Speed * EffectiveSpeedMultiplier) * Time.fixedDeltaTime;
             m_Rigidbody.MovePosition(m_Rigidbody.position + movement);
         }
 
 
         private void Turn()
         {
-            float turn = m_TurnInputValue * m_TurnSpeed * Time.fixedDeltaTime;
+            float turn = m_TurnInputValue * (m_TurnSpeed * EffectiveSpeedMultiplier) * Time.fixedDeltaTime;
             Quaternion turnRotation = Quaternion.Euler(0f, turn, 0f);
             m_Rigidbody.MoveRotation(m_Rigidbody.rotation * turnRotation);
         }

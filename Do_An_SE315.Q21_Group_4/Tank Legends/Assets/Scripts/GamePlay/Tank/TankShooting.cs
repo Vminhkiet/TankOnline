@@ -31,10 +31,6 @@ namespace Complete
         [Header("Turret and Shooting Direction")]
         public Transform m_TankHead;                // The turret / head object of the tank.
 
-        [Header("Movement Freeze Option")]
-        public bool m_CanMoveWhileShooting = true;  // If false, the tank will freeze after shooting.
-        public float m_MovementFreezeDuration = 0.5f; // The duration of the freeze in seconds.
-
         [Header("Fire Rate / Cooldown")]
         [Tooltip("Number of shots per second")]
         public float m_FireRate = 1.5f;             // Number of shots per second.
@@ -55,6 +51,8 @@ namespace Complete
         private float m_RemoteAimTimer = 0f;        // Timer for remote aiming
         private Quaternion m_RemoteTurretTarget;    // Smooth target rotation for remote turret
         private bool m_HasRemoteTurretTarget = false;
+
+        private Vector3 m_SkillTargetDir = Vector3.zero; // Used by TankSkills to override turret rotation
 
         private string m_FireButton;                // The input axis that is used for launching shells.
         private float m_CurrentLaunchForce;         // The force that will be given to the shell when the fire button is released.
@@ -98,6 +96,11 @@ namespace Complete
                 return true;
             }
             return false;
+        }
+
+        public void OverrideTurretTarget(Vector3 dir)
+        {
+            m_SkillTargetDir = dir;
         }
 
         public void TriggerReload()
@@ -333,8 +336,9 @@ namespace Complete
                 // Smooth remote turret rotation
                 if (m_HasRemoteTurretTarget && m_TankHead != null)
                 {
+                    float turretSpeed = m_Definition != null ? m_Definition.RealStats.TurretRotationSpeed : 180f;
                     m_TankHead.rotation = Quaternion.RotateTowards(
-                        m_TankHead.rotation, m_RemoteTurretTarget, 720f * Time.deltaTime);
+                        m_TankHead.rotation, m_RemoteTurretTarget, turretSpeed * Time.deltaTime);
                 }
 
                 if (m_HitscanVisualTimer > 0f)
@@ -350,10 +354,10 @@ namespace Complete
 
             if (m_IsReloading)
             {
-                // Allow movement during reload even for tanks that can't move while shooting
-                if (!m_CanMoveWhileShooting && m_Movement != null)
+                // Allow normal movement during reload
+                if (m_Movement != null)
                 {
-                    m_Movement.m_IsInputFrozen = false;
+                    m_Movement.m_ShootSpeedMultiplier = 1f;
                 }
 
                 m_ReloadTimer -= Time.deltaTime;
@@ -403,16 +407,33 @@ namespace Complete
                 SetHitscanVisualsActive(isTryingToFire);
             }
 
-            if (!m_CanMoveWhileShooting && m_Movement != null)
+            if (m_Movement != null)
             {
-                m_Movement.m_IsInputFrozen = isTryingToFire;
+                if (isTryingToFire)
+                {
+                    float multiplier = 1f;
+                    if (m_Definition != null)
+                    {
+                        multiplier = 1f - (m_Definition.RealStats.SpeedReductionWhileShooting / 100f);
+                    }
+                    m_Movement.m_ShootSpeedMultiplier = Mathf.Clamp01(multiplier);
+                }
+                else
+                {
+                    m_Movement.m_ShootSpeedMultiplier = 1f;
+                }
             }
 
             // Head rotation based on shooting direction
             Vector3 shootDir = Vector3.zero;
             bool hasTargetDir = false;
 
-            if (InputManager.Instance != null && InputManager.Instance.IsMobileMode)
+            if (m_SkillTargetDir != Vector3.zero)
+            {
+                shootDir = m_SkillTargetDir;
+                hasTargetDir = true;
+            }
+            else if (InputManager.Instance != null && InputManager.Instance.IsMobileMode)
             {
                 hasTargetDir = InputManager.Instance.TryGetMobileFireDirection(out shootDir, out _);
             }
@@ -447,7 +468,8 @@ namespace Complete
                 Quaternion targetTurretRot = targetMuzzleRot * Quaternion.Inverse(m_TurretToMuzzleOffset);
 
                 // Smoothly rotate the turret bone in world space
-                m_TankHead.rotation = Quaternion.RotateTowards(m_TankHead.rotation, targetTurretRot, 500f * Time.deltaTime);
+                float turretSpeed = m_Definition != null ? m_Definition.RealStats.TurretRotationSpeed : 180f;
+                m_TankHead.rotation = Quaternion.RotateTowards(m_TankHead.rotation, targetTurretRot, turretSpeed * Time.deltaTime);
             }
 
             if (m_HoldToCharge)
@@ -543,11 +565,6 @@ namespace Complete
             // Set the fired flag so only Fire is only called once.
             m_Fired = true;
             StopChargingEffect();
-
-            if (!m_CanMoveWhileShooting && m_Movement != null)
-            {
-                m_Movement.FreezeMovement(m_MovementFreezeDuration);
-            }
 
             var net = TankNetClient.Instance;
             if (net != null && net.IsConnected)

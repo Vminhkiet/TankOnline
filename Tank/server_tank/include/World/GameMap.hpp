@@ -34,6 +34,8 @@ public:
         float fireRange = 50.f;
         int magazineCapacity = 1;
         float reloadTime = 2.0f;
+        float speedReductionWhileShooting = 0.f;
+        float turretRotationSpeed = 180.f;
     };
 
     struct BulletConfig {
