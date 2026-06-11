@@ -180,6 +180,66 @@ namespace Complete
             }
         }
 
+        private void AdjustHitscanVisualsLifetime()
+        {
+            if (m_FireTransforms == null) return;
+            
+            float maxRange = m_Definition != null ? m_Definition.RealStats.FireRange : 20f;
+
+            for (int i = 0; i < m_FireTransforms.Length; i++)
+            {
+                if (m_FireTransforms[i] != null && m_FireTransforms[i].gameObject.activeSelf)
+                {
+                    float minT = maxRange;
+                    
+                    foreach (var shield in Complete.Shield.ActiveShields)
+                    {
+                        if (shield == null) continue;
+                        
+                        Vector3 mPos = m_FireTransforms[i].position;
+                        Vector3 dir = m_FireTransforms[i].forward;
+                        Vector3 sPos = shield.transform.position;
+                        
+                        Collider coll = shield.GetComponent<Collider>();
+                        float radius = coll != null ? coll.bounds.extents.x : shield.transform.localScale.x * 0.5f;
+                        
+                        float distToCenterSq = (sPos - mPos).sqrMagnitude;
+                        if (distToCenterSq < radius * radius) 
+                        {
+                            continue; // Inside the shield, ignore
+                        }
+                        
+                        Vector3 mToS = sPos - mPos;
+                        float t = Vector3.Dot(mToS, dir);
+                        if (t > 0f)
+                        {
+                            float distToRaySq = distToCenterSq - t * t;
+                            if (distToRaySq <= radius * radius)
+                            {
+                                float halfChord = Mathf.Sqrt(radius * radius - distToRaySq);
+                                float tEnter = t - halfChord;
+                                if (tEnter > 0f && tEnter < minT)
+                                {
+                                    minT = tEnter;
+                                }
+                            }
+                        }
+                    }
+
+                    var psList = m_FireTransforms[i].GetComponentsInChildren<ParticleSystem>();
+                    foreach (var ps in psList)
+                    {
+                        var main = ps.main;
+                        float speed = main.startSpeed.constant;
+                        if (speed > 0.01f)
+                        {
+                            main.startLifetime = minT / speed;
+                        }
+                    }
+                }
+            }
+        }
+
         private void SetChargingEffectsActive(bool active)
         {
             if (m_ChargingEffects == null) return;
@@ -348,6 +408,10 @@ namespace Complete
                     {
                         SetHitscanVisualsActive(false);
                     }
+                    else
+                    {
+                        AdjustHitscanVisualsLifetime();
+                    }
                 }
                 return;
             }
@@ -405,6 +469,10 @@ namespace Complete
             if (isHitscan)
             {
                 SetHitscanVisualsActive(isTryingToFire);
+                if (isTryingToFire)
+                {
+                    AdjustHitscanVisualsLifetime();
+                }
             }
 
             if (m_Movement != null)

@@ -261,6 +261,23 @@ struct PacketDespawnItem {
     uint32_t itemId = 0;
 };
 
+// S2C_EVENT_START_CHARGE_SKILL = 2011
+struct EventStartChargeSkillPacket {
+    uint32_t matchId = 0;
+    uint16_t opcode = 0; // Opcode::S2C_EVENT_START_CHARGE_SKILL
+    uint32_t casterId = 0;
+    char skillName[32] = {0};
+};
+
+// S2C_EVENT_SHIELD_HIT = 2012
+struct EventShieldHitPacket {
+    uint32_t matchId = 0;
+    uint16_t opcode = 0; // Opcode::S2C_EVENT_SHIELD_HIT
+    uint32_t shieldOwnerId = 0;
+    uint32_t bulletId = 0; // 0 for hitscan
+    float hitX = 0.f, hitY = 0.f, hitZ = 0.f;
+};
+
 // S2C_EVENT_SKILL_CAST = 2010
 struct EventSkillCastPacket {
     uint32_t matchId = 0;

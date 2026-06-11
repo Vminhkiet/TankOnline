@@ -11,6 +11,7 @@ namespace Complete
         [Tooltip("Gắn một Transform (như nòng súng hoặc đầu xe) để làm vị trí gốc cho skill. Nếu để trống sẽ dùng tâm của xe.")]
         public Transform m_SkillSpawnPoint;
         public bool m_IsLocalPlayer = false;
+        public uint OwnerId;
 
         private SkillIndicator m_Indicator;
         private SkillBase m_SkillInstance;

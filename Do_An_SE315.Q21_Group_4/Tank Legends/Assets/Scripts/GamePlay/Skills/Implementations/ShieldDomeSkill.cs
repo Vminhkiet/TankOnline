@@ -66,6 +66,7 @@ namespace Complete.Skills
                 if (shieldScript != null)
                 {
                     shieldScript.DeactivateAfter(destroyTime);
+                    if (ts != null) { shieldScript.OwnerId = ts.OwnerId; }
                 }
             }
 

@@ -199,6 +199,8 @@ namespace Complete
                     TankNetClient.Instance.OnForceLogout += HandleForceLogout;
                     TankNetClient.Instance.OnEventShoot  += HandleEventShoot;
                     TankNetClient.Instance.OnEventSkillCast += HandleEventSkillCast;
+                    TankNetClient.Instance.OnEventStartChargeSkill += HandleEventStartChargeSkill;
+                    TankNetClient.Instance.OnEventShieldHit += HandleEventShieldHit;
                     TankNetClient.Instance.OnItemSpawn   += HandleItemSpawn;
                     TankNetClient.Instance.OnItemDespawn += HandleItemDespawn;
 
@@ -319,6 +321,8 @@ namespace Complete
                 TankNetClient.Instance.OnForceLogout -= HandleForceLogout;
                 TankNetClient.Instance.OnEventShoot  -= HandleEventShoot;
                 TankNetClient.Instance.OnEventSkillCast -= HandleEventSkillCast;
+                TankNetClient.Instance.OnEventStartChargeSkill -= HandleEventStartChargeSkill;
+                TankNetClient.Instance.OnEventShieldHit -= HandleEventShieldHit;
                 TankNetClient.Instance.OnItemSpawn   -= HandleItemSpawn;
                 TankNetClient.Instance.OnItemDespawn -= HandleItemDespawn;
                 TankNetClient.Instance.Disconnect();
@@ -452,7 +456,7 @@ namespace Complete
                 if (kvp.Value != null) allTanks.Add(kvp.Value);
             }
 
-            // Collect all BulletHitVolume colliders and pre-spawned Shield colliders
+            // Collect all BulletHitVolume colliders
             var allHitColliders = new List<Collider>();
             for (int i = 0; i < allTanks.Count; i++)
             {
@@ -460,21 +464,6 @@ namespace Complete
                 if (hitVol != null)
                 {
                     var col = hitVol.GetComponent<Collider>();
-                    if (col != null) allHitColliders.Add(col);
-                }
-
-                // We don't collect shields per tank anymore because they are unparented
-            }
-
-            // Collect any pre-spawned shields anywhere in the scene (even if inactive)
-            var shields = Resources.FindObjectsOfTypeAll<Complete.Shield>();
-            for (int s = 0; s < shields.Length; s++)
-            {
-                // Only consider shields that are instantiated in the scene (not prefabs)
-                if (shields[s].gameObject.hideFlags == HideFlags.NotEditable || shields[s].gameObject.hideFlags == HideFlags.HideAndDontSave) continue;
-                if (shields[s].gameObject.scene.isLoaded)
-                {
-                    var col = shields[s].GetComponent<Collider>();
                     if (col != null) allHitColliders.Add(col);
                 }
             }
@@ -542,6 +531,8 @@ namespace Complete
             m_Tanks[0].Setup();
 
             var tm = m_Tanks[0].m_Instance.GetComponent<Complete.TankMovement>();
+            var tankSkills = m_Tanks[0].m_Instance.GetComponent<Complete.TankSkills>();
+            if (tankSkills != null) { tankSkills.OwnerId = m_MyPlayerId; }
             bool customPhysics = tm == null || tm.m_UseCustomOnlinePhysics;
 
             var tankShooting = m_Tanks[0].m_Instance.GetComponent<Complete.TankShooting>();
@@ -563,7 +554,6 @@ namespace Complete
 
             GameUIManager.Instance.UpdateHUDForLocalTank(m_Tanks[0].m_Instance);
 
-            var tankSkills = m_Tanks[0].m_Instance.GetComponent<Complete.TankSkills>();
             if (tankSkills == null) tankSkills = m_Tanks[0].m_Instance.AddComponent<Complete.TankSkills>();
             tankSkills.m_IsLocalPlayer = true;
 
@@ -933,6 +923,11 @@ namespace Complete
             {
                 Debug.Log($"[GameManager] Server assigned playerId={snap.LocalPlayerId} (was {m_MyPlayerId})");
                 m_MyPlayerId = snap.LocalPlayerId;
+                if (m_Tanks != null && m_Tanks.Length > 0 && m_Tanks[0].m_Instance != null)
+                {
+                    var tankSkills = m_Tanks[0].m_Instance.GetComponent<Complete.TankSkills>();
+                    if (tankSkills != null) { tankSkills.OwnerId = m_MyPlayerId; }
+                }
             }
 
             var seen = new HashSet<uint>();
@@ -1021,6 +1016,49 @@ namespace Complete
             else
             {
                 Debug.LogWarning($"[GameManager] Could not find remote tank with ID {pkt.casterId}");
+            }
+        }
+
+        private void HandleEventStartChargeSkill(EventStartChargeSkillPacket pkt)
+        {
+            if (pkt.casterId == m_MyPlayerId) return;
+            
+            if (_remoteTanks.TryGetValue(pkt.casterId, out var go))
+            {
+                var skills = go.GetComponent<Complete.TankSkills>();
+                if (skills != null)
+                {
+                    skills.RemoteStartChargeSkill(pkt.skillName, Vector3.zero, Vector3.forward);
+                }
+            }
+        }
+
+        private void HandleEventShieldHit(EventShieldHitPacket pkt)
+        {
+            // 1. Find the shield instance and trigger impact effect
+            foreach (var shield in Complete.Shield.ActiveShields)
+            {
+                if (shield.OwnerId == pkt.shieldOwnerId) 
+                {
+                    Vector3 hitPoint = new Vector3(pkt.hitX, pkt.hitY, pkt.hitZ);
+                    Vector3 outDir = (hitPoint - shield.transform.position).normalized;
+                    if (outDir == Vector3.zero) outDir = Vector3.forward;
+                    shield.TriggerBlockEffect(hitPoint, outDir);
+                    break;
+                }
+            }
+
+            // 2. Instantly remove physical projectile visually to prevent clipping before next snapshot
+            if (pkt.bulletId != 0 && _remoteBullets.ContainsKey(pkt.bulletId))
+            {
+                var rb = _remoteBullets[pkt.bulletId];
+                if (rb != null)
+                {
+                    var explosion = rb.GetComponent<Complete.ShellExplosion>();
+                    if (explosion != null) explosion.Explode();
+                    else Destroy(rb);
+                }
+                _remoteBullets.Remove(pkt.bulletId);
             }
         }
 
@@ -1225,10 +1263,6 @@ namespace Complete
         {
             if (go == null) return;
 
-            // Delegate to Shield to check if the bullet was despawned because it hit a shield
-            // We call this so the shield can play its block effect/ripple.
-            Complete.Shield.HandleRemoteBulletDespawn(go.transform.position, go.transform.forward);
-
             // Bullet's last snapshot position lags ~1 snapshot (50ms) behind the actual hit.
             // At 20-30 m/s that is 1-1.5 m of visual offset.
             // If the bullet was close to the local tank, snap the explosion there instead.
@@ -1427,6 +1461,7 @@ namespace Complete
                 var remoteSkills = go.GetComponent<Complete.TankSkills>();
                 if (remoteSkills == null) remoteSkills = go.AddComponent<Complete.TankSkills>();
                 remoteSkills.m_IsLocalPlayer = false;
+                remoteSkills.OwnerId = ts.tankId;
 
                 // Register BulletHitVolume colliders into particle system triggers
                 RegisterParticleTriggerColliders();

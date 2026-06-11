@@ -128,7 +128,6 @@ void GameWorld::castSkill(uint32_t playerId, const PacketCastSkill& pkt)
                         // Hit by laser! Check if blocked by shield first
                         bool blocked = false;
                         for (auto& shield : _activeShields) {
-                            if (shield.ownerId == playerId) continue;
                             
                             // If caster is inside the shield, the laser freely passes out!
                             float cDx = tank.position.x - shield.position.x;
@@ -300,7 +299,6 @@ void GameWorld::updateBullets(float deltaTime)
             // 1) Check shield collisions
             bool blockedByShield = false;
             for (auto& shield : _activeShields) {
-                if (shield.ownerId == b.ownerTankId) continue;
 
                 // If bullet spawned inside the shield, it can freely pass through this shield!
                 float dxSpawn = b.spawnPosition.x - shield.position.x;
@@ -318,6 +316,16 @@ void GameWorld::updateBullets(float deltaTime)
                 if (distSq <= rSum * rSum) {
                     blockedByShield = true;
                     shield.health -= b.damage;
+                    
+                    EventShieldHitPacket evHit{};
+                    evHit.opcode = static_cast<uint16_t>(Opcode::S2C_EVENT_SHIELD_HIT);
+                    evHit.shieldOwnerId = shield.ownerId;
+                    evHit.bulletId = b.id;
+                    evHit.hitX = b.position.x;
+                    evHit.hitY = b.position.y;
+                    evHit.hitZ = b.position.z;
+                    _shieldHitEvents.push_back(evHit);
+                    
                     break;
                 }
             }
@@ -416,7 +424,7 @@ void GameWorld::runPhysics(float deltaTime)
         if (!tank.isAlive) continue;
         tank.stats.speed = _map.getTankConfig(tank.stats.name).movementSpeed;
         for (const auto& shield : _activeShields) {
-            if (shield.ownerId == id) continue;
+            if (shield.ownerId == id) continue; // Owner is not slowed by their own shield
             float dx = tank.position.x - shield.position.x;
             float dz = tank.position.z - shield.position.z;
             if (dx*dx + dz*dz <= shield.radius * shield.radius) {
@@ -571,6 +579,13 @@ std::vector<EventSkillCastPacket> GameWorld::getSkillCastEvents()
     return res;
 }
 
+std::vector<EventShieldHitPacket> GameWorld::getShieldHitEvents()
+{
+    std::vector<EventShieldHitPacket> res;
+    res.swap(_shieldHitEvents);
+    return res;
+}
+
 std::vector<PacketSpawnItem> GameWorld::getItemSpawnEvents() {
     auto copy = _itemSpawnEvents;
     _itemSpawnEvents.clear();
@@ -714,7 +729,6 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
                         bool blockedByShield = false;
                         float maxDist = hit.hit ? hit.distance : tank.stats.fireRange;
                         for (auto& shield : _activeShields) {
-                            if (shield.ownerId == id) continue;
                             float dxSpawn = muzzlePos.x - shield.position.x;
                             float dySpawn = muzzlePos.y - shield.position.y;
                             float dzSpawn = muzzlePos.z - shield.position.z;
@@ -734,6 +748,16 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
                                     if (tEnter > 0 && tEnter < maxDist) {
                                         blockedByShield = true;
                                         shield.health -= bulletDamage;
+                                        
+                                        EventShieldHitPacket evHit{};
+                                        evHit.opcode = static_cast<uint16_t>(Opcode::S2C_EVENT_SHIELD_HIT);
+                                        evHit.shieldOwnerId = shield.ownerId;
+                                        evHit.bulletId = 0;
+                                        evHit.hitX = muzzlePos.x + dir.x * tEnter;
+                                        evHit.hitY = muzzlePos.y + dir.y * tEnter;
+                                        evHit.hitZ = muzzlePos.z + dir.z * tEnter;
+                                        _shieldHitEvents.push_back(evHit);
+                                        
                                         break;
                                     }
                                 }
@@ -807,7 +831,6 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
                         bool blockedByShield = false;
                         float maxDist = hit.hit ? hit.distance : tank.stats.fireRange;
                         for (auto& shield : _activeShields) {
-                            if (shield.ownerId == id) continue;
                             float dxSpawn = muzzlePos.x - shield.position.x;
                             float dySpawn = muzzlePos.y - shield.position.y;
                             float dzSpawn = muzzlePos.z - shield.position.z;
