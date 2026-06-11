@@ -19,6 +19,7 @@ namespace Complete
         public float m_EndImpactRadius = 3.0f;
         [Tooltip("Maximum strength of the impact visual.")]
         public float m_MaxImpactStrength = 1.0f;
+        public uint OwnerId;
 
         private Material m_ShieldMaterial;
         private int m_ImpactPosID;
@@ -86,12 +87,6 @@ namespace Complete
 
         private void OnTriggerEnter(Collider other)
         {
-            // Ignore the owner of the shield (e.g., the tank it is attached to) and any of its children/parts
-            if (other.transform.IsChildOf(transform.root) || (transform.parent != null && other.transform.IsChildOf(transform.parent)))
-            {
-                return;
-            }
-
             Collider shieldCollider = GetComponent<Collider>();
             if (shieldCollider == null) return;
 
@@ -147,48 +142,16 @@ namespace Complete
             }
         }
 
-        public static bool HandleRemoteBulletDespawn(Vector3 bulletPos, Vector3 bulletForward)
+        public void TriggerBlockEffect(Vector3 hitPoint, Vector3 hitDirection)
         {
-            if (ActiveShields.Count == 0) return false;
-
-            foreach (var shield in ActiveShields)
+            if (m_BlockEffect != null)
             {
-                if (shield == null) continue;
-
-                // Check distance from bullet to shield center
-                float distance = Vector3.Distance(shield.transform.position, bulletPos);
-                
-                // Assuming the shield scale/radius is roughly 5. 
-                // We add a tolerance (e.g., 3 units) to catch bullets that were despawned just before hitting.
-                // You can adjust the tolerance if the shield sizes vary drastically.
-                float estimatedRadius = shield.transform.localScale.x * 0.5f; // Assuming uniform scale and base sphere is 1x1x1
-                // Wait, if scale is handled differently, it's safer to use the collider's bounds.
-                Collider coll = shield.GetComponent<Collider>();
-                if (coll != null)
-                {
-                    estimatedRadius = coll.bounds.extents.x;
-                }
-
-                if (distance <= estimatedRadius + 3f && distance >= estimatedRadius - 1f)
-                {
-                    // Ensure the bullet was moving roughly towards or tangential to the shield, not away from it entirely
-                    Vector3 toShield = shield.transform.position - bulletPos;
-                    if (Vector3.Dot(toShield.normalized, bulletForward.normalized) > -0.5f)
-                    {
-                        Vector3 hitPoint = coll != null ? coll.ClosestPoint(bulletPos) : bulletPos;
-                        shield.TriggerImpact(hitPoint);
-                        if (shield.m_BlockEffect != null)
-                        {
-                            Instantiate(shield.m_BlockEffect, hitPoint, Quaternion.LookRotation(-bulletForward));
-                        }
-                        return true;
-                    }
-                }
+                Instantiate(m_BlockEffect, hitPoint, Quaternion.LookRotation(hitDirection));
             }
-            return false;
+            TriggerImpact(hitPoint);
         }
 
-        private void TriggerImpact(Vector3 hitPoint)
+        public void TriggerImpact(Vector3 hitPoint)
         {
             if (m_ShieldMaterial == null) return;
 

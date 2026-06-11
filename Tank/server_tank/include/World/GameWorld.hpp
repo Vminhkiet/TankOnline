@@ -50,6 +50,7 @@ public:
     std::vector<PacketSpawnItem> getItemSpawnEvents();
     std::vector<PacketDespawnItem> getItemDespawnEvents();
     std::vector<EventSkillCastPacket> getSkillCastEvents();
+    std::vector<EventShieldHitPacket> getShieldHitEvents();
 
     size_t playerCount()      const { return _tanks.size(); }
     size_t activeBulletCount() const {
@@ -93,6 +94,7 @@ private:
     std::vector<PacketSpawnItem>          _itemSpawnEvents;
     std::vector<PacketDespawnItem>        _itemDespawnEvents;
     std::vector<EventSkillCastPacket>     _skillCastEvents;
+    std::vector<EventShieldHitPacket>     _shieldHitEvents;
     std::vector<ActiveShield>             _activeShields;
 
     // Skill cooldown tracking: playerId -> skillName -> nextAvailableTime

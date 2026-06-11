@@ -32,6 +32,8 @@ namespace TankNet
         public event Action<MatchEndData> OnMatchEnd;
         public event Action<EventShootPacket> OnEventShoot;
         public event Action<EventSkillCastPacket> OnEventSkillCast;
+        public event Action<EventStartChargeSkillPacket> OnEventStartChargeSkill;
+        public event Action<EventShieldHitPacket> OnEventShieldHit;
         public event Action<ushort, string, uint> OnForceLogout; // (code, message, disconnectAfterMs)
         public event Action<PacketSpawnItem> OnItemSpawn;
         public event Action<PacketDespawnItem> OnItemDespawn;
@@ -320,6 +322,26 @@ namespace TankNet
                         if (pkt.matchId != MatchId) continue;
 
                         UnityMainThread.Post(() => OnEventSkillCast?.Invoke(pkt));
+                        continue;
+                    }
+
+                    if ((Opcode)opcode == Opcode.S2C_EVENT_START_CHARGE_SKILL)
+                    {
+                        if (data.Length < Marshal.SizeOf<EventStartChargeSkillPacket>()) continue;
+                        var pkt = BytesToStruct<EventStartChargeSkillPacket>(data, 0);
+                        if (pkt.matchId != MatchId) continue;
+
+                        UnityMainThread.Post(() => OnEventStartChargeSkill?.Invoke(pkt));
+                        continue;
+                    }
+
+                    if ((Opcode)opcode == Opcode.S2C_EVENT_SHIELD_HIT)
+                    {
+                        if (data.Length < Marshal.SizeOf<EventShieldHitPacket>()) continue;
+                        var pkt = BytesToStruct<EventShieldHitPacket>(data, 0);
+                        if (pkt.matchId != MatchId) continue;
+
+                        UnityMainThread.Post(() => OnEventShieldHit?.Invoke(pkt));
                         continue;
                     }
 

@@ -7311,12 +7311,12 @@
                 {
                     "x": 0.9880000352859497,
                     "y": 0.5570077896118164,
-                    "z": 1.6222442388534547
+                    "z": 2.3480000495910646
                 },
                 {
                     "x": -1.0479999780654908,
-                    "y": 0.5570077896118164,
-                    "z": 1.6222444772720338
+                    "y": 0.557007908821106,
+                    "z": 2.3480002880096437
                 }
             ],
             "max_health": 3000.0,
@@ -7374,7 +7374,7 @@
             "collider_offset": {
                 "x": 0.22823812067508698,
                 "y": 0.8065485954284668,
-                "z": 0.30103111267089846
+                "z": 0.30103158950805666
             },
             "weapon_type": 0,
             "turret_offset": {
@@ -7404,7 +7404,7 @@
         {
             "name": "Bastion Field",
             "skill_type": 3,
-            "cooldown": 5.0,
+            "cooldown": 25.0,
             "cast_range": 0.0,
             "radius": 10.0,
             "length": 20.0,
@@ -7422,7 +7422,7 @@
         {
             "name": "Combat Overdrive",
             "skill_type": 2,
-            "cooldown": 5.0,
+            "cooldown": 20.0,
             "cast_range": 0.0,
             "radius": 0.0,
             "length": 0.0,
@@ -7440,7 +7440,7 @@
         {
             "name": "Rail Breaker",
             "skill_type": 4,
-            "cooldown": 2.0,
+            "cooldown": 30.0,
             "cast_range": 0.0,
             "radius": 5.0,
             "length": 26.0,
@@ -7458,10 +7458,10 @@
         {
             "name": "Vector Burst",
             "skill_type": 1,
-            "cooldown": 5.0,
+            "cooldown": 8.0,
             "cast_range": 0.0,
             "radius": 5.0,
-            "length": 7.0,
+            "length": 4.0,
             "angle": 45.0,
             "duration": 0.0,
             "parameters": [

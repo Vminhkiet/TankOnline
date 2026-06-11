@@ -22,6 +22,8 @@ namespace TankNet
         S2C_EVENT_SPAWN_ITEM = 2008,
         S2C_EVENT_DESPAWN_ITEM = 2009,
         S2C_EVENT_SKILL_CAST = 2010,
+        S2C_EVENT_START_CHARGE_SKILL = 2011,
+        S2C_EVENT_SHIELD_HIT = 2012,
     }
 
     // Must match server NetworkConstants.h exactly
@@ -183,6 +185,28 @@ namespace TankNet
         public float  dirX;
         public float  dirZ;
         public byte   isCharging;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1, CharSet = CharSet.Ansi)]
+    public struct EventStartChargeSkillPacket
+    {
+        public uint   matchId;
+        public ushort opcode;       // = 2011
+        public uint   casterId;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string skillName;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct EventShieldHitPacket
+    {
+        public uint   matchId;
+        public ushort opcode;       // = 2012
+        public uint   shieldOwnerId;
+        public uint   bulletId;     // 0 for hitscan
+        public float  hitX;
+        public float  hitY;
+        public float  hitZ;
     }
 
     public class MatchEndData

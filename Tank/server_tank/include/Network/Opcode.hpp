@@ -21,4 +21,5 @@ enum class Opcode : uint16_t {
     S2C_EVENT_DESPAWN_ITEM = 2009, // raw binary: PacketDespawnItem
     S2C_EVENT_SKILL_CAST = 2010, // raw binary: EventSkillCastPacket
     S2C_EVENT_START_CHARGE_SKILL = 2011, // raw binary: EventStartChargeSkillPacket
+    S2C_EVENT_SHIELD_HIT = 2012, // raw binary: EventShieldHitPacket
 };
