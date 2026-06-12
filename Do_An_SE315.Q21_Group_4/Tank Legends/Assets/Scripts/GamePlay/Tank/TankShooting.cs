@@ -15,6 +15,7 @@ namespace Complete
         public TankDefinitionSO m_Definition;
 
         public int m_PlayerNumber = 1;              // Used to identify the different players.
+        public bool IsChargingWeapon { get; private set; } // Tracks if the weapon is currently charging or trying to fire
         public Rigidbody m_Shell;                   // Prefab of the shell.
         public Transform m_FireTransform;           // A child of the tank where the shells are spawned (legacy fallback).
         [Tooltip("Multiple barrel muzzle spawn points. If empty, falls back to m_FireTransform.")]
@@ -460,6 +461,7 @@ namespace Complete
             }
 
             bool isTryingToFire = fireHeld || fireDown;
+            IsChargingWeapon = m_IsChargingEffectActive;
             if (m_TankAnimation != null)
             {
                 m_TankAnimation.SetShooting(isTryingToFire);

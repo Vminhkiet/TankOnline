@@ -45,6 +45,11 @@ void GameWorld::castSkill(uint32_t playerId, const PacketCastSkill& pkt)
 {
     auto it = _tanks.find(playerId);
     if (it == _tanks.end()) return;
+
+    if (pkt.isCharging == 0) {
+        _lastCombatTime[playerId] = _elapsedTime;
+    }
+
     Tank& tank = it->second;
     if (!tank.isAlive) return;
 
@@ -53,6 +58,12 @@ void GameWorld::castSkill(uint32_t playerId, const PacketCastSkill& pkt)
     if (!config) {
         LOG_WARN("GameWorld: player {} tried to cast unknown skill '{}'", playerId, skillName);
         return;
+    }
+
+    if (pkt.isCharging == 1) {
+        tank.isChargingSkill = (config->chargeTime > 0.f);
+    } else {
+        tank.isChargingSkill = false;
     }
 
     // Cooldown check ONLY if not charging
@@ -671,6 +682,7 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
     // Spawn bullets for tanks that fired this tick
     for (auto& [id, tank] : _tanks) {
         if (tank.wantsShoot && tank.isAlive) {
+            _lastCombatTime[id] = _elapsedTime;
             const GameMap::TankConfig& cfg = _map.getTankConfig(tank.stats.name);
             float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
             
@@ -998,13 +1010,23 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
             Vector3 tmin = { center.x - cfg.extentX, center.y - cfg.extentY, center.z - cfg.extentZ };
             Vector3 tmax = { center.x + cfg.extentX, center.y + cfg.extentY, center.z + cfg.extentZ };
             
-            for (const auto& b : _map.getBushes()) {
-                if (tmin.x <= b.max.x && tmax.x >= b.min.x &&
-                    tmin.y <= b.max.y && tmax.y >= b.min.y &&
-                    tmin.z <= b.max.z && tmax.z >= b.min.z) {
-                    t.flags |= 2u; // InBush
-                    t.bushRegion = static_cast<uint8_t>(b.regionId);
-                    break;
+            // If the tank is charging their weapon or a skill, reveal them
+            bool revealed = tank.lastInput.isCharging || tank.isChargingSkill;
+            if (!revealed && _lastCombatTime.find(id) != _lastCombatTime.end()) {
+                if (_elapsedTime - _lastCombatTime.at(id) < 1.0f) {
+                    revealed = true;
+                }
+            }
+
+            if (!revealed) {
+                for (const auto& b : _map.getBushes()) {
+                    if (tmin.x <= b.max.x && tmax.x >= b.min.x &&
+                        tmin.y <= b.max.y && tmax.y >= b.min.y &&
+                        tmin.z <= b.max.z && tmax.z >= b.min.z) {
+                        t.flags |= 2u; // InBush
+                        t.bushRegion = static_cast<uint8_t>(b.regionId);
+                        break;
+                    }
                 }
             }
         }
