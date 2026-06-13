@@ -41,6 +41,7 @@ struct ClientInput {
     float   hullYaw     = 0.f;
     bool    shoot       = false;
     bool    reload      = false;
+    bool    isCharging  = false;
     uint8_t seq         = 0;
     float   launchForce = 20.f;   // bullet speed (m/s) when shoot=true
     uint8_t barrelCount = 1;      // number of barrels
@@ -53,6 +54,7 @@ struct PacketMovement {
     float   turretYaw = 0.f; // synced turret rotation
     float   hullYaw   = 0.f; // authoritative client hull rotation
     bool    reload    = false; // reload intent
+    bool    isCharging = false;
 
     template<typename Stream>
     bool Serialize(Stream& stream) {
@@ -73,6 +75,7 @@ struct PacketMovement {
         }
 
         serialize_bool(stream, reload);
+        serialize_bool(stream, isCharging);
 
         return true;
     }
@@ -84,6 +87,7 @@ struct PacketMovement {
         ci.turretYaw = turretYaw;
         ci.hullYaw = hullYaw;
         ci.reload = reload;
+        ci.isCharging = isCharging;
         ci.seq   = s;
         return ci;
     }

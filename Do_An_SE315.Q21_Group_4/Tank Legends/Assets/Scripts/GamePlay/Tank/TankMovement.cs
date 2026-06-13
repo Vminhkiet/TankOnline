@@ -543,11 +543,13 @@ namespace Complete
             {
                 float turretYaw = 0f;
                 bool reload = false;
+                bool isCharging = false;
                 if (m_TankShooting != null) {
                     turretYaw = m_TankShooting.GetCurrentTurretYaw();
                     reload = m_TankShooting.ConsumeReloadIntent();
+                    isCharging = m_TankShooting.IsChargingWeapon;
                 }
-                net.SetMove(moveX, moveZ, turretYaw, m_Rigidbody.rotation.eulerAngles.y, reload);
+                net.SetMove(moveX, moveZ, turretYaw, m_Rigidbody.rotation.eulerAngles.y, reload, isCharging);
             }
         }
 
@@ -559,13 +561,15 @@ namespace Complete
 
             float turretYaw = 0f;
             bool reload = false;
+            bool isCharging = false;
             if (m_TankShooting != null) {
                 turretYaw = m_TankShooting.GetCurrentTurretYaw();
                 reload = m_TankShooting.ConsumeReloadIntent();
+                isCharging = m_TankShooting.IsChargingWeapon;
             }
 
             GetMobileDiscreteMove(out int mx, out int mz);
-            net.SendMoveNow(mx, mz, turretYaw, m_Rigidbody.rotation.eulerAngles.y, reload);
+            net.SendMoveNow(mx, mz, turretYaw, m_Rigidbody.rotation.eulerAngles.y, reload, isCharging);
         }
     }
 }

@@ -178,6 +178,7 @@ bool GameMap::LoadFromFile(const std::string& filepath, PhysicsWorld& physicsWor
                 if (s.contains("duration")) sc.duration = s["duration"].get<float>();
                 if (s.contains("charge_time")) sc.chargeTime = s["charge_time"].get<float>();
                 if (s.contains("speed_reduction_percent")) sc.speedReductionPercent = s["speed_reduction_percent"].get<float>();
+                if (s.contains("reveals_position_on_map")) sc.revealsPositionOnMap = s["reveals_position_on_map"].get<bool>();
                 
                 if (s.contains("parameters")) {
                     for (const auto& p : s["parameters"]) {

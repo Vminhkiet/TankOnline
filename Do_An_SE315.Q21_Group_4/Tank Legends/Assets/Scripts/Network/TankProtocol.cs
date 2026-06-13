@@ -66,6 +66,7 @@ namespace TankNet
 
         public bool IsAlive => (flags & 1) != 0;
         public bool IsInBush => (flags & 2) != 0;
+        public bool IsRevealedOnMap => (flags & 4) != 0;
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -245,7 +246,7 @@ namespace TankNet
             return w.ToBytes();
         }
 
-        public static byte[] BuildMove(uint matchId, int moveX, int moveZ, float turretYaw, float hullYaw, bool reload,
+        public static byte[] BuildMove(uint matchId, int moveX, int moveZ, float turretYaw, float hullYaw, bool reload, bool isCharging,
                                        uint playerId = 0, byte seq = 0, ushort tick = 0)
         {
             var w = new BitWriter(8);
@@ -267,6 +268,7 @@ namespace TankNet
             w.WriteInt(hullYawDegInt, -180, 180);
             
             w.WriteInt(reload ? 1 : 0, 0, 1);
+            w.WriteInt(isCharging ? 1 : 0, 0, 1);
             
             return w.ToBytes();
         }

@@ -45,6 +45,7 @@ void GameWorld::castSkill(uint32_t playerId, const PacketCastSkill& pkt)
 {
     auto it = _tanks.find(playerId);
     if (it == _tanks.end()) return;
+
     Tank& tank = it->second;
     if (!tank.isAlive) return;
 
@@ -53,6 +54,18 @@ void GameWorld::castSkill(uint32_t playerId, const PacketCastSkill& pkt)
     if (!config) {
         LOG_WARN("GameWorld: player {} tried to cast unknown skill '{}'", playerId, skillName);
         return;
+    }
+
+    if (pkt.isCharging == 0) {
+        if (config->revealsPositionOnMap) {
+            _lastCombatTime[playerId] = _elapsedTime;
+        }
+    }
+
+    if (pkt.isCharging == 1) {
+        tank.isChargingSkill = (config->chargeTime > 0.f);
+    } else {
+        tank.isChargingSkill = false;
     }
 
     // Cooldown check ONLY if not charging
@@ -671,6 +684,7 @@ void GameWorld::applyPhysicsResults(float /*deltaTime*/)
     // Spawn bullets for tanks that fired this tick
     for (auto& [id, tank] : _tanks) {
         if (tank.wantsShoot && tank.isAlive) {
+            _lastCombatTime[id] = _elapsedTime;
             const GameMap::TankConfig& cfg = _map.getTankConfig(tank.stats.name);
             float sy = std::sin(tank.yaw), cy = std::cos(tank.yaw);
             
@@ -952,9 +966,10 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
         t.health = static_cast<int16_t>(tank.health);
         t.flags  = tank.isAlive ? 1u : 0u;
 
-        // Pack tank type index into bits 2-7 of flags
+        // Pack tank type index into bits 3-7 of flags
+        // Currently we only have a few tanks, so 5 bits (0-31) is enough
         uint8_t typeIndex = _map.getTankTypeIndex(tank.stats.name);
-        t.flags |= (typeIndex << 2);
+        t.flags |= (typeIndex << 3);
 
         float baseSpeed = _map.getTankConfig(tank.stats.name).movementSpeed;
         float mult = baseSpeed > 0.f ? (tank.stats.speed / baseSpeed) : 1.0f;
@@ -998,13 +1013,27 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
             Vector3 tmin = { center.x - cfg.extentX, center.y - cfg.extentY, center.z - cfg.extentZ };
             Vector3 tmax = { center.x + cfg.extentX, center.y + cfg.extentY, center.z + cfg.extentZ };
             
-            for (const auto& b : _map.getBushes()) {
-                if (tmin.x <= b.max.x && tmax.x >= b.min.x &&
-                    tmin.y <= b.max.y && tmax.y >= b.min.y &&
-                    tmin.z <= b.max.z && tmax.z >= b.min.z) {
-                    t.flags |= 2u; // InBush
-                    t.bushRegion = static_cast<uint8_t>(b.regionId);
-                    break;
+            // If the tank is charging their weapon or a skill, reveal them
+            bool revealed = tank.lastInput.isCharging || tank.isChargingSkill;
+            if (!revealed && _lastCombatTime.find(id) != _lastCombatTime.end()) {
+                if (_elapsedTime - _lastCombatTime.at(id) < 1.0f) {
+                    revealed = true;
+                }
+            }
+
+            if (revealed) {
+                t.flags |= 4u; // RevealedOnMap
+            }
+
+            if (!revealed) {
+                for (const auto& b : _map.getBushes()) {
+                    if (tmin.x <= b.max.x && tmax.x >= b.min.x &&
+                        tmin.y <= b.max.y && tmax.y >= b.min.y &&
+                        tmin.z <= b.max.z && tmax.z >= b.min.z) {
+                        t.flags |= 2u; // InBush
+                        t.bushRegion = static_cast<uint8_t>(b.regionId);
+                        break;
+                    }
                 }
             }
         }

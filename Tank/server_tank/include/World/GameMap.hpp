@@ -55,6 +55,7 @@ public:
         std::vector<float> parameters;
         float chargeTime = 0.f;
         float speedReductionPercent = 0.f;
+        bool revealsPositionOnMap = true;
     };
 
     GameMap() = default;

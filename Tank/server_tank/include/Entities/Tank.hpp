@@ -34,6 +34,7 @@ public:
     float    wantsShootForce = 20.f;  // bullet speed (m/s) for next shot
     float    wantsShootYaw   = 0.f;   // actual aiming yaw of the turret
     uint8_t  wantsShootBarrels = 1;   // number of barrels
+    bool     isChargingSkill = false;
     float    shootSlowTimer = 0.f;    // timer tracking slow duration
     float    fireCooldownTimer = 0.f; // timer for strict server-side fire rate enforcement
 

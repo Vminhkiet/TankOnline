@@ -168,19 +168,21 @@ namespace TankNet
 
         private float _pendingHullYaw;
         private bool _pendingReload;
+        private bool _pendingIsCharging;
 
         // Call from player input (main thread safe — just sets flags)
-        public void SetMove(int moveX, int moveZ, float turretYaw = 0f, float hullYaw = 0f, bool reload = false)
+        public void SetMove(int moveX, int moveZ, float turretYaw = 0f, float hullYaw = 0f, bool reload = false, bool isCharging = false)
         {
             _pendingMoveX = Mathf.Clamp(moveX, -1, 1);
             _pendingMoveZ = Mathf.Clamp(moveZ, -1, 1);
             _pendingTurretYaw = turretYaw;
             _pendingHullYaw = hullYaw;
+            _pendingIsCharging = isCharging;
             if (reload) _pendingReload = true; // latch until sent
         }
 
         // Send input immediately from FixedUpdate — keeps server in sync with client prediction
-        public void SendMoveNow(int moveX, int moveZ, float turretYaw = 0f, float hullYaw = 0f, bool reload = false)
+        public void SendMoveNow(int moveX, int moveZ, float turretYaw = 0f, float hullYaw = 0f, bool reload = false, bool isCharging = false)
         {
             if (!_running) return;
             // Keep pending in sync so SendTick (heartbeat/shoot) doesn't override with (0,0)
@@ -188,9 +190,10 @@ namespace TankNet
             _pendingMoveZ = Mathf.Clamp(moveZ, -1, 1);
             _pendingTurretYaw = turretYaw;
             _pendingHullYaw = hullYaw;
+            _pendingIsCharging = isCharging;
             if (reload) _pendingReload = true;
             
-            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, _pendingHullYaw, _pendingReload, PlayerId, _seq++);
+            byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, _pendingHullYaw, _pendingReload, _pendingIsCharging, PlayerId, _seq++);
             _pendingReload = false; // consume
             try { _udp.Send(pkt, pkt.Length, _server); } catch { }
         }
@@ -227,7 +230,7 @@ namespace TankNet
                     try { _udp.Send(pingPkt, pingPkt.Length, _server); } catch { }
                 }
 
-                byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, _pendingHullYaw, _pendingReload, PlayerId, _seq++);
+                byte[] pkt = PacketBuilder.BuildMove(MatchId, _pendingMoveX, _pendingMoveZ, _pendingTurretYaw, _pendingHullYaw, _pendingReload, _pendingIsCharging, PlayerId, _seq++);
                 _pendingReload = false; // consume
                 int sent = _udp.Send(pkt, pkt.Length, _server);
                 
