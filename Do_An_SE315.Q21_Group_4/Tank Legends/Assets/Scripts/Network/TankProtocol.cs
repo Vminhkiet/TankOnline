@@ -66,6 +66,7 @@ namespace TankNet
 
         public bool IsAlive => (flags & 1) != 0;
         public bool IsInBush => (flags & 2) != 0;
+        public bool IsRevealedOnMap => (flags & 4) != 0;
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]

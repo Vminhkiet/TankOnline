@@ -5,14 +5,13 @@ using System.Collections.Generic;
 namespace Complete
 {
     /// <summary>
-    /// Handles bush stealth mechanic for tanks.
+    /// Handles bush stealth mechanic and 12m vision logic for tanks.
     /// - Local tank: uses OnTriggerEnter/Exit to detect bush colliders (tag "Bush")
     ///   and sets _Dissolve = 0.5 (semi-transparent to the player).
     /// - Remote tank: reads InBush flag from server snapshot and sets _Dissolve = 1.0
     ///   (fully invisible to enemies).
     /// 
-    /// Also hides the health UI (Canvas) of remote tanks when they are stealthed.
-    /// Grace period prevents flickering when moving between adjacent bush colliders.
+    /// Also hides the health UI (Canvas) of remote tanks when they are stealthed or beyond 12m.
     /// </summary>
     public class TankStealth : MonoBehaviour
     {
@@ -22,11 +21,18 @@ namespace Complete
         public float m_LerpSpeed = 8f;           // Speed of dissolve transition
         public float m_GracePeriod = 0.2f;       // Delay before "exiting" bush (anti-flicker)
 
+        [Header("Minimap & Vision")]
+        public float m_VisionRadius = 12f;
+        public SpriteRenderer m_MinimapDot;
+        public Color m_LocalMinimapColor = Color.blue;
+        public Color m_EnemyMinimapColor = Color.red;
+
         /// <summary>
         /// Set by GameManager from server snapshot for remote tanks.
         /// </summary>
         [HideInInspector] public bool ServerInBush;
         [HideInInspector] public int ServerBushRegion;
+        [HideInInspector] public bool ServerRevealedOnMap;
 
         /// <summary>
         /// True if this is the local player's tank.
@@ -34,8 +40,9 @@ namespace Complete
         [HideInInspector] public bool IsLocalTank;
         
         public static int s_LocalPlayerBushRegion;
+        public static Transform s_LocalTankTransform;
 
-        // ── Internal state ──────────────────────────────────────────────────
+        // Internal state
         private bool _inBush;                     // Computed state: currently considered "in bush"
         private float _currentDissolve;           // Current dissolve value being applied
 
@@ -55,6 +62,22 @@ namespace Complete
             CacheWorldCanvas();
         }
 
+        private void Start()
+        {
+            if (IsLocalTank)
+            {
+                s_LocalTankTransform = transform;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (IsLocalTank && s_LocalTankTransform == transform)
+            {
+                s_LocalTankTransform = null;
+            }
+        }
+
         /// <summary>
         /// Scans all child Renderers and caches those whose material has a _Dissolve property.
         /// Called once on spawn.
@@ -64,6 +87,9 @@ namespace Complete
             _dissolveRenderers.Clear();
             foreach (var rend in GetComponentsInChildren<Renderer>(true))
             {
+                // Skip the minimap dot sprite
+                if (rend == m_MinimapDot) continue;
+
                 // Check each material on the renderer
                 foreach (var mat in rend.sharedMaterials)
                 {
@@ -112,42 +138,82 @@ namespace Complete
                 }
             }
 
-            // Compute target dissolve value
-            float targetDissolve = 0f;
-            if (_inBush)
+            // --- 1. MINIMAP LOGIC ---
+            if (m_MinimapDot != null)
             {
-                if (IsLocalTank || isSharedBush)
-                    targetDissolve = m_LocalDissolve;
+                if (IsLocalTank)
+                {
+                    m_MinimapDot.color = m_LocalMinimapColor;
+                    m_MinimapDot.enabled = true;
+                }
                 else
-                    targetDissolve = m_RemoteDissolve;
+                {
+                    m_MinimapDot.color = m_EnemyMinimapColor;
+                    
+                    float distance = s_LocalTankTransform != null ? Vector3.Distance(transform.position, s_LocalTankTransform.position) : float.MaxValue;
+                    bool visibleOnScreen = (distance <= m_VisionRadius) && (!_inBush || isSharedBush);
+                    
+                    // Show on minimap if visible on screen OR revealed by combat anywhere
+                    m_MinimapDot.enabled = visibleOnScreen || ServerRevealedOnMap;
+                }
             }
 
-            // Smoothly interpolate
-            _currentDissolve = Mathf.Lerp(_currentDissolve, targetDissolve, Time.deltaTime * m_LerpSpeed);
+            // --- 2. SCREEN VISIBILITY LOGIC (Dissolve & Hide Renderers) ---
+            float targetDissolve = 0f;
+            bool isHiddenByDistance = false;
 
-            // Snap to zero when very close to avoid perpetual tiny values
+            if (!IsLocalTank)
+            {
+                float distance = s_LocalTankTransform != null ? Vector3.Distance(transform.position, s_LocalTankTransform.position) : float.MaxValue;
+                if (distance > m_VisionRadius)
+                {
+                    isHiddenByDistance = true; // Enemy is beyond 12m, hide completely!
+                }
+                else if (_inBush && !isSharedBush)
+                {
+                    targetDissolve = m_RemoteDissolve; // In bush, fully invisible
+                }
+            }
+            else if (_inBush)
+            {
+                targetDissolve = m_LocalDissolve; // Local player in bush
+            }
+
+            // Smoothly interpolate dissolve (only applies when not hidden by distance)
+            _currentDissolve = Mathf.Lerp(_currentDissolve, targetDissolve, Time.deltaTime * m_LerpSpeed);
             if (targetDissolve == 0f && _currentDissolve < 0.01f)
                 _currentDissolve = 0f;
 
-            // Apply to all dissolve-capable renderers
-            ApplyDissolve(_currentDissolve);
-
-            // Hide/show health bar UI for remote tanks when stealthed
-            if (!IsLocalTank && _worldCanvas != null)
-            {
-                // Hide when dissolve is nearly full (enemy is invisible)
-                _worldCanvas.enabled = _currentDissolve < 0.9f;
-            }
-        }
-
-        private void ApplyDissolve(float value)
-        {
+            // Apply visibility to all renderers
             foreach (var rend in _dissolveRenderers)
             {
                 if (rend == null) continue;
-                rend.GetPropertyBlock(_mpb);
-                _mpb.SetFloat(DissolveID, value);
-                rend.SetPropertyBlock(_mpb);
+
+                if (isHiddenByDistance)
+                {
+                    rend.enabled = false;
+                }
+                else
+                {
+                    rend.enabled = true;
+                    rend.GetPropertyBlock(_mpb);
+                    _mpb.SetFloat(DissolveID, _currentDissolve);
+                    rend.SetPropertyBlock(_mpb);
+                }
+            }
+
+            // Hide/show health bar UI for remote tanks
+            if (!IsLocalTank && _worldCanvas != null)
+            {
+                if (isHiddenByDistance)
+                {
+                    _worldCanvas.enabled = false;
+                }
+                else
+                {
+                    // Hide when dissolve is nearly full (enemy is invisible in bush)
+                    _worldCanvas.enabled = _currentDissolve < 0.9f;
+                }
             }
         }
 
@@ -160,7 +226,18 @@ namespace Complete
             _inBush = false;
             ServerInBush = false;
             ServerBushRegion = 0;
-            ApplyDissolve(0f);
+            ServerRevealedOnMap = false;
+            
+            foreach (var rend in _dissolveRenderers)
+            {
+                if (rend != null)
+                {
+                    rend.enabled = true;
+                    rend.GetPropertyBlock(_mpb);
+                    _mpb.SetFloat(DissolveID, 0f);
+                    rend.SetPropertyBlock(_mpb);
+                }
+            }
 
             if (_worldCanvas != null)
                 _worldCanvas.enabled = true;

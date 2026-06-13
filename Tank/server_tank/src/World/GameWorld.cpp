@@ -46,10 +46,6 @@ void GameWorld::castSkill(uint32_t playerId, const PacketCastSkill& pkt)
     auto it = _tanks.find(playerId);
     if (it == _tanks.end()) return;
 
-    if (pkt.isCharging == 0) {
-        _lastCombatTime[playerId] = _elapsedTime;
-    }
-
     Tank& tank = it->second;
     if (!tank.isAlive) return;
 
@@ -58,6 +54,12 @@ void GameWorld::castSkill(uint32_t playerId, const PacketCastSkill& pkt)
     if (!config) {
         LOG_WARN("GameWorld: player {} tried to cast unknown skill '{}'", playerId, skillName);
         return;
+    }
+
+    if (pkt.isCharging == 0) {
+        if (config->revealsPositionOnMap) {
+            _lastCombatTime[playerId] = _elapsedTime;
+        }
     }
 
     if (pkt.isCharging == 1) {
@@ -964,9 +966,10 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
         t.health = static_cast<int16_t>(tank.health);
         t.flags  = tank.isAlive ? 1u : 0u;
 
-        // Pack tank type index into bits 2-7 of flags
+        // Pack tank type index into bits 3-7 of flags
+        // Currently we only have a few tanks, so 5 bits (0-31) is enough
         uint8_t typeIndex = _map.getTankTypeIndex(tank.stats.name);
-        t.flags |= (typeIndex << 2);
+        t.flags |= (typeIndex << 3);
 
         float baseSpeed = _map.getTankConfig(tank.stats.name).movementSpeed;
         float mult = baseSpeed > 0.f ? (tank.stats.speed / baseSpeed) : 1.0f;
@@ -1016,6 +1019,10 @@ std::vector<uint8_t> GameWorld::getSnapshot() const
                 if (_elapsedTime - _lastCombatTime.at(id) < 1.0f) {
                     revealed = true;
                 }
+            }
+
+            if (revealed) {
+                t.flags |= 4u; // RevealedOnMap
             }
 
             if (!revealed) {

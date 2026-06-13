@@ -509,8 +509,8 @@ namespace Complete
             var pos = new Vector3(ts.x, ts.y, ts.z);
             var rot = Quaternion.Euler(0, ts.yaw * Mathf.Rad2Deg, 0);
 
-            // Unpack the tank type index from flags (bits 2-7)
-            int typeIndex = (ts.flags >> 2) & 0x3F;
+            // Unpack the tank type index from flags (bits 3-7)
+            int typeIndex = (ts.flags >> 3) & 0x1F;
             GameObject prefabToSpawn = m_TankPrefab; // fallback to default local tank prefab
 
             if (m_TankPrefabMappings != null)
@@ -1400,6 +1400,7 @@ namespace Complete
             {
                 localStealth.ServerInBush = ts.IsInBush;
                 localStealth.ServerBushRegion = ts.bushRegion;
+                localStealth.ServerRevealedOnMap = ts.IsRevealedOnMap;
             }
         }
 
@@ -1407,8 +1408,8 @@ namespace Complete
         {
             if (!_remoteTanks.TryGetValue(ts.tankId, out var go) || go == null)
             {
-                // Unpack the tank type index from flags (bits 2-7)
-                int typeIndex = (ts.flags >> 2) & 0x3F;
+                // Unpack the tank type index from flags (bits 3-7)
+                int typeIndex = (ts.flags >> 3) & 0x1F;
                 GameObject prefabToSpawn = m_RemoteTankPrefab;
                 if (m_TankPrefabMappings != null)
                 {
@@ -1492,6 +1493,7 @@ namespace Complete
                 {
                     stealth.ServerInBush = ts.IsInBush;
                     stealth.ServerBushRegion = ts.bushRegion;
+                    stealth.ServerRevealedOnMap = ts.IsRevealedOnMap;
                 }
 
                 if (!_remoteSnaps.ContainsKey(ts.tankId))

@@ -42,6 +42,10 @@ namespace Complete.Skills
         [Tooltip("Phần trăm tốc độ di chuyển bị giảm khi charge skill (0 = di chuyển bình thường, 100 = đứng yên).")]
         [Range(0f, 100f)]
         public float speedReductionPercent = 100f;
+        
+        [Header("Combat & Stealth")]
+        [Tooltip("Có làm lộ vị trí trên bản đồ nhỏ (Minimap) toàn cầu khi sử dụng chiêu này không?")]
+        public bool revealsPositionOnMap = true;
         [Tooltip("Thời gian khóa nòng súng không cho tự động quay về sau khi bắn (tạo cảm giác nặng).")]
         public float postFireTurretLockTime = 0.5f;
 

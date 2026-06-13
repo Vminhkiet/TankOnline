@@ -460,7 +460,8 @@ public class MapExporter
                     duration = skill.duration,
                     parameters = pList,
                     charge_time = skill.chargeTime,
-                    speed_reduction_percent = skill.speedReductionPercent
+                    speed_reduction_percent = skill.speedReductionPercent,
+                    reveals_position_on_map = skill.revealsPositionOnMap
                 });
             }
         }
@@ -539,6 +540,7 @@ public class MapExporter
         public List<float> parameters;
         public float charge_time;
         public float speed_reduction_percent;
+        public bool reveals_position_on_map;
     }
 
     [System.Serializable]
